@@ -38,14 +38,14 @@ After bind:
    through the uplink. Both are below Android's VPN rules (10000+). Plain Linux needs
    neither, because the main table already routes everything.
 
-Every 2 s the daemon re-asserts `ip_forward` (Android resets it) and re-probes the
-uplink. When the default network moves between Wi-Fi and mobile data, the FROM rule
-moves with it.
+The daemon runs Droidspaces' route monitor (rtnetlink events plus a 1.5 s heartbeat): it
+re-asserts forwarding, puts back rules netd flushed, and moves the FROM rule when the
+default network moves between Wi-Fi and mobile data.
 
 On SIGTERM: stop DHCP, remove the MASQUERADE and ACCEPT rules and the policy rules.
-Off Android, `ip_forward` goes back to its old value. On Android netd owns it, and
-Android's own tethering may need it by then. The MSS clamp stays: it is not scoped to
-us, and Droidspaces inserts the identical rule.
+Forwarding stays on, on Android and Linux alike: a Droidspaces container or Android's
+own tethering may need it by then. The MSS clamp stays: it is not scoped to us, and
+Droidspaces inserts the identical rule.
 
 ## Lessons from the NetHunter `usbtethering` script
 

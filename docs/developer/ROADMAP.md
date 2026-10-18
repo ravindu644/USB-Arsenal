@@ -90,6 +90,15 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Daemon: address, DHCP (Droidspaces `dhcp.c`), NAT (`iptables.c`), uplink detection
       (`uplink.c` from `network.c`), Android policy rules
 - [x] Re-asserts `ip_forward` and follows the uplink between Wi-Fi and mobile data
+- [x] Droidspaces' route monitor ported with our own constants: rtnetlink events plus a
+      1.5 s heartbeat, policy and firewall rules reinstalled after a netd flush,
+      forwarding re-asserted on Linux too and never turned back off, a vanished pinned
+      uplink drops its rule. Hardware (S10, next to a running Droidspaces): deleted
+      MASQUERADE, FROM rule, IPv6 TO rule and `ip_forward` all back within one
+      heartbeat with no ping lost on the host; Wi-Fi off and on followed, IPv4 back ~4 s
+      after Wi-Fi reconnected; Droidspaces' own rules untouched
+- [ ] Hardware: the Wi-Fi to mobile data handoff (the S10 has mobile data off; with
+      Wi-Fi off the monitor rightly refused the IPv6-only IMS bearer `rmnet1`)
 - [x] `--no-net` for a bare network function
 - [x] Refuses clearly when the interface is in another network namespace (container),
       and a failed start removes the function it added
@@ -285,3 +294,9 @@ Tick a box only when the item is merged and verified as described in its phase.
   Droidspaces NAT66: SLAAC, ping and HTTPS over IPv6 from the host, rules gone after
   `stop`, ADB back. Roadmap cleaned up: the hand-back gate, tethering on hardware,
   container support and the 5.15 line were done but still open.
+- 2026-10-19: Route monitor. `tether`'s 2 s poll became Droidspaces' route monitor with
+  our own subnets and interface (events over rtnetlink, a 1.5 s heartbeat, netd-flush
+  repair). Forwarding is no longer restored on stop, which on Linux could cut a
+  Droidspaces container off; Droidspaces' monitor now runs on Linux too, for the
+  forwarding and the netfilter reconcile. Verified on the S10 (see Phase 3).
+

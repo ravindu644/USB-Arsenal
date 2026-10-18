@@ -13,6 +13,7 @@
 #include "../net/net.h"
 #include "usbarsenal.h"
 #include <linux/rtnetlink.h>
+#include <sys/signalfd.h>
 
 #define NCM "ncm.ua"
 #define RNDIS "rndis.ua"
@@ -23,7 +24,10 @@
 #define RULE_PRIO_TO 6090
 #define RULE_PRIO_FROM 6100
 
-#define TICK_SEC 2
+/* Droidspaces' route monitor heartbeat: covers kernels with broken netlink
+ * notifications, a gateway container restarting in another namespace (no
+ * event reaches us from there), and forwarding that someone switched off */
+#define HEARTBEAT_MS 1500
 
 /* NAT66 hands the host a ULA /64. Our own, not Droidspaces' fd64:7370::/48,
  * so a container's network and the USB link can run side by side. */
@@ -43,11 +47,9 @@ struct tether {
   char cidr[32]; /* our subnet, for the NAT rules */
   int table;     /* uplink routing table the FROM rule points at, 0 = none */
   char uplink[IFNAMSIZ];
-  char saved_forward[8];
   int nat6;   /* IPv6 NAT is up, and the DHCP thread sends RAs */
   int table6; /* uplink IPv6 table the IPv6 FROM rule points at, 0 = none */
   struct in6_addr prefix6;
-  char saved_forward6[8];
   unsigned ifindex; /* of the netdev we configured; a new one means rebind */
   /* gateway mode: a container (OpenWrt) serves the host instead of us */
   int gateway;
@@ -438,13 +440,16 @@ static void sync_uplink(struct tether *t, int quiet) {
               "link but no route out until one comes up");
     t->uplink[0] = '\0';
     iface[0] = '\0';
-    table = t->table; /* leave the rule alone on a transient loss */
+    /* Automatic mode keeps the rule through a transient loss. A pinned
+     * uplink that is gone loses it, so the host's traffic never leaks out
+     * of a table the kernel may recycle for another network. */
+    table = t->upstream ? 0 : t->table;
   }
   if (strcmp(iface, t->uplink) != 0 && how) {
     ua_log("Sharing %s (%s)", iface, how);
     safe_strncpy(t->uplink, iface, sizeof(t->uplink));
   }
-  if (how)
+  if (how || t->upstream)
     sync_uplink6(t, iface);
   if (!is_android() || table == t->table) {
     write_info(t);
@@ -462,6 +467,46 @@ static void sync_uplink(struct tether *t, int quiet) {
   t->table = table;
   ds_nl_close(ctx);
   write_info(t);
+}
+
+/* Android routes nothing to or from our subnets by default: replies to the
+ * host must find our connected route in main, and the host's traffic must
+ * find the uplink's table. Re-run by the monitor, because netd flushes every
+ * rule when it restarts; adding a rule that exists is a no-op. */
+static void install_policy_rules(struct tether *t) {
+  if (!is_android())
+    return;
+  ds_nl_ctx_t *ctx = ds_nl_open();
+  if (!ctx)
+    return;
+  int ret = ds_nl_add_rule4(ctx, 0, 0, t->net_be, t->prefix, RT_TABLE_MAIN,
+                            RULE_PRIO_TO);
+  if (t->table > 0 && ds_nl_add_rule4(ctx, t->net_be, t->prefix, 0, 0, t->table,
+                                      RULE_PRIO_FROM) < 0)
+    ret = -1;
+  if (t->nat6 &&
+      ds_nl_rule6(ctx, 1, &t->prefix6, 64, 0, RT_TABLE_MAIN, RULE_PRIO_TO) < 0)
+    ret = -1;
+  if (t->table6 > 0 &&
+      ds_nl_rule6(ctx, 1, &t->prefix6, 64, 1, t->table6, RULE_PRIO_FROM) < 0)
+    ret = -1;
+  if (ret < 0)
+    ua_warn("[NET] One or more route rules failed to install");
+  ds_nl_close(ctx);
+}
+
+/* One family's firewall rules. Fails on MASQUERADE or FORWARD, the two
+ * without which that family has no connectivity at all. A mobile uplink's
+ * MTU is often below the 1500 the host assumes, hence the clamp. */
+static int install_family_rules(int family, const char *cidr,
+                                const char *iface) {
+  ds_ipt_ensure_input_accept(family, iface);
+  int ret = ds_ipt_ensure_masquerade(family, cidr) < 0 ||
+                    ds_ipt_ensure_forward_accept(family, iface) < 0
+                ? -1
+                : 0;
+  ds_ipt_ensure_mss_clamp(family);
+  return ret;
 }
 
 /* The per-interface half of NAT66, redone whenever the netdev is re-created.
@@ -536,23 +581,14 @@ static void nat6_up(struct tether *t) {
     return;
   inet_pton(AF_INET6, NAT6_PREFIX, &t->prefix6);
   int err = nat6_iface(ctx, t);
+  ds_nl_close(ctx);
   /* Fail closed: an address and a default route with no MASQUERADE behind
    * them make every IPv6 connection hang instead of falling back to IPv4 */
-  if (err < 0 || ds_ipt_ensure_masquerade(AF_INET6, NAT6_CIDR) < 0 ||
-      ds_ipt_ensure_forward_accept(AF_INET6, t->iface) < 0) {
+  if (err < 0 || install_family_rules(AF_INET6, NAT6_CIDR, t->iface) < 0) {
     ua_warn("[NET] IPv6 setup on %s failed; the host gets IPv4 only", t->iface);
     ds_ipt_remove_nat_rules(AF_INET6, NAT6_CIDR, t->iface);
-    ds_nl_close(ctx);
     return;
   }
-  ds_ipt_ensure_input_accept(AF_INET6, t->iface);
-  ds_ipt_ensure_mss_clamp(AF_INET6);
-  if (is_android())
-    ds_nl_rule6(ctx, 1, &t->prefix6, 64, 0, RT_TABLE_MAIN, RULE_PRIO_TO);
-  ds_nl_close(ctx);
-
-  read_file("/proc/sys/net/ipv6/conf/all/forwarding", t->saved_forward6,
-            sizeof(t->saved_forward6));
   keep_host_slaac();
   write_file("/proc/sys/net/ipv6/conf/all/forwarding", "1");
   t->nat6 = 1;
@@ -573,27 +609,16 @@ static int net_up(struct tether *t) {
     ds_nl_close(ctx);
     return -1;
   }
-  /* Replies to the host must find our connected route in main, whatever
-   * table netd would otherwise send them to */
-  if (is_android())
-    ds_nl_add_rule4(ctx, 0, 0, t->net_be, t->prefix, RT_TABLE_MAIN,
-                    RULE_PRIO_TO);
   ds_nl_close(ctx);
 
-  read_file("/proc/sys/net/ipv4/ip_forward", t->saved_forward,
-            sizeof(t->saved_forward));
   write_file("/proc/sys/net/ipv4/ip_forward", "1");
-
-  if (ds_ipt_ensure_masquerade(AF_INET, t->cidr) < 0 ||
-      ds_ipt_ensure_forward_accept(AF_INET, t->iface) < 0) {
+  if (install_family_rules(AF_INET, t->cidr, t->iface) < 0) {
     ua_error("Cannot install the NAT rules for %s", t->cidr);
     return -1;
   }
-  ds_ipt_ensure_input_accept(AF_INET, t->iface);
-  /* A mobile uplink's MTU is often below the 1500 the host assumes */
-  ds_ipt_ensure_mss_clamp(AF_INET);
 
   nat6_up(t);
+  install_policy_rules(t);
   sync_uplink(t, 0);
   ds_dhcp_server_start(t->dns, t->iface, t->offer_be, t->ip_be, t->mask_be,
                        t->nat6 ? &t->prefix6 : NULL);
@@ -646,19 +671,119 @@ static void net_down(struct tether *t) {
         ds_nl_rule6(ctx, 0, &t->prefix6, 64, 1, t->table6, RULE_PRIO_FROM);
       ds_nl_close(ctx);
     }
-  } else {
-    /* On Android netd owns forwarding and Android's own tethering may need
-     * it by now, so only plain Linux gets its old values back */
-    if (t->saved_forward[0])
-      write_file("/proc/sys/net/ipv4/ip_forward", t->saved_forward);
-    if (t->saved_forward6[0])
-      write_file("/proc/sys/net/ipv6/conf/all/forwarding", t->saved_forward6);
   }
+  /* Forwarding stays on: a Droidspaces container or Android's own tethering
+   * may be routing through it by now, and turning it off would cut them */
 }
 
-/* The network side lives as long as this loop. It also re-asserts what
- * Android likes to undo behind our back: forwarding, and the uplink rule when
- * the default network moves between Wi-Fi and mobile data. */
+/* Re-apply what someone else may have removed, then follow the uplink.
+ * Droidspaces' do_uplink_reprobe(), with our subnets and interface. */
+static void reprobe(struct tether *t) {
+  if (t->gateway) {
+    gw_tick(t);
+    return;
+  }
+  follow_netdev(t);
+  install_policy_rules(t);
+  /* Only 0 means a rule is missing; -1 is "tables unreadable", where a
+   * blind reinstall through the iptables binary would stack duplicates */
+  if (ds_ipt_host_rules_present(AF_INET, t->iface, t->cidr, 0) == 0 ||
+      (t->nat6 &&
+       ds_ipt_host_rules_present(AF_INET6, t->iface, NAT6_CIDR, 0) == 0)) {
+    ua_warn("[NET] The tether firewall rules are gone (netd restart or a "
+            "firewall app?); reinstalling");
+    install_family_rules(AF_INET, t->cidr, t->iface);
+    if (t->nat6)
+      install_family_rules(AF_INET6, NAT6_CIDR, t->iface);
+  }
+  sync_uplink(t, 1);
+}
+
+/* netd resets forwarding on Android, and on Linux any tool restoring its own
+ * saved value on exit does the same. /proc/sys raises no event, so poll. */
+static void keep_forwarding(const struct tether *t) {
+  char val[4];
+  if (!t->gateway && (t->table > 0 || !is_android()) &&
+      read_file("/proc/sys/net/ipv4/ip_forward", val, sizeof(val)) > 0 &&
+      val[0] == '0') {
+    ua_log("[NET] ip_forward was switched off; switching it back on");
+    write_file("/proc/sys/net/ipv4/ip_forward", "1");
+  }
+  if (t->nat6 &&
+      read_file("/proc/sys/net/ipv6/conf/all/forwarding", val, sizeof(val)) >
+          0 &&
+      val[0] == '0')
+    write_file("/proc/sys/net/ipv6/conf/all/forwarding", "1");
+}
+
+static int monitor_socket(const struct tether *t) {
+  int sock = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
+  if (sock < 0)
+    return -1;
+  struct sockaddr_nl sa;
+  memset(&sa, 0, sizeof(sa));
+  sa.nl_family = AF_NETLINK;
+  /* Rule changes are netd swapping the default network, the Wi-Fi <-> mobile
+   * handoff itself. No RTMGRP_ macro exists for rule groups. */
+  sa.nl_groups = RTMGRP_LINK | RTMGRP_IPV4_IFADDR | RTMGRP_IPV4_ROUTE |
+                 (1u << (RTNLGRP_IPV4_RULE - 1));
+  if (t->nat6)
+    sa.nl_groups |= RTMGRP_IPV6_ROUTE | (1u << (RTNLGRP_IPV6_RULE - 1));
+  if (bind(sock, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+    close(sock);
+    return -1;
+  }
+  return sock;
+}
+
+/* An event on an interface that still exists and is not loopback or our own
+ * bridge and veth (ua-*). The USB interface counts: a re-created one is what
+ * follow_netdev() is waiting for. */
+static int real_iface(int ifindex) {
+  char name[IFNAMSIZ] = {0};
+  if (ifindex <= 0 || !if_indextoname((unsigned)ifindex, name))
+    return 0;
+  return strncmp(name, "ua-", 3) != 0 && strcmp(name, "lo") != 0;
+}
+
+static int wants_reprobe(uint8_t *buf, ssize_t len) {
+  for (struct nlmsghdr *h = (struct nlmsghdr *)buf; NLMSG_OK(h, (uint32_t)len);
+       h = NLMSG_NEXT(h, len)) {
+    if (h->nlmsg_type == NLMSG_DONE || h->nlmsg_type == NLMSG_ERROR)
+      break;
+    if (h->nlmsg_type == RTM_NEWRULE || h->nlmsg_type == RTM_DELRULE)
+      return 1; /* our own rule echoes settle in one no-op pass */
+    if (h->nlmsg_type == RTM_NEWLINK || h->nlmsg_type == RTM_DELLINK) {
+      if (real_iface(((struct ifinfomsg *)NLMSG_DATA(h))->ifi_index))
+        return 1;
+    } else if (h->nlmsg_type == RTM_NEWADDR || h->nlmsg_type == RTM_DELADDR) {
+      struct ifaddrmsg *ifa = NLMSG_DATA(h);
+      if (ifa->ifa_family == AF_INET && real_iface((int)ifa->ifa_index))
+        return 1;
+    } else if (h->nlmsg_type == RTM_NEWROUTE || h->nlmsg_type == RTM_DELROUTE) {
+      /* IPv6 also announces every /64, neighbour and cached clone; only a
+       * route as short as uplink detection accepts can move the uplink */
+      struct rtmsg *rtm = NLMSG_DATA(h);
+      if (rtm->rtm_family != AF_INET &&
+          !(rtm->rtm_family == AF_INET6 && rtm->rtm_dst_len < 8))
+        continue;
+      int oif = 0, rlen = (int)RTM_PAYLOAD(h);
+      for (struct rtattr *rta = RTM_RTA(rtm); RTA_OK(rta, rlen);
+           rta = RTA_NEXT(rta, rlen))
+        if (rta->rta_type == RTA_OIF && RTA_PAYLOAD(rta) >= (int)sizeof(int))
+          oif = *(int *)RTA_DATA(rta);
+      /* No output interface (a blackhole, say) still counts */
+      if (oif <= 0 || real_iface(oif))
+        return 1;
+    }
+  }
+  return 0;
+}
+
+/* The network side lives as long as this loop: Droidspaces' route monitor,
+ * event driven over rtnetlink with a heartbeat behind it. It follows the
+ * uplink between Wi-Fi and mobile data, puts back the rules and forwarding
+ * that Android (or anyone) removes, and re-configures a re-created netdev. */
 static int serve(struct tether *t, int ready_fd) {
   sigset_t set;
   sigemptyset(&set);
@@ -666,8 +791,9 @@ static int serve(struct tether *t, int ready_fd) {
   sigaddset(&set, SIGINT);
   sigaddset(&set, SIGHUP);
   sigprocmask(SIG_BLOCK, &set, NULL);
+  int sfd = signalfd(-1, &set, SFD_CLOEXEC);
 
-  int ok = (t->gateway ? gw_up(t) : net_up(t)) == 0;
+  int ok = sfd >= 0 && (t->gateway ? gw_up(t) : net_up(t)) == 0;
   if (ready_fd >= 0) {
     char c = ok ? '1' : '0';
     if (write(ready_fd, &c, 1) < 0)
@@ -675,32 +801,56 @@ static int serve(struct tether *t, int ready_fd) {
     close(ready_fd);
   }
   if (!ok) {
-    if (t->gateway)
+    if (sfd < 0)
+      ua_error("signalfd: %s", strerror(errno));
+    else if (t->gateway)
       gw_down();
     else
       net_down(t);
     return -1;
   }
 
-  struct timespec tick = {TICK_SEC, 0};
-  while (sigtimedwait(&set, NULL, &tick) < 0) {
-    char fwd[8];
-    if (t->gateway) {
-      gw_tick(t);
+  int sock = monitor_socket(t);
+  if (sock < 0)
+    ua_warn("[NET] No rtnetlink socket (%s); following changes on the "
+            "heartbeat only",
+            strerror(errno));
+  uint8_t buf[8192];
+  for (;;) {
+    keep_forwarding(t);
+    struct pollfd pfd[2] = {{sfd, POLLIN, 0}, {sock, POLLIN, 0}};
+    int pr = poll(pfd, sock >= 0 ? 2 : 1, HEARTBEAT_MS);
+    if (pr < 0 && errno == EINTR)
+      continue;
+    if (pr < 0 || (pfd[0].revents & POLLIN))
+      break;
+    if (pr == 0) {
+      reprobe(t);
       continue;
     }
-    if (is_android() &&
-        read_file("/proc/sys/net/ipv4/ip_forward", fwd, sizeof(fwd)) > 0 &&
-        fwd[0] == '0')
-      write_file("/proc/sys/net/ipv4/ip_forward", "1");
-    if (t->nat6 && is_android() &&
-        read_file("/proc/sys/net/ipv6/conf/all/forwarding", fwd, sizeof(fwd)) >
-            0 &&
-        fwd[0] == '0')
-      write_file("/proc/sys/net/ipv6/conf/all/forwarding", "1");
-    follow_netdev(t);
-    sync_uplink(t, 1);
+    ssize_t len = recv(sock, buf, sizeof(buf), 0);
+    if (len < 0 && errno == ENOBUFS) {
+      /* An event burst overflowed the socket: resync and keep going */
+      reprobe(t);
+      continue;
+    }
+    if (len < 0 && errno != EINTR && errno != EAGAIN) {
+      ua_warn("[NET] rtnetlink: %s; following changes on the heartbeat only",
+              strerror(errno));
+      close(sock);
+      sock = -1;
+    }
+    if (len <= 0 || !wants_reprobe(buf, len))
+      continue;
+    /* A handoff is a burst of rule, route and address events: let it settle
+     * into one reprobe instead of one per event */
+    while (poll(&pfd[1], 1, 200) > 0 && recv(sock, buf, sizeof(buf), 0) > 0)
+      ;
+    reprobe(t);
   }
+  if (sock >= 0)
+    close(sock);
+  close(sfd);
   ua_log("[NET] Stopping tethering on %s", t->iface);
   if (t->gateway)
     gw_down();

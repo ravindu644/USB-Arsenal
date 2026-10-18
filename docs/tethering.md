@@ -15,8 +15,9 @@ usb-arsenal tether start --address 10.42.0.1/24 --dns 9.9.9.9 --upstream wlan0
 - **The host's traffic is NATed** out of whatever connection the phone is using. On
   Android that is the network netd marks as default; on Linux, the main routing table's
   default route. `--upstream` pins one interface.
-- **When the phone moves between Wi-Fi and mobile data**, the route follows within two
-  seconds.
+- **When the phone moves between Wi-Fi and mobile data**, the route follows as soon as
+  Android switches networks. If Android's network service restarts and flushes the
+  firewall, the rules are put back within two seconds.
 - **DNS** handed to the host is `1.1.1.1` and `8.8.8.8` unless `--dns` says otherwise.
 - **IPv6 too, where the kernel can NAT it** (`CONFIG_IP6_NF_NAT`; `check` shows the
   "IPv6 NAT" line). The host gets an address in `fd75:7361::/64` by SLAAC and a default

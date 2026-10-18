@@ -162,12 +162,22 @@ reads it on every take and rebind; the commands read their defaults from it.
 ## The tether process (`src/gadgets/tether.c`)
 
 `tether start` forks the network side and waits on a pipe for it to report up or down.
-Every 2 s it:
-- re-asserts `ip_forward` on Android;
-- follows the uplink (moving the Android policy rule);
+Its main loop is Droidspaces' route monitor with our own subnets and interface: it
+listens for rtnetlink rule, route, link and address events (a netd default-network swap
+is a rule event), lets a burst settle for 200 ms, then reprobes. A 1.5 s heartbeat
+reprobes too, for kernels with broken notifications. Each reprobe:
 - notices a re-created netdev (a new ifindex, M62 frees it on unbind), and brings it
-  up, re-adds the address and restarts DHCP.
+  up, re-adds the addresses and restarts DHCP;
+- re-adds the Android policy rules and, when `ds_ipt_host_rules_present()` says one is
+  missing, the firewall rules (netd flushes both when it restarts);
+- follows the uplink, moving the IPv4 and IPv6 FROM rules. Automatic mode keeps a rule
+  through a transient loss; a pinned `--upstream` that disappears loses it.
 
-In gateway mode it instead keeps `usb0` on the `ua-usb` bridge and the veth plugged into
+Forwarding is re-asserted on every pass, on Linux as on Android, and never turned back
+off: a Droidspaces container or Android's own tethering may be routing through it. The
+two monitors coexist because every rule either one touches carries its own subnet or
+interface; only the MSS clamp is shared, and nobody removes it.
+
+In gateway mode the reprobe instead keeps `usb0` on the `ua-usb` bridge and the veth plugged into
 the container's current namespace. The veth is created with its far end born there,
 under its final name, and rebuilt when the container's namespace inode changes.
