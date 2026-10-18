@@ -1,78 +1,60 @@
 # Kernel requirements
 
-`usb-arsenal check` asks the running kernel directly. This page lists what to enable when
-building one.
+`usb-arsenal check` asks the running kernel directly: it creates each gadget function
+and removes it again, without reading a config dump. This page lists what to enable when
+building a kernel, and the patches USB Arsenal ships for Samsung kernels.
 
 ## Required
 
 | Option | Why |
 |---|---|
-| `CONFIG_USB_CONFIGFS` | The gadget interface. Stock 3.18 Samsung kernels pick `CONFIG_USB_G_ANDROID` instead (same Kconfig `choice`), so they need a rebuild. |
-| A peripheral-capable UDC driver | dwc3 on most phones, dwc2 on a Raspberry Pi (`dtoverlay=dwc2` and `modules-load=dwc2`) |
+| `CONFIG_USB_CONFIGFS` | The gadget interface. Stock 3.18 Samsung kernels pick `CONFIG_USB_G_ANDROID` instead (the same Kconfig `choice`), so they need a rebuild. |
+| A peripheral-capable UDC driver | dwc3 on most phones, dwc2 on a Raspberry Pi |
 
 ## Per function
 
 | Option | Command |
 |---|---|
-| `CONFIG_USB_CONFIGFS_MASS_STORAGE` | `storage` (missing from stock exynos9820/990 defconfigs) |
-| `CONFIG_USB_CONFIGFS_F_HID` | `hid` (missing from stock exynos9820/990 defconfigs) |
-| `CONFIG_USB_CONFIGFS_NCM` | `tether` (present everywhere surveyed) |
+| `CONFIG_USB_CONFIGFS_MASS_STORAGE` | `storage` (missing from stock Exynos 9820/990 defconfigs) |
+| `CONFIG_USB_CONFIGFS_F_HID` | `hid` (missing from stock Exynos 9820/990 defconfigs) |
+| `CONFIG_USB_CONFIGFS_NCM` | `tether` (present in every kernel surveyed) |
 | `CONFIG_USB_CONFIGFS_RNDIS` | `tether --rndis` (removed from GKI after 5.10) |
 | `CONFIG_IP_NF_NAT`, `CONFIG_IP_NF_TARGET_MASQUERADE` | `tether` NAT |
-| `CONFIG_USB_CONFIGFS_F_UVC` | planned |
 
-Modules work: the kernel loads `usb_f_<name>` when the function directory is created.
+Modules work too: the kernel loads `usb_f_<name>` when the function directory is
+created.
 
-## Samsung configfs patches
+## Patches for Samsung 4.x kernels
 
-Stock Samsung 4.14 and 4.19 kernels (`CONFIG_USB_CONFIGFS_UEVENT`) cannot create a second
-gadget, and cannot bind one built by hand. USB Arsenal still works there through the
-piggyback backend, but these two commits from `M62-backport` unlock the own-gadget
-backend, which Android's USB HAL cannot disturb:
+`kernel-patches/4.14/` holds `git format-patch` exports, written against the
+M62-backport kernel (Exynos 9820, 4.14). Apply them in order:
 
-1. `usb: gadget: configfs: allow creating more than one gadget` (`aa8867995`): one uevent
-   device per gadget (`android0`, `android1`, ...) instead of a hardcoded `android0`.
-2. `usb: gadget: configfs: support mainline gadget bring-up alongside Android`
-   (`4088bea61`): splice `linked_func` into `func_list` at bind, and search it on unlink.
+```sh
+cd /path/to/kernel
+git am /path/to/USB-Arsenal/kernel-patches/4.14/*.patch
+```
 
-Background: [references/samsung-gadget-duct-tapes.md](references/samsung-gadget-duct-tapes.md).
+Other Samsung 4.x trees (Exynos 990 on 4.19; A01 and Tab A on 4.9) carry the same code
+and may need small rebases.
 
-## Recommended patch for Samsung 4.x kernels (`f_ncm.c`)
+| Patch | Fixes | Without it, USB Arsenal... |
+|---|---|---|
+| `0001` configfs: allow creating more than one gadget | Every gadget registered its uevent device under a hardcoded `android0`, so a second gadget failed with a misleading "Out of memory" | uses the piggyback backend: its functions ride inside Android's own gadget `g1` and are selected through `android0/functions`. It works, but Android rewrites `g1` on a replug or a USB mode change. |
+| `0002` configfs: support mainline gadget bring-up alongside Android | A symlinked function only reached the config through `android0/functions`, so a hand-built gadget failed to bind with "needs at least one function" | same as above; `0001` and `0002` together unlock the own-gadget backend. |
+| `0003` f_ncm: make Samsung's extras safe for more than one instance | A second NCM instance made `f_ncm` destroy the shared `android0` device and free state under Android's own NCM function, and the kernel panicked | avoids NCM on these kernels and tethers over RNDIS instead. |
 
-Samsung's NCM extras (`CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE`) are one per system but
-were created and destroyed per NCM instance:
-1. `create_terminal_attribute()` calls `device_destroy()` on the shared `android0` when
-   a second instance cannot add `terminal_version`.
-2. `ncm_function_init()` overwrites the global `_ncm_dev` and registers the
-   `usb_ncm` misc device again at every function alloc.
-3. `ncm_function_cleanup()` deregisters that misc device and frees `_ncm_dev` when
-   *any* instance is freed, under the instance that still uses them.
+### How USB Arsenal tells a patched kernel apart
 
-The patch (applied to `M62-backport`):
-- counts NCM instances under a mutex;
-- creates the attributes once and never destroys `android0`;
-- initialises `_ncm_dev` and the misc device only once;
-- cleans them up only after the last instance;
-- exposes the count as `/sys/class/android_usb/android0/ncm_instances`.
+It looks, and never tries, because trying is what panics an unpatched kernel:
 
-How USB Arsenal decides:
-
-| `terminal_version` | `ncm_instances` | Meaning | `tether` uses |
+| `android0/terminal_version` | `android0/ncm_instances` | Meaning | `tether` uses |
 |---|---|---|---|
-| absent | absent | no Samsung extras, or no NCM instance yet; safe | NCM |
-| present | present | patched kernel; safe | NCM |
-| present | absent | unpatched Samsung kernel; a second NCM instance panics | RNDIS |
+| absent | absent | no Samsung NCM extras, or no NCM instance yet | NCM |
+| present | present | patched with `0003` | NCM |
+| present | absent | unpatched Samsung kernel | RNDIS |
 
-It is decided by looking, never by trying. See
-[research/01-kernel-survey.md](research/01-kernel-survey.md).
+`ncm_instances` is added by `0003`; it also shows how many NCM instances exist. For
+`0001` and `0002`, `check` shows which backend the kernel allows: "own gadget" with
+them, "piggyback" without.
 
-## Raspberry Pi and other boards
-
-```
-# /boot/firmware/config.txt
-dtoverlay=dwc2
-# then: modprobe libcomposite (usb-arsenal tries this itself)
-```
-
-Only the USB-C / OTG port of a Pi 4/5 (or the data micro-USB port of a Zero) can act
-as a device.
+Background: [developer/research/01-kernel-survey.md](developer/research/01-kernel-survey.md).

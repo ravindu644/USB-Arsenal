@@ -6,7 +6,8 @@
  *
  * `storage`: f_mass_storage LUNs. Booting an ISO is entirely the kernel's
  * job; we only pick between CD-ROM and disk mode and write the attributes in
- * the order the kernel accepts. See docs/research/03-mass-storage-cdrom.md.
+ * the order the kernel accepts. See
+ * docs/developer/research/03-mass-storage-cdrom.md.
  */
 
 #include "usbarsenal.h"

@@ -7,7 +7,7 @@
  * `tether`: an f_ncm (or f_rndis) network function, plus a small daemon
  * that gives the host an address, NAT and a route out. The networking is
  * Droidspaces' (src/net/); this file only wires it to the gadget's
- * interface. See docs/research/04-tethering.md.
+ * interface. See docs/developer/research/04-tethering.md.
  */
 
 #include "../net/net.h"

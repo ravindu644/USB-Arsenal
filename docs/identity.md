@@ -67,18 +67,3 @@ needs no root.
   that vendor's driver for that exact PID may try to bind it.
 - The piggyback backend (stock Samsung kernels) rides in Android's `g1`, whose IDs and
   strings stay Android's. The command defaults still apply.
-
-## Verified (a166p, Fedora host)
-
-- From the Ubuntu container: a profile with `18d1:4ee8`, Google / Pixel / `TEST123`, an
-  inquiry string and `tether_address=192.168.43.1/24`.
-  - `set` made a copy (the daemon cannot see `/root`).
-  - The host showed `18d1:4ee8 Google Inc.`, with `iManufacturer Google`,
-    `iProduct Pixel`, `iSerial TEST123`.
-  - `sr0` reported Google / Pixel Disk / 1.0.
-  - The host leased 192.168.43.2 with no option given.
-- Changing `id_product` and `set` again while live: one re-plug, then `18d1:4ee9`, with
-  storage and tether intact.
-- From the Android shell: a profile under `/data/local/tmp` became a real symlink.
-  Deleting it gave the "is gone" warning and the defaults; `unset` went back to
-  built-in.

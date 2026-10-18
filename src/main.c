@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Command dispatch, modelled on git: global options, then a command, then
- * that command's own action and options. See docs/cli.md.
+ * that command's own action and options. See docs/usage.md.
  */
 
 #include "usbarsenal.h"

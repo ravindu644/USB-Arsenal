@@ -1,0 +1,176 @@
+From a5c4c973f083e0219ee1e166e8ec53cb08d0ad89 Mon Sep 17 00:00:00 2001
+From: ravindu644 <droidcasts@protonmail.com>
+Date: Sun, 18 Oct 2026 23:51:48 +0530
+Subject: [PATCH] usb: gadget: f_ncm: make Samsung's extras safe for more than
+ one instance
+
+Samsung's NCM additions (CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE) exist once
+per system, but were created and destroyed per NCM instance. With a
+second instance next to Android's ncm.0 (a separate configfs gadget, as
+USB Arsenal builds) the kernel panics:
+
+- create_terminal_attribute() hangs terminal_version on the shared
+  android0 device. A second instance cannot add it again, and the error
+  path calls device_destroy() on android0 itself. The next NCM instance
+  then hits "kernel BUG at fs/sysfs/file.c:333" in sysfs_create_file_ns
+  from ncm_alloc_inst. Reproduced twice on an SM-G977N.
+- ncm_function_init() overwrites the global _ncm_dev and registers the
+  usb_ncm misc device again at every function alloc.
+- ncm_function_cleanup() runs when any instance is freed, deregistering
+  that misc device and freeing _ncm_dev under the instance still using
+  them.
+
+Count the instances under a mutex: create the attributes once and never
+destroy android0, initialise _ncm_dev and the misc device once, and tear
+them down only after the last instance is freed. The count is exposed
+read-only as android0/ncm_instances, which also tells userspace this
+kernel takes more than one NCM instance safely; USB Arsenal uses NCM
+again when it sees it and falls back to RNDIS otherwise.
+
+Compiled with the tree's own clang command line.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Signed-off-by: ravindu644 <droidcasts@protonmail.com>
+---
+ drivers/usb/gadget/function/f_ncm.c | 56 +++++++++++++++++++++++++++--
+ 1 file changed, 53 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/usb/gadget/function/f_ncm.c b/drivers/usb/gadget/function/f_ncm.c
+index 43c2f3796..cc1fb064d 100644
+--- a/drivers/usb/gadget/function/f_ncm.c
++++ b/drivers/usb/gadget/function/f_ncm.c
+@@ -550,6 +550,19 @@ u16 terminal_mode_version;
+ u16 terminal_mode_vendor_id;
+ 
+ static struct ncm_dev *_ncm_dev;
++static bool mirrorlink_registered;
++
++/*
++ * Samsung's extras (terminal_version on android0, the usb_ncm misc device,
++ * _ncm_dev) exist once per system, but were created and destroyed per NCM
++ * instance. A second instance, such as a separate configfs gadget next to
++ * Android's ncm.0, then destroyed android0 or freed _ncm_dev under the first
++ * one and the kernel panicked. Count the instances: create on the first,
++ * tear down after the last. ncm_instances on android0 exposes the count and
++ * tells userspace this kernel takes more than one NCM instance safely.
++ */
++static DEFINE_MUTEX(ncm_samsung_lock);
++static int ncm_instances;
+ #endif
+ /*-------------------------------------------------------------------------*/
+ 
+@@ -1653,22 +1666,42 @@ static ssize_t terminal_version_store(struct device *dev,
+ static DEVICE_ATTR(terminal_version,  S_IRUGO | S_IWUSR,
+ 		terminal_version_show, terminal_version_store);
+ 
++static ssize_t ncm_instances_show(struct device *dev,
++		struct device_attribute *attr, char *buf)
++{
++	return sprintf(buf, "%d\n", ncm_instances);
++}
++static DEVICE_ATTR_RO(ncm_instances);
++
++/* Called with ncm_samsung_lock held */
+ static int create_terminal_attribute(void)
+ {
++	static bool created;
+ 	struct device *android_dev;
+ 	int err = 0;
+ 
++	if (created)
++		return 0;
++
+ 	android_dev = create_function_device("terminal_version");
+ 	if (IS_ERR(android_dev))
+ 		return PTR_ERR(android_dev);
+ 
++	/*
++	 * android_dev is the shared android0 device, owned by the gadget. Never
++	 * destroy it here on failure: the next user of it would touch a freed
++	 * device.
++	 */
+ 	err = device_create_file(android_dev, &dev_attr_terminal_version);
+ 	if (err) {
+ 		printk(KERN_DEBUG "usb: %s failed to create attr\n",
+ 				__func__);
+-		device_destroy(android_dev->class, android_dev->devt);
+ 		return err;
+ 	}
++	if (device_create_file(android_dev, &dev_attr_ncm_instances))
++		printk(KERN_DEBUG "usb: %s failed to create ncm_instances\n",
++				__func__);
++	created = true;
+ 	return 0;
+ }
+ 
+@@ -1722,11 +1755,15 @@ static void ncm_work(struct work_struct *data)
+ 	kobject_uevent_env(&mirrorlink_device.this_device->kobj, KOBJ_CHANGE, uevent_envp);
+ }
+ 
++/* Called with ncm_samsung_lock held, at every function alloc (bind) */
+ static int ncm_function_init(void)
+ {
+ 	struct ncm_dev *dev;
+ 	int ret = 0;
+ 
++	if (_ncm_dev)
++		return 0;
++
+ 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
+ 	if (!dev)
+ 		return -ENOMEM;
+@@ -1738,12 +1775,17 @@ static int ncm_function_init(void)
+ 	ret = misc_register(&mirrorlink_device);
+ 	if (ret)
+ 		printk("usb: %s - usb_ncm misc driver fail \n", __func__);
++	else
++		mirrorlink_registered = true;
+ 	return 0;
+ }
+ 
++/* Called with ncm_samsung_lock held, once the last instance is gone */
+ static void ncm_function_cleanup(void)
+ {
+-	misc_deregister(&mirrorlink_device);
++	if (mirrorlink_registered)
++		misc_deregister(&mirrorlink_device);
++	mirrorlink_registered = false;
+ 	kfree(_ncm_dev);
+ 	_ncm_dev = NULL;
+ }
+@@ -1797,7 +1839,10 @@ To prevent crash in case we are not bound.
+ */
+ 	kfree(opts);
+ #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+-	ncm_function_cleanup();
++	mutex_lock(&ncm_samsung_lock);
++	if (--ncm_instances == 0)
++		ncm_function_cleanup();
++	mutex_unlock(&ncm_samsung_lock);
+ #endif
+ }
+ 
+@@ -1812,7 +1857,10 @@ static struct usb_function_instance *ncm_alloc_inst(void)
+ 	opts->func_inst.free_func_inst = ncm_free_inst;
+ 	config_group_init_type_name(&opts->func_inst.group, "", &ncm_func_type);
+ #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
++	mutex_lock(&ncm_samsung_lock);
++	ncm_instances++;
+ 	create_terminal_attribute();
++	mutex_unlock(&ncm_samsung_lock);
+ #endif
+ 	return &opts->func_inst;
+ }
+@@ -1892,7 +1940,9 @@ static struct usb_function *ncm_alloc(struct usb_function_instance *fi)
+ 	ncm->port.unwrap = ncm_unwrap_ntb;
+ 
+ #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
++	mutex_lock(&ncm_samsung_lock);
+ 	ncm_function_init();
++	mutex_unlock(&ncm_samsung_lock);
+ #endif
+ 	return &ncm->port.func;
+ }
+-- 
+2.56.0
+
