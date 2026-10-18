@@ -84,8 +84,8 @@ usb-arsenal stop                                  # everything off, ADB and MTP 
 The host was a Fedora PC: it read the disks and CD-ROMs, typed nothing but saw the HID
 devices, and got online through the tether. An MSI laptop booted Alpine Linux from an
 ISO on the S10 (UEFI, as a disk and as a CD-ROM) and a 4.9 GB Windows PE ISO in `dvd`
-mode. Legacy BIOS boot is not verified yet, and the KernelSU module has not been flashed
-on a test device (the daemon it starts was tested by hand). Other phones, kernels and hosts are untested; reports are
+mode. The KernelSU module was flashed on the S10 and starts the daemon at boot. Legacy
+BIOS boot is not verified yet. Other phones, kernels and hosts are untested; reports are
 welcome.
 
 ## Security

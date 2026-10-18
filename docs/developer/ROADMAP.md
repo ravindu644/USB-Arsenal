@@ -84,8 +84,9 @@ Tick a box only when the item is merged and verified as described in its phase.
       picked by auto mode past the CD-ROM limit; SELinux checked first (fail closed);
       the module ships the `loop_device` rule as `sepolicy.rule`. Verified on the S10:
       auto picks dvd, status names the ISO, loops cleaned up after a swap and `stop`
+- [x] Hardware: the module's `sepolicy.rule` loaded at boot (S10, no manual patch)
 - [ ] Hardware: `dvd` mode under legacy BIOS; the fail-closed SELinux path on a device
-      without the rule; the module's `sepolicy.rule` loaded at boot
+      without the rule
 - [ ] Stretch: Ventoy-style on-PC menu
 
 ## Phase 2. `hid`
@@ -156,7 +157,7 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Hardware: gateway re-plug after an OpenWrt container restart (new pid and netns;
       cable re-plugged automatically; host's DNS through OpenWrt back after ~13 s, then
       one ~7 s blip while OpenWrt's services start)
-- [ ] Hardware: module flashed, daemon up after boot
+- [x] Hardware: module flashed, daemon up after boot (S10)
 
 ## Phase 6. Identity profiles (see [identity.md](../identity.md))
 - [x] `identity generate FILE [--force]`: every key, with defaults and comments
@@ -344,3 +345,7 @@ Tick a box only when the item is merged and verified as described in its phase.
   booted the MSI and Windows mounted its UDF volume from the DVD-ROM. The host's
   multi-session query (READ TOC format 1) now answers. Both routes past 2.36 GB work:
   `dvd` mode on stock kernels, `cdrom` mode on a patched one.
+- 2026-10-19: Flashed the module on the S10. After a reboot the daemon was running from
+  the module, its `sepolicy.rule` was loaded (kernel may read `loop_device`), and
+  `usb-arsenal storage start` from `/system/bin`, relayed to the daemon, served the WinPE
+  ISO in `dvd` mode; `stop` handed the port back and the loop went with it.
