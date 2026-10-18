@@ -60,8 +60,9 @@ It looks, and never tries, because trying is what panics an unpatched kernel:
 verbatim (Maxim Devaev, pikvm/packages `linux-rpi-pikvm` at `336ceef6`, written for
 6.12) as the base for ports. It lifts the 2.36 GB CD-ROM clamp by presenting bigger
 images as a DVD-ROM, the same change as `4.14/0004`. Checked with `git apply --check`:
-it applies as is to the 6.6 GKI (Pixel 10); 5.15 (sm8550) and 4.19 (Exynos 990) need
-small rebases in `f_mass_storage.c`. `--mode dvd` does not need it.
+it applies as is to the 6.6 GKI (Pixel 10) and to the Galaxy A16 trees (a166p 5.15,
+a165f 5.10); sm8550 (5.15), Exynos 990 (4.19) and t295 (4.9) need small rebases in
+`f_mass_storage.c`. `--mode dvd` does not need it.
 
 `ncm_instances` is added by `0003`; it also shows how many NCM instances exist. For
 `0001` and `0002`, `check` shows which backend the kernel allows: "own gadget" with
