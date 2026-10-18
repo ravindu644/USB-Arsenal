@@ -14,6 +14,9 @@
 
 #define FUNC "mass_storage.ua"
 
+/* The profile's SCSI inquiry string, empty for the kernel's own */
+static char inquiry[32];
+
 /* storage_common.c clamps a CD-ROM to 256*60*75-1 frames of 2048 bytes on
  * every kernel we support, and only logs it. Past this the host reads a
  * silently truncated disc. */
@@ -123,6 +126,8 @@ static int lun_load(const char *ldir, const char *path, enum mode mode,
         usleep(100000);
   }
   lun_write(ldir, "removable", "1");
+  if (inquiry[0])
+    lun_write(ldir, "inquiry_string", inquiry);
   if (lun_write(ldir, "cdrom", mode == MODE_CDROM ? "1" : "0") < 0 &&
       mode == MODE_CDROM) {
     ua_error("This kernel cannot emulate a CD-ROM (no lun.N/cdrom)");
@@ -326,7 +331,7 @@ void ua_status_storage(const struct ua_gadget *g) {
 
 struct sargs {
   enum mode mode;
-  int lun, fd;
+  int mode_set, lun, fd;
   const char *action;
   int image; /* index of IMAGE in argv, 0 if none */
 };
@@ -354,7 +359,7 @@ static int parse(int argc, char **argv, struct sargs *a, int report) {
       int found = 0;
       for (int i = 0; i < 4; i++)
         if (!strcmp(optarg, mode_names[i]))
-          a->mode = (enum mode)i, found = 1;
+          a->mode = (enum mode)i, found = 1, a->mode_set = 1;
       if (!found) {
         if (report)
           ua_usage_error("storage", "Unknown mode '%s'", optarg);
@@ -447,6 +452,12 @@ int ua_cmd_storage(int argc, char **argv) {
   int r = parse(argc, argv, &a, 1);
   if (r != -1)
     return r;
+  struct ua_config cfg;
+  ua_config_active(&cfg);
+  safe_strncpy(inquiry, cfg.storage_inquiry, sizeof(inquiry));
+  for (int i = 0; !a.mode_set && i < 4; i++)
+    if (!strcmp(cfg.storage_mode, mode_names[i]))
+      a.mode = (enum mode)i;
   if (!strcmp(a.action, "start")) {
     char name[PATH_MAX] = "";
     int fd = a.fd;

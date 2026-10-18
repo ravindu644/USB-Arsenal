@@ -39,6 +39,7 @@ set`) use. Help follows https://clig.dev: every command explains itself, with ex
 | `hid` | `start`, `stop` | `-p/--perm MODE`, `-g/--group GROUP` |
 | `tether` | `start`, `stop` | `--rndis`, `-u/--upstream IFACE`, `-a/--address CIDR`, `-d/--dns IP[,IP]`, `--no-net`, `-f/--foreground`, `-G/--gateway NAME`, `--gateway-pid PID`, `--gateway-netns PATH`, `--gateway-iface IFACE` |
 | `stop` | | |
+| `identity` | `generate FILE`, `set FILE`, `show`, `unset` | `--force` (generate) |
 | `daemon` | `stop` | `-f/--foreground`, `-g/--gid GID` |
 | `help [command]`, `version` | | |
 
@@ -57,6 +58,9 @@ configfs itself; the only state file is the handoff record (see
 `storage` and `hid` are one-shot: the gadget lives in the kernel, not in our process.
 `tether start` forks a process that holds the network side (DHCP and NAT, or the gateway
 cable), and writes `Pids/tether.pid`. `tether stop` and `stop` send it SIGTERM.
+
+Defaults for every command, and the IDs and strings the host sees, come from the active
+profile; see [identity.md](identity.md). An explicit option always wins.
 
 When `usb-arsenal daemon` is running, every command except `daemon`, `help` and
 `version` is relayed to it and runs there; see [daemon.md](daemon.md). `UA_NO_PROXY=1`

@@ -25,6 +25,9 @@
 
 #define TICK_SEC 2
 
+/* The profile in force for this run; MACs come from it when it sets them */
+static const struct ua_config *tether_cfg;
+
 struct tether {
   const char *upstream; /* --upstream, or NULL for automatic */
   const char *dns;      /* --dns, or NULL */
@@ -166,13 +169,8 @@ static int parse_address(const char *s, struct tether *t) {
  * every time tethering starts. Locally administered, derived from something
  * stable on this machine. */
 static void stable_macs(char *dev, char *host, size_t size) {
-  char seed[128] = "";
-  if (is_android())
-    ua_getprop("ro.serialno", seed, sizeof(seed));
-  if (!seed[0])
-    read_file("/etc/machine-id", seed, sizeof(seed));
-  if (!seed[0])
-    safe_strncpy(seed, UA_NAME, sizeof(seed));
+  char seed[128];
+  ua_device_seed(seed, sizeof(seed));
   uint32_t h = 2166136261u;
   for (const char *p = seed; *p; p++)
     h = (h ^ (uint8_t)*p) * 16777619u;
@@ -621,6 +619,10 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
       return UA_EXIT_FAIL;
     }
     stable_macs(dev, host, sizeof(dev));
+    if (tether_cfg && tether_cfg->tether_dev_mac[0])
+      safe_strncpy(dev, tether_cfg->tether_dev_mac, sizeof(dev));
+    if (tether_cfg && tether_cfg->tether_host_mac[0])
+      safe_strncpy(host, tether_cfg->tether_host_mac, sizeof(host));
     write_in(dir, "dev_addr", dev);
     write_in(dir, "host_addr", host);
     if (!strcmp(func, RNDIS) && !g.piggyback)
@@ -736,11 +738,19 @@ int ua_cmd_tether(int argc, char **argv) {
       {"help", no_argument, NULL, 'h'},
       {NULL, 0, NULL, 0},
   };
+  /* static: t.dns and t.upstream point into it for the daemon's lifetime */
+  static struct ua_config cfg;
   struct tether t;
-  int rndis = 0, no_net = 0, fg = 0, c;
+  int rndis, no_net = 0, fg = 0, c;
   memset(&t, 0, sizeof(t));
-  parse_address("192.168.42.129/24", &t);
+  ua_config_active(&cfg);
+  if (parse_address(cfg.tether_address, &t) < 0)
+    parse_address("192.168.42.129/24", &t);
+  t.dns = cfg.tether_dns[0] ? cfg.tether_dns : NULL;
+  t.upstream = cfg.tether_upstream[0] ? cfg.tether_upstream : NULL;
+  rndis = !strcmp(cfg.tether_function, "rndis");
   t.gw_iface = "usb0";
+  tether_cfg = &cfg;
 
   if (argc < 2 || ua_want_help(argc, argv)) {
     ua_help_tether();

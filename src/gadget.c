@@ -360,13 +360,21 @@ int ua_gadget_live(const struct ua_gadget *g) {
 }
 
 static int build_skeleton(const struct ua_gadget *g) {
-  char p[PATH_MAX];
+  char p[PATH_MAX], v[160];
+  struct ua_config c;
   if (mkdir(g->path, 0755) < 0 && errno != EEXIST)
     return -1;
-  write_attr(g->path, "idVendor", UA_ID_VENDOR);
-  write_attr(g->path, "idProduct", UA_ID_PRODUCT);
-  write_attr(g->path, "bcdDevice", "0x0100");
-  write_attr(g->path, "bcdUSB", "0x0200");
+  /* The active profile, or the built-in identity. Written on every take and
+   * every rebind, so `identity set` reaches the host at the next enumeration */
+  ua_config_active(&c);
+  snprintf(v, sizeof(v), "0x%04x", c.id_vendor);
+  write_attr(g->path, "idVendor", v);
+  snprintf(v, sizeof(v), "0x%04x", c.id_product);
+  write_attr(g->path, "idProduct", v);
+  snprintf(v, sizeof(v), "0x%04x", c.bcd_device);
+  write_attr(g->path, "bcdDevice", v);
+  snprintf(v, sizeof(v), "0x%04x", c.bcd_usb);
+  write_attr(g->path, "bcdUSB", v);
   /* Misc/IAD: Windows only enumerates a composite with an RNDIS or NCM
    * function properly when the device says it uses interface associations */
   write_attr(g->path, "bDeviceClass", "0xEF");
@@ -376,17 +384,20 @@ static int build_skeleton(const struct ua_gadget *g) {
   if (pathf(p, sizeof(p), "%s/strings/0x409", g->path) < 0 ||
       mkdir_p(p, 0755) < 0)
     return -1;
-  write_attr(p, "manufacturer", "USB Arsenal");
-  write_attr(p, "product", "USB Arsenal");
-  write_attr(p, "serialnumber", "USBARSENAL0001");
+  write_attr(p, "manufacturer", c.manufacturer);
+  write_attr(p, "product", c.product);
+  if (!c.serial[0])
+    ua_device_seed(c.serial, sizeof(c.serial));
+  write_attr(p, "serialnumber", c.serial);
 
   if (pathf(p, sizeof(p), "%s/strings/0x409", g->config) < 0 ||
       mkdir_p(p, 0755) < 0)
     return -1;
   /* Samsung's configfs treats any configuration string other than "Conf 1" as
    * "symlink change mode" and binds links straight away. Harmless elsewhere. */
-  write_attr(p, "configuration", "USB Arsenal");
-  write_attr(g->config, "MaxPower", "250");
+  write_attr(p, "configuration", c.configuration);
+  snprintf(v, sizeof(v), "%u", c.max_power);
+  write_attr(g->config, "MaxPower", v);
   return 0;
 }
 

@@ -275,10 +275,12 @@ int ua_cmd_hid(int argc, char **argv) {
       {"help", no_argument, NULL, 'h'},
       {NULL, 0, NULL, 0},
   };
-  mode_t perm = 0660;
-  gid_t gid = 0;
+  struct ua_config cfg;
   int c, ok;
   char *end;
+  ua_config_active(&cfg);
+  mode_t perm = (mode_t)cfg.hid_perm;
+  gid_t gid = (gid_t)cfg.hid_group;
 
   if (argc < 2 || ua_want_help(argc, argv)) {
     ua_help_hid();

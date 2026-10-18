@@ -33,6 +33,8 @@ static const struct command commands[] = {
     {"tether", ua_cmd_tether, ua_help_tether,
      "Give the host a network over USB"},
     {"stop", cmd_stop, help_stop, "Tear everything down, restore the owner"},
+    {"identity", ua_cmd_identity, ua_help_identity,
+     "Profiles: IDs, strings, serial, defaults"},
     {"daemon", ua_cmd_daemon, ua_help_daemon,
      "Run the root daemon other copies relay to"},
     {"help", cmd_help, NULL, "Show help for a command"},
@@ -258,8 +260,39 @@ static int relay(int argc, char **argv, int cmd_index) {
           img = i;
     }
   }
+  /* identity: generate only writes the user's own file, so it never goes to
+   * the daemon. set sends its FILE open, plus the path it has here: the
+   * daemon links to it when it sees that very file, else keeps a copy. */
+  static char pathopt[PATH_MAX + 8];
+  if (!strcmp(argv[cmd_index], "identity")) {
+    int act = 0;
+    for (int i = cmd_index + 1; i < argc; i++)
+      if (argv[i][0] != '-') {
+        if (!act) {
+          act = i;
+          if (!strcmp(argv[i], "generate"))
+            return -2;
+          if (strcmp(argv[i], "set"))
+            break;
+        } else {
+          char real[PATH_MAX];
+          if ((fd = open(argv[i], O_RDONLY | O_CLOEXEC)) < 0 ||
+              !realpath(argv[i], real)) {
+            ua_error("%s: %s", argv[i], strerror(errno));
+            if (fd >= 0)
+              close(fd);
+            return UA_EXIT_FAIL;
+          }
+          snprintf(pathopt, sizeof(pathopt), "--path=%s", real);
+          img = i;
+          break;
+        }
+      }
+  }
   for (int i = 1; i < argc; i++)
     av[n++] = (img && i == img) ? "--fd=3" : argv[i];
+  if (pathopt[0])
+    av[n++] = pathopt;
   av[n] = NULL;
   int r = ua_client_run(n, av, &fd, fd >= 0 ? 1 : 0);
   if (fd >= 0)

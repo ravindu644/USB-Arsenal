@@ -28,6 +28,7 @@ SRCS = $(SRC_DIR)/main.c \
        $(SRC_DIR)/check.c \
        $(SRC_DIR)/gadget.c \
        $(SRC_DIR)/daemon.c \
+       $(SRC_DIR)/config.c \
        $(SRC_DIR)/gadgets/storage.c \
        $(SRC_DIR)/gadgets/hid.c \
        $(SRC_DIR)/gadgets/tether.c \

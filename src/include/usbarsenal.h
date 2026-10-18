@@ -58,11 +58,6 @@
 #define UA_ENUM_TIMEOUT_MS 3000     /* host reaching "configured" after bind */
 #define UA_RESTORE_TIMEOUT_MS 10000 /* Android's mode back, adbd included */
 
-/* Linux Foundation multifunction composite gadget. Hosts bind usbccgp/the
- * composite driver to it without an inf, which is all we need. */
-#define UA_ID_VENDOR "0x1d6b"
-#define UA_ID_PRODUCT "0x0104"
-
 /* Exit codes, the way git and most CLIs split them */
 #define UA_EXIT_OK 0
 #define UA_EXIT_FAIL 1
@@ -106,6 +101,7 @@ int ua_setprop(const char *name, const char *value);
 int ua_wait_file(const char *path, const char *want, int timeout_ms);
 int ua_wait_prop(const char *name, const char *want, int timeout_ms);
 pid_t ua_read_our_pid(const char *pidfile);
+void ua_device_seed(char *out, size_t size);
 #define UA_MAX_FDS 8
 int ua_send_fds(int sock, const void *data, size_t len, const int *fds,
                 int count);
@@ -145,6 +141,26 @@ int ua_gadget_func_dir(const struct ua_gadget *g, const char *func, char *dir,
                        size_t size);
 void ua_crit_enter(void);
 void ua_crit_leave(void);
+
+/* config.c */
+
+struct ua_config {
+  char source[PATH_MAX]; /* the profile in force, "" = built-in */
+  int copied;            /* source is a copy kept in the workspace */
+  unsigned id_vendor, id_product, bcd_device, bcd_usb, max_power;
+  char manufacturer[127], product[127], serial[127], configuration[127];
+  char storage_inquiry[29];
+  char tether_dev_mac[18], tether_host_mac[18];
+  char storage_mode[8], tether_function[8];
+  char tether_address[32], tether_dns[128], tether_upstream[IFNAMSIZ];
+  unsigned hid_perm, hid_group;
+};
+
+void ua_config_defaults(struct ua_config *c);
+int ua_config_load(const char *path, struct ua_config *c);
+void ua_config_active(struct ua_config *c);
+int ua_cmd_identity(int argc, char **argv);
+void ua_help_identity(void);
 
 /* check.c */
 

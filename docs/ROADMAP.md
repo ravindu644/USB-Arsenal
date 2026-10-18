@@ -127,6 +127,19 @@ Tick a box only when the item is merged and verified as described in its phase.
       one ~7 s blip while OpenWrt's services start)
 - [ ] Hardware: module flashed, daemon up after boot
 
+## Phase 6. Identity profiles (see [identity.md](identity.md))
+- [x] `identity generate FILE [--force]`: every key, with defaults and comments
+      (Droidspaces config.c style loader and atomic writes)
+- [x] `identity set FILE`: symlink in `Gadget/identity.conf`, or a copy when the daemon
+      cannot see the file; re-plugs a live gadget
+- [x] `identity show`, `identity unset`; a vanished profile is reported and the
+      defaults used
+- [x] Profile drives descriptor IDs, strings, serial (default from `ro.serialno`),
+      MaxPower, SCSI inquiry, tether MACs, and the defaults of storage, tether and HID
+- [x] Hardware: container profile copied, host saw `18d1:4ee8` Google/Pixel/TEST123 and
+      the inquiry string, leased from the profile's subnet; live change re-plugged once;
+      Android-side profile symlinked, deletion reported
+
 ## Phase 4. UVC (TODO)
 - [ ] `f_uvc` plus a userspace frame feeder, after the kernel's `uvc-gadget` sample
 
@@ -214,4 +227,8 @@ Tick a box only when the item is merged and verified as described in its phase.
   keyboard and mouse, NCM tether through the daemon), checked by the user. A cable
   unplug and replug brought the whole composite device back on the host by itself:
   the UDC's VBUS handling raises the pullup again on the own-gadget backend.
+- 2026-10-18: Identity profiles. Verified from the container (copy) and from the
+  Android shell (symlink). The host saw the profile's VID/PID, strings, serial and SCSI
+  inquiry string, and leased from the profile's tether subnet. A live `set` re-plugged
+  once. A deleted target was reported, and the defaults applied.
 

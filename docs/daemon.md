@@ -28,7 +28,7 @@ The subfolders follow Droidspaces' names:
 | `Logs/` | `usb-arsenald.log` (rotated at 2 MB), `tether.log` |
 | `Pids/` | `tether.pid` |
 | `Net/` | `tether.info` |
-| `Gadget/` | `handoff`, `lock`, `hid.perm` |
+| `Gadget/` | `handoff`, `lock`, `hid.perm`, `identity.conf` (the active profile: a symlink, or a copy; see [identity.md](identity.md)) |
 | `bin/` | a copy of the binary (installed by the module) |
 
 ## Running it

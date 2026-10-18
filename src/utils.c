@@ -435,3 +435,16 @@ ssize_t ua_recv_fds(int sock, void *data, size_t len, int *fds, int max,
   }
   return n;
 }
+
+/* Something stable and unique to this machine: the phone's serial, else the
+ * machine id. The default USB serial and the tether MACs come from it, so a
+ * host keeps recognising the device and two of them never collide. */
+void ua_device_seed(char *out, size_t size) {
+  out[0] = '\0';
+  if (is_android())
+    ua_getprop("ro.serialno", out, size);
+  if (!out[0])
+    read_file("/etc/machine-id", out, size);
+  if (!out[0])
+    safe_strncpy(out, UA_NAME, size);
+}
