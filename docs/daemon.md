@@ -162,6 +162,14 @@ A composite gadget makes the host name its network interface by interface number
 new interface `disconnected` until `nmcli device connect <iface>`, or a profile matching
 it, activates it. Fixed MACs (from `ro.serialno`) keep it stable after that.
 
+If the host should keep its own default route (for instance a workstation testing the
+gateway mode), give the USB link a profile that never takes it:
+
+```sh
+nmcli connection add type ethernet con-name "USB Arsenal (no default route)" \
+  match.interface-name "enp0s20f0u*" ipv4.never-default yes ipv6.never-default yes
+```
+
 ## Verified (a166p, 5.15, Fedora host)
 
 - Daemon on the Android side: socket and directory modes as above, a second instance
@@ -173,6 +181,10 @@ it, activates it. Fixed MACs (from `ro.serialno`) keep it stable after that.
     reached the internet through OpenWrt.
   - A `storage start` rebind kept `usb0` on the bridge.
   - `stop` removed the links.
+- Restarting the OpenWrt container: the cable was re-plugged into the new namespace by
+  itself. The host's DNS through OpenWrt was back after about 13 s (graceful stop plus
+  boot), with one more ~7 s blip while OpenWrt's services started, and the host kept
+  its lease.
 - From the Ubuntu container through the bind-mounted `Run/`:
   - As root: storage from a container path, HID, and NAT tether (the host's default
     route went through the phone).

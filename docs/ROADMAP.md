@@ -122,7 +122,9 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Hardware: client inside a Droidspaces container through the bind-mounted `Run/`:
       root (storage from a container path, HID, NAT tether: host online through the
       phone), group member (status, storage of their own image), non-member refused
-- [ ] Hardware: gateway re-plug after an OpenWrt container restart
+- [x] Hardware: gateway re-plug after an OpenWrt container restart (new pid and netns;
+      cable re-plugged automatically; host's DNS through OpenWrt back after ~13 s, then
+      one ~7 s blip while OpenWrt's services start)
 - [ ] Hardware: module flashed, daemon up after boot
 
 ## Phase 4. UVC (TODO)
@@ -200,3 +202,11 @@ Tick a box only when the item is merged and verified as described in its phase.
   "daemon, but no access". `stop` as the group member gave back ADB.
   Host-side note: with storage or HID in the gadget, the host names the NCM interface
   `...i3`, and NetworkManager may need `nmcli device connect` the first time.
+- 2026-10-18: OpenWrt restart under gateway mode. `droidspaces --name=OpenWrt restart`
+  changed the pid (27088 → 20373) and the netns. The tether loop logged "not running",
+  then re-plugged `vaplan0` into the new namespace, where netifd brought it back as
+  192.168.42.1. Host side: DNS through OpenWrt down about 13 s (Droidspaces' graceful
+  stop plus boot), then one ~7 s blip during OpenWrt service start-up, then stable. The
+  host kept its lease; nothing was needed on the PC. Lesson: the test host must not
+  route its default traffic over the USB link, or a gateway restart stalls the test
+  machine itself (a NetworkManager profile with `never-default` did it).
