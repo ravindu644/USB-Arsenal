@@ -62,7 +62,7 @@ for DVD emulation instead. Nobody upstreamed one.
   DISC INFORMATION, READ TRACK INFORMATION, READ DISC STRUCTURE (physical format), the
   0x2A capabilities mode page, and a fixed lead-out in the TOC. Images below the limit
   stay CD-ROMs. About 390 lines in `f_mass_storage.c` and `storage_common.[ch]`, GPL-2,
-  no userspace interface change. This is the one to port into `kernel-patches/`.
+  no userspace interface change. Backported to 4.14 as `kernel-patches/4.14/0004`.
 
 **Without a kernel patch (untested idea).** EDK2's `PartitionDxe/ElTorito.c` parses El
 Torito on any block device whose block size divides 2048 ("If the ISO image has been

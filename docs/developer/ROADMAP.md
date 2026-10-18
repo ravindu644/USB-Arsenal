@@ -74,8 +74,9 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Hardware: the same ISO boots from `sr0` in `--mode cdrom` (El Torito, UEFI)
 - [ ] Hardware: a non-hybrid ISO (Windows) boots from `sr0`; legacy BIOS boot
 - [ ] Hardware: swap while live, host sees a medium change, no re-enumeration
-- [ ] Port PiKVM's DVD-ROM emulation to `kernel-patches/4.14/` (CD-ROM images over
-      2.36 GB, see research/03)
+- [x] Port PiKVM's DVD-ROM emulation to `kernel-patches/4.14/0004` (CD-ROM images over
+      2.36 GB, see research/03); builds clean on M62
+- [ ] Hardware: a CD-ROM image over 2.36 GB boots with `0004`
 - [ ] Try a Windows ISO in disk mode, then on a 2048-byte loop device (no kernel patch)
 - [ ] Stretch: Ventoy-style on-PC menu
 
