@@ -29,7 +29,7 @@ ignores `tether_address`.
 | `max_power` | `250` | mA, 0 to 500 |
 | `storage_inquiry` | empty | SCSI vendor(8) product(16) revision(4), at most 28 characters; empty: the kernel's "Linux File-Stor Gadget" |
 | `tether_dev_mac`, `tether_host_mac` | empty | empty: derived from the device seed, stable |
-| `storage_mode` | `auto` | `auto`, `cdrom`, `disk`, `rw` |
+| `storage_mode` | `auto` | `auto`, `cdrom`, `dvd`, `disk`, `rw` |
 | `tether_function` | `ncm` | `ncm`, `rndis` |
 | `tether_address` | `192.168.42.129/24` | this side; the host gets the next address |
 | `tether_dns` | empty | empty: `1.1.1.1,8.8.8.8` |

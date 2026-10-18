@@ -52,7 +52,7 @@ static const struct key keys[] = {
     {"tether_host_mac", K_MAC, F(tether_host_mac), S(tether_host_mac), 0, NULL,
      "the MAC the host sees"},
     {"storage_mode", K_CHOICE, F(storage_mode), S(storage_mode), 0,
-     "auto cdrom disk rw", "auto | cdrom | disk | rw"},
+     "auto cdrom dvd disk rw", "auto | cdrom | dvd | disk | rw"},
     {"tether_function", K_CHOICE, F(tether_function), S(tether_function), 0,
      "ncm rndis", "ncm | rndis"},
     {"tether_address", K_CIDR, F(tether_address), S(tether_address), 0, NULL,

@@ -41,20 +41,31 @@ usb-arsenal storage stop
 
 | Mode | The host sees |
 |---|---|
-| `auto` (default) | a disk if the image has an MBR or GPT (hybrid Linux ISOs, USB images), a CD-ROM otherwise |
+| `auto` (default) | a disk if the image has an MBR or GPT (hybrid Linux ISOs, USB images); otherwise a CD-ROM, or `dvd` when the image is over the CD-ROM limit |
 | `cdrom` | a read-only CD-ROM: plain ISO9660/UDF images boot this way |
+| `dvd` | a read-only disk with 2048-byte sectors: plain ISOs of any size, such as Windows ISOs |
 | `disk` | a read-only disk |
 | `rw` | a writable disk: a pen drive the host can write to |
 
 - **`--lun N` (0-7)** adds another drive. Each LUN is a separate drive on the host.
 - **`start` on a live LUN** swaps the image in place, like changing a disc.
-  - A change between disk and CD-ROM re-plugs the gadget, because a host only reads the
-    device type when it enumerates.
+  - A change between disk, `dvd` and CD-ROM re-plugs the gadget, because a host only
+    reads the device type and sector size when it enumerates or sees a new disc.
   - If the host has locked the drive, `start` also re-plugs, which releases the lock.
 - **CD-ROM mode stops at about 2.36 GB.** The kernel cuts larger images off and the host
-  reads a truncated disc; USB Arsenal warns. Modern Windows ISOs are bigger than that:
-  write them to a disk image with an NTFS partition (Rufus, or woeusb on Linux) and use
-  `--mode disk`.
+  reads a truncated disc; USB Arsenal warns (unless the kernel carries
+  `kernel-patches/4.14/0004`). `dvd` mode has no limit and is what auto mode picks for a
+  big plain ISO:
+  - The image goes behind a read-only loop device with 2048-byte blocks. The loop
+    detaches by itself on eject, swap or stop.
+  - UEFI firmware boots it through El Torito, and Windows finds its UDF volume because
+    the sectors are the size UDF expects. Verified with a 4.9 GB WinPE 11 ISO.
+  - It needs kernel 4.14 or newer, and on Android an SELinux rule that lets the kernel
+    read loop devices. The module loads that rule at boot; with the bare binary, run
+    `ksud sepolicy patch "allow kernel loop_device blk_file { open read getattr ioctl }"`
+    (Magisk: `magiskpolicy --live "..."`). Without it, `storage` refuses instead of
+    serving a disk the host cannot read.
+  - Legacy BIOS boot of a `dvd` LUN is untested.
 - **Through the daemon, the image is opened on your side** and passed to the daemon as an
   open file, so a path inside a container works as typed.
 - **On Android, an image the kernel may not read gets relabelled.** Files in a container

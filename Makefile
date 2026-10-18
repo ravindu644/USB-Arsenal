@@ -146,7 +146,7 @@ module:
 		$(MAKE) --no-print-directory $$a || exit 1; \
 		mv $(OUT_DIR)/$(BINARY_NAME) $(OUT_DIR)/module/bin/$(BINARY_NAME)-$$a || exit 1; \
 	done
-	@cp module/module.prop module/customize.sh module/service.sh module/uninstall.sh $(OUT_DIR)/module/
+	@cp module/module.prop module/customize.sh module/service.sh module/uninstall.sh module/sepolicy.rule $(OUT_DIR)/module/
 	@sed -i 's/^version=.*/version=v$(VERSION)/' $(OUT_DIR)/module/module.prop
 	@cd $(OUT_DIR)/module && rm -f ../$(BINARY_NAME)-$(VERSION).zip && zip -qr9 ../$(BINARY_NAME)-$(VERSION).zip .
 	@echo "[+] Built: $(OUT_DIR)/$(BINARY_NAME)-$(VERSION).zip"

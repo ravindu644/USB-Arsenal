@@ -11,6 +11,7 @@
  */
 
 #include "usbarsenal.h"
+#include <linux/loop.h>
 #include <sys/xattr.h>
 
 #define FUNC "mass_storage.ua"
@@ -24,8 +25,16 @@ static char inquiry[32];
 #define CDROM_MAX_BYTES ((long long)(256 * 60 * 75 - 1) * 2048)
 #define CDROM_MIN_BYTES (300LL * 2048)
 
-enum mode { MODE_AUTO, MODE_CDROM, MODE_DISK, MODE_RW };
-static const char *const mode_names[] = {"auto", "cdrom", "disk", "rw"};
+enum mode { MODE_AUTO, MODE_CDROM, MODE_DVD, MODE_DISK, MODE_RW };
+static const char *const mode_names[] = {"auto", "cdrom", "dvd", "disk", "rw"};
+#define NMODES (int)(sizeof(mode_names) / sizeof(mode_names[0]))
+
+#ifndef LOOP_SET_BLOCK_SIZE
+#define LOOP_SET_BLOCK_SIZE 0x4C09
+#endif
+
+/* The loop device behind a dvd LUN, closed once the kernel holds it */
+static int loop_fd = -1;
 
 void ua_help_storage(void) {
   printf(
@@ -42,9 +51,14 @@ void ua_help_storage(void) {
       "  -m, --mode MODE  How the host sees the image (default: auto)\n"
       "                     auto   disk if the image has an MBR or GPT\n"
       "                            (isohybrid Linux ISOs, USB images),\n"
-      "                            CD-ROM otherwise (Windows ISOs)\n"
+      "                            CD-ROM otherwise, dvd past the CD-ROM\n"
+      "                            limit (Windows ISOs)\n"
       "                     cdrom  read-only CD-ROM, boots plain ISO9660/UDF\n"
       "                            via El Torito. Limit: about 2.36 GB.\n"
+      "                     dvd    read-only disk with 2048-byte sectors, for\n"
+      "                            plain ISOs of any size. UEFI boots it via\n"
+      "                            El Torito and Windows reads its UDF.\n"
+      "                            Needs kernel 4.14+ (loop block size).\n"
       "                     disk   read-only disk\n"
       "                     rw     writable disk: a pen drive the host can\n"
       "                            write to. Never use on a mounted image.\n"
@@ -53,17 +67,14 @@ void ua_help_storage(void) {
       "  -h, --help       Show this help\n\n"
       "Examples:\n"
       "  " UA_NAME " storage start ubuntu-24.04.iso\n"
-      "  " UA_NAME " storage start --mode cdrom Win11.iso\n"
+      "  " UA_NAME " storage start --mode dvd Win11.iso\n"
       "  " UA_NAME " storage start --mode rw /data/local/tmp/pendrive.img\n"
       "  " UA_NAME " storage start --lun 1 --mode disk rescue.img\n"
       "  " UA_NAME " storage start fedora.iso     # swaps the live image\n"
       "  " UA_NAME " storage eject\n"
       "  " UA_NAME " storage stop\n\n"
       "Make a blank 4 GB pen drive image:\n"
-      "  truncate -s 4G pendrive.img\n\n"
-      "Windows ISOs are larger than the kernel's CD-ROM limit. Write them to\n"
-      "a disk image with an NTFS partition (Rufus, or woeusb on Linux) and\n"
-      "use --mode disk.\n");
+      "  truncate -s 4G pendrive.img\n");
 }
 
 /* lseek works for block devices too, no BLKGETSIZE64 needed */
@@ -88,6 +99,12 @@ static enum mode detect_mode(int fd) {
 static int lun_dir(const char *fdir, int lun, char *out, size_t size) {
   int n = snprintf(out, size, "%s/lun.%d", fdir, lun);
   return (n < 0 || (size_t)n >= size) ? -1 : 0;
+}
+
+/* A dvd LUN holds a loop device rather than the image itself */
+static int is_loop(const char *file) {
+  const char *base = strrchr(file, '/');
+  return base && !strncmp(base + 1, "loop", 4);
 }
 
 static int lun_write(const char *ldir, const char *attr, const char *val) {
@@ -176,6 +193,103 @@ static void selinux_fix(int fd, const char *path) {
             path, label, strerror(errno));
 }
 
+/* Asks selinuxfs whether the kernel domain may read a block device with
+ * this label. 1 when it may or when there is no SELinux to ask. */
+static int kernel_reads_blk(int fd) {
+  char label[256], q[320], ans[64], v[16];
+  ssize_t n = fgetxattr(fd, "security.selinux", label, sizeof(label) - 1);
+  if (n <= 0)
+    return 1;
+  label[n] = '\0';
+  int cls, perm;
+  if (read_file("/sys/fs/selinux/class/blk_file/index", v, sizeof(v)) <= 0 ||
+      (cls = atoi(v)) <= 0 ||
+      read_file("/sys/fs/selinux/class/blk_file/perms/read", v, sizeof(v)) <=
+          0 ||
+      (perm = atoi(v)) <= 0)
+    return 1;
+  int afd = open("/sys/fs/selinux/access", O_RDWR | O_CLOEXEC);
+  if (afd < 0)
+    return 1;
+  int len = snprintf(q, sizeof(q), "u:r:kernel:s0 %s %d", label, cls);
+  int ok = 1;
+  if (write(afd, q, len) == len && (n = read(afd, ans, sizeof(ans) - 1)) > 0) {
+    ans[n] = '\0';
+    ok = (strtoul(ans, NULL, 16) >> (perm - 1)) & 1;
+  }
+  close(afd);
+  return ok;
+}
+
+/* A loop device node: ueventd (or udev) makes it a moment after the kernel
+ * creates the device, so wait for it before making one ourselves. The minor
+ * comes from sysfs, since loop.max_part spaces them out. */
+static int loop_open(int n, char *dev, size_t size) {
+  for (int tries = 0; tries < 20; tries++) {
+    snprintf(dev, size, "/dev/block/loop%d", n);
+    if (access(dev, F_OK) != 0)
+      snprintf(dev, size, "/dev/loop%d", n);
+    int fd = open(dev, O_RDONLY | O_CLOEXEC);
+    if (fd >= 0 || errno != ENOENT)
+      return fd;
+    usleep(50000);
+  }
+  char p[64], v[32];
+  unsigned maj, min;
+  snprintf(p, sizeof(p), "/sys/block/loop%d/dev", n);
+  if (read_file(p, v, sizeof(v)) <= 0 || sscanf(v, "%u:%u", &maj, &min) != 2)
+    return -1;
+  snprintf(
+      dev, size,
+      access("/dev/block", F_OK) == 0 ? "/dev/block/loop%d" : "/dev/loop%d", n);
+  mknod(dev, S_IFBLK | 0600, makedev(maj, min));
+  return open(dev, O_RDONLY | O_CLOEXEC);
+}
+
+/* dvd mode: the image behind a read-only loop device with 2048-byte blocks.
+ * f_mass_storage then reports 2048-byte sectors, the geometry a plain ISO's
+ * UDF is laid out for, and disk mode has no CD-ROM size clamp. Autoclear
+ * detaches the loop when its last user lets go: us right after the kernel
+ * opens it, then the kernel on eject, swap or stop. */
+static int loop_attach(int fd, const char *name, char *dev, size_t size) {
+  int ctl = open("/dev/loop-control", O_RDWR | O_CLOEXEC);
+  if (ctl < 0) {
+    ua_error("dvd mode needs loop devices: /dev/loop-control: %s",
+             strerror(errno));
+    return -1;
+  }
+  for (int tries = 0; tries < 3; tries++) {
+    int n = ioctl(ctl, LOOP_CTL_GET_FREE);
+    int lfd = n < 0 ? -1 : loop_open(n, dev, size);
+    if (lfd < 0)
+      break;
+    if (ioctl(lfd, LOOP_SET_FD, fd) < 0) {
+      close(lfd);
+      if (errno == EBUSY)
+        continue; /* someone took it between GET_FREE and here */
+      break;
+    }
+    struct loop_info64 li;
+    memset(&li, 0, sizeof(li));
+    li.lo_flags = LO_FLAGS_AUTOCLEAR;
+    safe_strncpy((char *)li.lo_file_name, name, sizeof(li.lo_file_name));
+    if (ioctl(lfd, LOOP_SET_STATUS64, &li) < 0 ||
+        ioctl(lfd, LOOP_SET_BLOCK_SIZE, 2048UL) < 0) {
+      ua_error("Cannot give %s 2048-byte blocks: %s%s", dev, strerror(errno),
+               errno == EINVAL ? " (needs kernel 4.14 or newer)" : "");
+      ioctl(lfd, LOOP_CLR_FD, 0);
+      close(lfd);
+      close(ctl);
+      return -1;
+    }
+    close(ctl);
+    return lfd;
+  }
+  ua_error("Cannot set up a loop device for %s: %s", name, strerror(errno));
+  close(ctl);
+  return -1;
+}
+
 /* The image arrives open, either opened here or by a client in another
  * mount namespace and passed over the daemon socket. The kernel gets
  * /proc/self/fd/N: it follows the magic link to the real file wherever that
@@ -184,9 +298,12 @@ static void selinux_fix(int fd, const char *path) {
 static int do_start(int fd, const char *name, enum mode mode, int lun) {
   char path[64];
   snprintf(path, sizeof(path), "/proc/self/fd/%d", fd);
-  if (mode == MODE_AUTO)
-    mode = detect_mode(fd);
   long long size = image_size(fd);
+  if (mode == MODE_AUTO) {
+    mode = detect_mode(fd);
+    if (mode == MODE_CDROM && size > CDROM_MAX_BYTES)
+      mode = MODE_DVD;
+  }
 
   if (mode == MODE_CDROM && size >= 0 && size < CDROM_MIN_BYTES) {
     ua_error("%s is too small for a CD-ROM (minimum 600 KB)", name);
@@ -195,8 +312,8 @@ static int do_start(int fd, const char *name, enum mode mode, int lun) {
   if (mode == MODE_CDROM && size > CDROM_MAX_BYTES)
     ua_warn("%s is %.2f GB, but the kernel's CD-ROM emulation stops at 2.36 "
             "GB unless it carries the DVD patch (kernel-patches/4.14/0004). "
-            "Otherwise the host will read a truncated disc; use --mode disk "
-            "with a disk image instead (see '" UA_NAME " storage --help').",
+            "Otherwise the host reads a truncated disc; --mode dvd has no "
+            "limit.",
             name, (double)size / 1e9);
 
   struct ua_gadget g;
@@ -206,6 +323,23 @@ static int do_start(int fd, const char *name, enum mode mode, int lun) {
   struct stat st;
   if (g.android_gadget && fstat(fd, &st) == 0 && S_ISREG(st.st_mode))
     selinux_fix(fd, name);
+
+  if (mode == MODE_DVD) {
+    char dev[32];
+    if ((loop_fd = loop_attach(fd, name, dev, sizeof(dev))) < 0)
+      return UA_EXIT_FAIL;
+    /* Fail closed: an unreadable LUN looks like a dead disk on the host */
+    if (g.android_gadget && !kernel_reads_blk(loop_fd)) {
+      ua_error("SELinux does not let the kernel read loop devices, so the "
+               "host would see only read errors. The USB Arsenal module "
+               "loads the rule at boot; without it, run: ksud sepolicy patch "
+               "\"allow kernel loop_device blk_file { open read getattr "
+               "ioctl }\" (Magisk: magiskpolicy --live)");
+      return UA_EXIT_FAIL;
+    }
+    ua_debug("%s is %s with 2048-byte blocks", name, dev);
+    snprintf(path, sizeof(path), "/proc/self/fd/%d", loop_fd);
+  }
 
   char fdir[PATH_MAX], ldir[PATH_MAX];
   if (ua_gadget_func_dir(&g, FUNC, fdir, sizeof(fdir)) < 0 ||
@@ -217,11 +351,16 @@ static int do_start(int fd, const char *name, enum mode mode, int lun) {
    * CD-ROM is a different SCSI device type, which a host only reads when it
    * enumerates, and a host lock blocks the eject; both take the rebind
    * below, whose disconnect also clears the lock. */
-  char cdrom[PATH_MAX + 8], v[8] = "";
+  /* dvd and disk differ in sector size, which the host also only reads
+   * when it sees a new medium, so a loaded one is swapped the same way. */
+  char cdrom[PATH_MAX + 8], cur[PATH_MAX + 8], v[8] = "";
   snprintf(cdrom, sizeof(cdrom), "%s/cdrom", ldir);
+  snprintf(cur, sizeof(cur), "%s/file", ldir);
   if (ua_gadget_live(&g) && ua_gadget_has(&g, FUNC) &&
       read_file(cdrom, v, sizeof(v)) > 0 &&
-      (v[0] == '1') == (mode == MODE_CDROM)) {
+      (v[0] == '1') == (mode == MODE_CDROM) &&
+      (read_file(cur, cur, sizeof(cur)) <= 0 ||
+       is_loop(cur) == (mode == MODE_DVD))) {
     int r = lun_load(ldir, path, mode, 0);
     if (r == 0) {
       ua_log("LUN %d now holds %s (%s)", lun, name, mode_names[mode]);
@@ -257,6 +396,7 @@ static int do_start(int fd, const char *name, enum mode mode, int lun) {
     return UA_EXIT_FAIL;
   ua_log("Serving %s as a %s on LUN %d", name,
          mode == MODE_CDROM ? "CD-ROM"
+         : mode == MODE_DVD ? "read-only disk with 2048-byte sectors"
          : mode == MODE_RW  ? "writable disk"
                             : "read-only disk",
          lun);
@@ -323,11 +463,22 @@ void ua_status_storage(const struct ua_gadget *g) {
     int cdrom = read_file(p, v, sizeof(v)) > 0 && v[0] == '1';
     snprintf(p, sizeof(p), "%s/ro", ldir);
     int ro = read_file(p, v, sizeof(v)) > 0 && v[0] == '1';
-    printf("Storage:    LUN %d: %s%s\n", lun, file[0] ? file : "(empty)",
-           !file[0] ? ""
-           : cdrom  ? " [cdrom]"
-           : ro     ? " [disk, read-only]"
-                    : " [disk, writable]");
+    /* Name the image behind a dvd LUN's loop device */
+    char backing[PATH_MAX] = "";
+    if (is_loop(file)) {
+      snprintf(p, sizeof(p), "/sys/block/%s/loop/backing_file",
+               strrchr(file, '/') + 1);
+      read_file(p, backing, sizeof(backing));
+    }
+    printf("Storage:    LUN %d: %s%s\n", lun,
+           backing[0] ? backing
+           : file[0]  ? file
+                      : "(empty)",
+           !file[0]     ? ""
+           : cdrom      ? " [cdrom]"
+           : backing[0] ? " [dvd]"
+           : ro         ? " [disk, read-only]"
+                        : " [disk, writable]");
   }
 }
 
@@ -359,7 +510,7 @@ static int parse(int argc, char **argv, struct sargs *a, int report) {
     switch (c) {
     case 'm': {
       int found = 0;
-      for (int i = 0; i < 4; i++)
+      for (int i = 0; i < NMODES; i++)
         if (!strcmp(optarg, mode_names[i]))
           a->mode = (enum mode)i, found = 1, a->mode_set = 1;
       if (!found) {
@@ -457,7 +608,7 @@ int ua_cmd_storage(int argc, char **argv) {
   struct ua_config cfg;
   ua_config_active(&cfg);
   safe_strncpy(inquiry, cfg.storage_inquiry, sizeof(inquiry));
-  for (int i = 0; !a.mode_set && i < 4; i++)
+  for (int i = 0; !a.mode_set && i < NMODES; i++)
     if (!strcmp(cfg.storage_mode, mode_names[i]))
       a.mode = (enum mode)i;
   if (!strcmp(a.action, "start")) {
@@ -479,6 +630,8 @@ int ua_cmd_storage(int argc, char **argv) {
     }
     r = do_start(fd, name[0] ? name : "image", a.mode, a.lun);
     close(fd); /* the kernel holds its own reference by now */
+    if (loop_fd >= 0)
+      close(loop_fd); /* autoclear: the loop now lives as long as the LUN */
     return r;
   }
   if (!strcmp(a.action, "eject"))

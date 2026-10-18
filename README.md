@@ -15,8 +15,9 @@ Android when it is done, so ADB and MTP return.
 
 - **ISOs the way a boot stick or DVD presents them.** An image with a partition table
   (hybrid Linux ISOs, USB images) appears as a disk; a plain ISO9660 image appears as a
-  CD-ROM. The mode is picked from the image, and a new image can be swapped in while the
-  drive is live.
+  CD-ROM, or past the 2.36 GB CD-ROM limit (Windows ISOs) as a disk with 2048-byte
+  sectors. The mode is picked from the image, and a new image can be swapped in while
+  the drive is live.
 - **A pen drive.** Any image file or block device, read-only or writable, with up to
   eight drives at once.
 - **USB tethering.** NCM, or RNDIS for older Windows, with DHCP and NAT built in, IPv6
@@ -82,9 +83,9 @@ usb-arsenal stop                                  # everything off, ADB and MTP 
 
 The host was a Fedora PC: it read the disks and CD-ROMs, typed nothing but saw the HID
 devices, and got online through the tether. An MSI laptop booted Alpine Linux from an
-ISO on the S10 (UEFI, as a disk and as a CD-ROM); legacy BIOS boot is not verified yet,
-and the KernelSU module has not been flashed on a test device (the daemon
-it starts was tested by hand). Other phones, kernels and hosts are untested; reports are
+ISO on the S10 (UEFI, as a disk and as a CD-ROM) and a 4.9 GB Windows PE ISO in `dvd`
+mode. Legacy BIOS boot is not verified yet, and the KernelSU module has not been flashed
+on a test device (the daemon it starts was tested by hand). Other phones, kernels and hosts are untested; reports are
 welcome.
 
 ## Security

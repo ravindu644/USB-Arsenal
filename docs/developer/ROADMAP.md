@@ -79,8 +79,12 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [ ] Hardware: a CD-ROM image over 2.36 GB boots with `0004`
 - [x] Hardware: a 4.9 GB Windows PE ISO boots and mounts its UDF volume from a 2048-byte
       loop device in disk mode, stock kernel (S10, MSI, UEFI)
-- [ ] `storage`: serve big non-hybrid ISOs through a 2048-byte loop device automatically;
-      ship the `loop_device` sepolicy rule in the module
+- [x] `storage --mode dvd`: big plain ISOs through a 2048-byte autoclear loop device,
+      picked by auto mode past the CD-ROM limit; SELinux checked first (fail closed);
+      the module ships the `loop_device` rule as `sepolicy.rule`. Verified on the S10:
+      auto picks dvd, status names the ISO, loops cleaned up after a swap and `stop`
+- [ ] Hardware: `dvd` mode under legacy BIOS; the fail-closed SELinux path on a device
+      without the rule; the module's `sepolicy.rule` loaded at boot
 - [ ] Stretch: Ventoy-style on-PC menu
 
 ## Phase 2. `hid`
@@ -323,3 +327,8 @@ Tick a box only when the item is merged and verified as described in its phase.
   volume (512-byte sectors put UDF's anchor in the wrong place). Behind a loop device
   with 2048-byte blocks, served in disk mode, it booted and mounted everything. Needs
   one SELinux rule so the kernel may read `loop_device`. Details in research/03.
+- 2026-10-19: `storage --mode dvd` built in. Auto mode now serves a plain ISO over 2.36 GB
+  from a read-only loop device with 2048-byte blocks and autoclear, so the loop goes when
+  the LUN lets go of it. Checked on the S10 with the 4.9 GB WinPE ISO: auto chose dvd,
+  Fedora read UDF with 2048-byte sectors, a swap and `stop` left no loop behind, ADB came
+  back.

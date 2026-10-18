@@ -16,8 +16,15 @@ automatically and print "Relabelled ...". If the relabel itself fails, move the 
 
 **A Windows ISO boots, then setup fails part-way.**
 CD-ROM mode stops at about 2.36 GB, and the kernel silently cuts the rest off; USB
-Arsenal warns about it. Use a disk image with an NTFS partition and `--mode disk`; see
+Arsenal warns about it. Use `--mode dvd` (auto mode picks it for big plain ISOs); see
 [usage.md](usage.md#storage).
+
+**WinPE boots, but its programs or `sources` folder are missing.**
+The ISO was served with `--mode disk`. Its 512-byte sectors put the UDF anchor where
+Windows does not look, so Windows never mounts the volume. Use `--mode dvd`.
+
+**`dvd` mode refuses: "SELinux does not let the kernel read loop devices".**
+Install the module (it loads the rule at boot) or load the rule the message prints.
 
 **Swapping an image made the device re-appear on the host.**
 That happens when switching between disk and CD-ROM, or when the host had locked the

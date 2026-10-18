@@ -86,6 +86,10 @@ so the host saw "Unrecovered read error" on sector 0 until
 `allow kernel loop_device blk_file { open read getattr ioctl }` was loaded
 (`ksud sepolicy patch`; a module ships it as `sepolicy.rule`).
 
+`storage --mode dvd` does this (`loop_attach()` in `src/gadgets/storage.c`), with
+`LO_FLAGS_AUTOCLEAR` so the loop detaches when f_mass_storage closes it, and checks the
+SELinux rule through selinuxfs `access` before serving.
+
 Also: toybox `losetup` has no block-size option and refuses paths over 64 bytes, and with
 `loop.max_part=7` a loop's minor is `n * 8`, so a fallback `mknod` must read the
 minor from sysfs.

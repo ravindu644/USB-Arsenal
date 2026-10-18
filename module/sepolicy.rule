@@ -1,0 +1,2 @@
+# The kernel thread behind a dvd LUN reads the image through a loop device
+allow kernel loop_device blk_file { open read getattr ioctl }
