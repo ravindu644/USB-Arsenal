@@ -21,7 +21,7 @@ the controller from Android and giving it back.
   Android's `g1` for stock Samsung kernels that cannot create a second gadget.
 - One UDC is used automatically. With more than one, `--udc` is required.
 - git-style CLI: `usb-arsenal <command> <action> [options]`, each command with a full
-  `--help`. See [cli.md](../usage.md).
+  `--help`. See [usage.md](../usage.md).
 - Networking comes from Droidspaces (`src/net/`), same author, GPL-3.0-or-later.
 
 Tick a box only when the item is merged and verified as described in its phase.
@@ -47,10 +47,10 @@ Tick a box only when the item is merged and verified as described in its phase.
       yet (needs root on the dev machine)
 - [x] Android detected from the kernel (`g1` + `/sys/class/android_usb`), not `/system`,
       so it works from inside a container; `g1` rebound by hand where `setprop` is absent
-- [ ] Gate on hardware: `tether start --no-net`, then `stop`, gives ADB back on all three
-      test devices; `kill -9` mid-bind, then `stop`, recovers. a166p (5.15, from a
-      Droidspaces container): `g1` unbound and rebound correctly, `kill -9` recovered;
-      ADB itself not observed (no host on the cable)
+- [x] Gate on hardware: `stop` gives ADB back; `kill -9` mid-bind, then `stop`,
+      recovers. a166p (5.15): `g1` rebound, `kill -9` recovered, `adb devices` saw the
+      phone again. S10 (M62 4.14): `stop` after an NCM tether gave back
+      `mtp,conn_gadget,adb` and ADB returned
 - [ ] Piggyback: confirm whether unlinking our functions after `enable 0` hits the
       `linked_func` WARN on stock Samsung
 
@@ -93,16 +93,24 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] `--no-net` for a bare network function
 - [x] Refuses clearly when the interface is in another network namespace (container),
       and a failed start removes the function it added
-- [ ] Hardware: host gets a lease, `ping 1.1.1.1` works; after `stop`, Android's own USB
-      tethering still works
+- [x] Hardware: host gets a lease and is online (a166p, S10)
+- [ ] Hardware: after `stop`, Android's own USB tethering still works
 - [x] Re-apply the address and restart DHCP when a composition change re-registers the
       netdev (M62: verified, host re-leased after a storage re-plug)
-- [ ] Container support, see [research/05-netns.md](research/05-netns.md): Droidspaces
-      `usb_net_passthrough` (host-side move), plus setns-move-setns in USB Arsenal when a
-      host netns handle exists (chroot `/proc/1/ns/net`, or a bind mount)
-- [ ] IPv6 (RA is already in `ra.c`, NAT66 probe is `ds_ipt6_available()`)
+- [x] Container support: superseded by the daemon (Phase 5), which runs in the host
+      namespace and serves containers over a socket; see
+      [research/05-netns.md](research/05-netns.md) for the options weighed
+- [x] IPv6 NAT mode, ported from Droidspaces' NAT66: ULA `fd75:7361::/64` on the link
+      (`fe80::1` plus `::1`), RAs from the DHCP thread, ip6tables MASQUERADE, policy
+      rules on Android following the uplink's IPv6 table, an IPv6-only uplink accepted
+      when nothing carries IPv4. Fails closed to IPv4 only without the nat table.
+      Hardware (S10): host took a SLAAC address, pinged `2606:4700:4700::1111` through
+      the link, and `ifconfig.co` saw the phone's Wi-Fi IPv6; `stop` removed every rule
+- [ ] IPv6 in gateway mode: the Android side keeps IPv6 off on `usb0`, the bridge and
+      the veth (done); the OpenWrt side uses VirtualAP's odhcpd settings, documented in
+      tethering.md, not yet tried on hardware
 
-## Phase 5. Daemon, containers, gateway (see [daemon.md](../containers.md))
+## Phase 5. Daemon, containers, gateway (see [containers.md](../containers.md))
 - [x] Workspace `/data/local/USB-Arsenal` / `/var/lib/USB-Arsenal`, laid out like
       Droidspaces' (`Logs`, `Pids`, `Net`, `Gadget`, `Run`, `usb-arsenald.pid`)
 - [x] `usb-arsenal daemon [--foreground] [--gid N]`, `daemon stop`: Droidspaces' daemon
@@ -149,9 +157,11 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [ ] Verify on a Pixel (gadget HAL that rebinds `g1` on its own)
 
 ## Verification on hardware
-- [x] Exynos9820 on M62-backport (S10, own gadget, pullup HACK): storage, HID, RNDIS tether, re-plug follow; after fixing two kernel panics, see the status log
+- [x] Exynos9820 on M62-backport (S10, own gadget, pullup HACK): storage, HID, RNDIS
+      and NCM tether (with `kernel-patches/4.14/`), IPv6, re-plug follow, ADB back after
+      `stop`; see the status log for the panics fixed on the way
 - [ ] Stock Samsung 4.14/4.19 (piggyback)
-- [ ] Samsung 5.10/5.15 (own gadget)
+- [x] Samsung 5.15 (a166p, own gadget): every command, containers, gateway mode
 
 ## Status log
 - 2026-10-18: Research done (kernel survey, Droidspaces/Dragon conventions, prior art).
@@ -267,4 +277,11 @@ Tick a box only when the item is merged and verified as described in its phase.
   `kernel-patches/4.14/0003`. Verified on the S10 (kernel #3): NCM tether up, host
   offered .130, `ncm_instances` 2 while tethering and 1 after `stop`, `ncm0` kept its
   ifindex across a storage re-plug, a clean kernel log, MTP back.
-
+- 2026-10-19: IPv6 tethering. NAT mode ported from Droidspaces' NAT66 under its own ULA
+  (`fd75:7361::/64`, apart from Droidspaces' `fd64:7370::/48` so both can run); the
+  uplink finder takes an IPv6-only uplink when nothing carries IPv4; `check` shows
+  "IPv6 NAT". Gateway mode needed no code (IPv6 was already off on the Android side);
+  tethering.md gains VirtualAP's odhcpd settings. Verified on the S10 next to a running
+  Droidspaces NAT66: SLAAC, ping and HTTPS over IPv6 from the host, rules gone after
+  `stop`, ADB back. Roadmap cleaned up: the hand-back gate, tethering on hardware,
+  container support and the 5.15 line were done but still open.
