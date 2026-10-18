@@ -19,14 +19,23 @@ link up, and tear it all down cleanly so the phone's own USB (ADB/MTP) comes bac
 
 The architecture is not fixed yet. INIT.md gives direction, you design it.
 
-## Build (fill in as it takes shape)
+## Build
 
-Model the build on Droidspaces: a `Makefile` with real targets (`make native`,
-cross-compiles, `make format` over the tree), **no wildcard SRCS** (list each `.c`
-explicitly), and no header-dependency tracking (so `make clean` after a header edit).
-A `.clangd` / `compile_commands.json` for the editor, as Droidspaces has.
+`make native`, `make aarch64`, `make armhf`, `make x86_64`, `make x86`: static musl
+builds into `output/usb-arsenal`. Toolchains are found as `<triplet>-gcc` in
+`$MUSL_CROSS`, `~/toolchains/<triplet>-cross/bin`, `PATH` or `/opt/cross/bin`.
+`make format` runs clang-format over `src/`. Bare `make` prints help.
 
-Bare `make` should print help, not build.
+**No wildcard SRCS**: add each new `.c` to the list in the Makefile. No
+header-dependency tracking: `make clean` after editing a header. The editor gets its
+flags from `compile_flags.txt` (clangd reads it directly).
+
+Layout: `src/include/usbarsenal.h` is the only header a `.c` includes (plus
+`src/net/net.h` for the networking pieces). `src/gadget.c` is the core every command
+goes through (begin, add, commit, teardown). The commands live in `src/gadgets/`.
+`src/net/` is lifted from Droidspaces; keep its `ds_` names so it can be re-synced.
+
+End-to-end check without a phone: `sudo tests/dummy_hcd.sh` (dummy_hcd virtual UDC).
 
 ## Testing on a device
 
@@ -93,11 +102,13 @@ name.
 
 ## Hard constraints
 
-- **Kernel floor is 3.18** (see `../Kernels/samsung_kernel_t385`). The top end is the
+- **Kernel floor is 3.18** (see `../../Kernels/samsung_kernel_t385`). The top end is the
   latest GKI. The same core has to work across that whole range, so detect capabilities
   at runtime (what functions the kernel built, the UDC name, patched vs stock configfs),
   never hardcode a kernel-specific path. See the Samsung duct-tapes in
-  `docs/references/samsung-gadget-duct-tapes.md`.
+  `docs/references/samsung-gadget-duct-tapes.md`. Stock 3.18 ships no configfs gadget
+  at all, so the real floor is "3.18 built with `CONFIG_USB_CONFIGFS`"; `check` refuses
+  the rest with the reason (docs/research/01-kernel-survey.md).
 - **Never hardcode the UDC name.** Read it from `/sys/class/udc`.
 - **Teardown must always restore Android's own gadget.** A crash or error path that
   leaves the UDC unbound kills ADB and MTP. This is the one thing that must never break.

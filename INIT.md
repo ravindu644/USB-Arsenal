@@ -87,12 +87,12 @@ depends on it.
 
 ## Resources (dig through all of these)
 
-- **Kernel sources: `../Kernels/`.** This is your primary reference, not the web. The
+- **Kernel sources: `../../Kernels/`.** This is your primary reference, not the web. The
   gadget subsystem is `drivers/usb/gadget/`: `function/f_mass_storage.c`,
   `storage_common.c`, `function/f_hid.c`, `function/f_ncm.c`, `function/f_rndis.c`,
   `function/f_uvc.c`, `configfs.c`, and `udc/core.c`. Compare across the range you must
   support:
-  - **3.18 floor:** `../Kernels/samsung_kernel_t385` (also `t295`, `a015f/g` for old).
+  - **3.18 floor:** `../../Kernels/samsung_kernel_t385` (also `t295`, `a015f/g` for old).
   - **4.x / 5.x Samsung:** `exynos9820`, `exynos990`, `M62-backport` (4.14),
     `a165f` (5.10), `a166p` (5.15), `sm8550`.
   - **Latest GKI:** `google_kernel_pixel10pro-2026-01`, `p10-pro-krnl`.
@@ -152,7 +152,7 @@ depends on it.
 
 1. Read this file, AGENTS.md, and the duct-tapes doc end to end.
 2. Copy `/tmp/report_desc.txt` into `docs/references/hid-report-descriptors.txt`.
-3. Survey `../Kernels/` for the gadget subsystem across the version range; write what you
+3. Survey `../../Kernels/` for the gadget subsystem across the version range; write what you
    find into `docs/` (which kernels support what, mainline vs patched configfs, attribute
    differences).
 4. Write `docs/ROADMAP.md` (model it on Dragon's): phase 0 gadget core, then storage,

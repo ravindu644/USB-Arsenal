@@ -1,0 +1,30 @@
+HID report descriptors used by `usb-arsenal hid`
+(copied from /tmp/report_desc.txt on 2026-10-18; the same bytes are compiled into
+src/gadgets/hid.c)
+
+Keyboard: hid.ua_kbd, protocol 1 (keyboard), subclass 1 (boot), report_length 8
+Input report: [modifiers][reserved][key1]..[key6]; output report: 5 LED bits.
+63 bytes:
+
+05 01 09 06 a1 01 05 07 19 e0 29 e7 15 00 25 01
+75 01 95 08 81 02 95 01 75 08 81 03 95 05 75 01
+05 08 19 01 29 05 91 02 95 01 75 03 91 03 95 06
+75 08 15 00 25 65 05 07 19 00 29 65 81 00 c0
+
+Mouse: hid.ua_mouse, protocol 2 (mouse), subclass 1 (boot), report_length 4
+Input report: [buttons 1-5][X][Y][wheel], X/Y/wheel signed -127..127.
+52 bytes:
+
+05 01 09 02 a1 01 09 01 a1 00 05 09 19 01 29 05
+15 00 25 01 95 05 75 01 81 02 95 01 75 03 81 01
+05 01 09 30 09 31 09 38 15 81 25 7f 75 08 95 03
+81 06 c0 c0
+
+Original source lines (an app that wrote them through a root shell):
+
+shell.add("            echo -n -e '\\x05\\x01\\x09\\x06\\xa1\\x01\\x05\\x07\\x19\\xe0\\x29\\xe7\\x15\\x00\\x25\\x01\\x75\\x01\\x95\\x08\\x81\\x02\\x95\\x01\\x75\\x08\\x81\\x03\\x95\\x05\\x75\\x01\\x05\\x08\\x19\\x01\\x29\\x05\\x91\\x02\\x95\\x01\\x75\\x03\\x91\\x03\\x95\\x06\\x75\\x08\\x15\\x00\\x25\\x65\\x05\\x07\\x19\\x00\\x29\\x65\\x81\\x00\\xc0' > /config/usb_gadget/hid/functions/hid.keyboard/report_desc\n");
+        shell.add("            mkdir -p /config/usb_gadget/hid/functions/hid.mouse > /dev/null 2>&1\n");
+        shell.add("            echo \"2\" > /config/usb_gadget/hid/functions/hid.mouse/protocol\n");
+        shell.add("            echo \"1\" > /config/usb_gadget/hid/functions/hid.mouse/subclass\n");
+        shell.add("            echo \"4\" > /config/usb_gadget/hid/functions/hid.mouse/report_length\n");
+        shell.add("            echo -n -e '\\x05\\x01\\x09\\x02\\xa1\\x01\\x09\\x01\\xa1\\x00\\x05\\x09\\x19\\x01\\x29\\x05\\x15\\x00\\x25\\x01\\x95\\x05\\x75\\x01\\x81\\x02\\x95\\x01\\x75\\x03\\x81\\x01\\x05\\x01\\x09\\x30\\x09\\x31\\x09\\x38\\x15\\x81\\x25\\x7F\\x75\\x08\\x95\\x03\\x81\\x06\\xc0\\xc0' > /config/usb_gadget/hid/functions/hid.mouse/report_desc\n");
