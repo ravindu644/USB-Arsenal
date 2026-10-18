@@ -37,8 +37,8 @@ pullup does go up on bind there.
   backend. There is one exception: a config string other than `"Conf 1"` set before
   linking turns on "symlink change mode" (exynos9820 :466, exynos990 :434). We set
   `"USB Arsenal"`, which is harmless everywhere else.
-- **M62-backport.** Commit `aa8867995` gives every gadget its own uevent device. Commit
-  `4088bea61` (3090dac36 in that tree) splices `linked_func` at bind (configfs.c:1599-1610)
+- **M62-backport.** Commit `aa8867995` (`kernel-patches/4.14/0001`) gives every gadget its own uevent
+  device. Commit `3090dac36` (`0002`) splices `linked_func` at bind (configfs.c:1599-1610)
   and searches it on unlink (:765-779). The own-gadget backend works there.
 - **M62 `enable_store(0)`** calls `unregister_gadget` + `clear_current_usb_link`
   (configfs.c:~2125). If Android's HAL writes `android0` while we hold the controller, it

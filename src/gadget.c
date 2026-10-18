@@ -6,7 +6,8 @@
  *
  * The gadget core. Every subsystem goes through begin -> add -> commit, and
  * every failure after begin goes through teardown, which is the one path that
- * hands the controller back. See docs/research/02-android-usb-handoff.md.
+ * hands the controller back. See
+ * docs/developer/research/02-android-usb-handoff.md.
  */
 
 #include "usbarsenal.h"
@@ -718,9 +719,8 @@ int ua_gadget_commit(struct ua_gadget *g) {
       int err = errno;
       ua_error("Binding to %s failed: %s", g->udc, strerror(err));
       if (err == EINVAL)
-        ua_log("Samsung configfs without patch 4088bea61 ('usb: gadget: "
-               "configfs: support mainline gadget bring-up alongside "
-               "Android') cannot bind a hand-built gadget.");
+        ua_log("Samsung configfs without the bring-up fix (kernel-patches/"
+               "4.14/0002) cannot bind a hand-built gadget.");
       else if (err == EBUSY)
         ua_log("Another gadget or a legacy g_* driver holds the controller.");
       goto fail;

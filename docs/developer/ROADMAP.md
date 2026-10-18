@@ -21,7 +21,7 @@ the controller from Android and giving it back.
   Android's `g1` for stock Samsung kernels that cannot create a second gadget.
 - One UDC is used automatically. With more than one, `--udc` is required.
 - git-style CLI: `usb-arsenal <command> <action> [options]`, each command with a full
-  `--help`. See [cli.md](cli.md).
+  `--help`. See [cli.md](../usage.md).
 - Networking comes from Droidspaces (`src/net/`), same author, GPL-3.0-or-later.
 
 Tick a box only when the item is merged and verified as described in its phase.
@@ -102,7 +102,7 @@ Tick a box only when the item is merged and verified as described in its phase.
       host netns handle exists (chroot `/proc/1/ns/net`, or a bind mount)
 - [ ] IPv6 (RA is already in `ra.c`, NAT66 probe is `ds_ipt6_available()`)
 
-## Phase 5. Daemon, containers, gateway (see [daemon.md](daemon.md))
+## Phase 5. Daemon, containers, gateway (see [daemon.md](../containers.md))
 - [x] Workspace `/data/local/USB-Arsenal` / `/var/lib/USB-Arsenal`, laid out like
       Droidspaces' (`Logs`, `Pids`, `Net`, `Gadget`, `Run`, `usb-arsenald.pid`)
 - [x] `usb-arsenal daemon [--foreground] [--gid N]`, `daemon stop`: Droidspaces' daemon
@@ -127,7 +127,7 @@ Tick a box only when the item is merged and verified as described in its phase.
       one ~7 s blip while OpenWrt's services start)
 - [ ] Hardware: module flashed, daemon up after boot
 
-## Phase 6. Identity profiles (see [identity.md](identity.md))
+## Phase 6. Identity profiles (see [identity.md](../identity.md))
 - [x] `identity generate FILE [--force]`: every key, with defaults and comments
       (Droidspaces config.c style loader and atomic writes)
 - [x] `identity set FILE`: symlink in `Gadget/identity.conf`, or a copy when the daemon
@@ -245,4 +245,26 @@ Tick a box only when the item is merged and verified as described in its phase.
   RNDIS tether (host leased 192.168.42.130), and the tether daemon following the netdev
   M62 re-creates on every re-plug (host re-leased, disk alongside). `stop` gave back
   MTP. The kernel log stayed clean.
+- 2026-10-19: Docs rewrite. A README under 150 lines; user pages in `docs/`
+  (installation, usage, tethering, containers, identity, kernel requirements,
+  troubleshooting); developer material in `docs/developer/` (architecture, testing,
+  research, references, this roadmap). INIT.md and the duct-tapes notes are retired; the
+  Samsung piggyback notes live on in architecture.md. Kernel fixes are exported to
+  `kernel-patches/4.14/` (0001-0003, verified to apply in order to M62-backport) and
+  wired into kernel-requirements.md. `check` no longer lists UVC.
+- 2026-10-19: S10 NCM, the rest of the way. With the android0 fix in place, `check`
+  showed NCM as safe, and two more Samsung f_ncm panics followed:
+  - `tether start` crashed in `ncm_opts_dev_addr_store`: the netdev existed only after
+    bind. `tether` now reads `dev_addr` before writing MACs, and the kernel fix gives the
+    netdev to the instance (mainline/5.15 lifecycle).
+  - At link-up the rx worker crashed unlinking a freed skb: `ncm_unwrap_ntb()` queued the
+    original skb as the last datagram and then freed it. A first reading blamed an
+    unlocked `port_usb` read and produced a wrong patch, withdrawn before it was built.
+    Decoding the oops' code bytes found the real fault (lesson in testing.md). The kernel
+    fix copies each datagram, as mainline does.
+
+  All three f_ncm fixes are squashed into one M62 commit and shipped as
+  `kernel-patches/4.14/0003`. Verified on the S10 (kernel #3): NCM tether up, host
+  offered .130, `ncm_instances` 2 while tethering and 1 after `stop`, `ncm0` kept its
+  ifindex across a storage re-plug, a clean kernel log, MTP back.
 

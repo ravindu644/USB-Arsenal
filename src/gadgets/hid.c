@@ -6,7 +6,8 @@
  *
  * `hid`: a boot-protocol keyboard and mouse through f_hid. Our job ends at
  * /dev/hidgN existing with sane permissions; what gets written there is up
- * to whoever opens it. Descriptors: docs/references/hid-report-descriptors.txt
+ * to whoever opens it. Descriptors:
+ * docs/developer/references/hid-report-descriptors.txt
  */
 
 #include "usbarsenal.h"
