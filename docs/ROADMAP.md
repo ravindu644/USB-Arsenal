@@ -210,3 +210,8 @@ Tick a box only when the item is merged and verified as described in its phase.
   host kept its lease; nothing was needed on the PC. Lesson: the test host must not
   route its default traffic over the USB link, or a gateway restart stalls the test
   machine itself (a NetworkManager profile with `never-default` did it).
+- 2026-10-18: All functions at once from the Ubuntu container (writable disk, HID
+  keyboard and mouse, NCM tether through the daemon), checked by the user. A cable
+  unplug and replug brought the whole composite device back on the host by itself:
+  the UDC's VBUS handling raises the pullup again on the own-gadget backend.
+
