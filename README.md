@@ -81,8 +81,9 @@ usb-arsenal stop                                  # everything off, ADB and MTP 
 - Galaxy S10 on the M62-backport kernel (Exynos 9820, kernel 4.14).
 
 The host was a Fedora PC: it read the disks and CD-ROMs, typed nothing but saw the HID
-devices, and got online through the tether. Actually booting a PC from an image is not
-verified yet, and the KernelSU module has not been flashed on a test device (the daemon
+devices, and got online through the tether. An MSI laptop booted Alpine Linux from an
+ISO on the S10 (UEFI, disk mode); CD-ROM mode and legacy BIOS boot are not verified yet,
+and the KernelSU module has not been flashed on a test device (the daemon
 it starts was tested by hand). Other phones, kernels and hosts are untested; reports are
 welcome.
 

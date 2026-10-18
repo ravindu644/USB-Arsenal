@@ -69,8 +69,9 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Mode change or host medium lock falls back to a rebind (clears the lock)
 - [x] Hardware (a166p to a Fedora host): FAT image read as a disk (label seen), ISO read
       as `sr0` iso9660, swaps work
-- [ ] Hardware: a hybrid Linux ISO actually boots a PC as a disk; a non-hybrid ISO boots
-      from `sr0`
+- [x] Hardware: a hybrid Linux ISO actually boots a PC as a disk (S10, Alpine 3.23
+      x86_64, UEFI on an MSI laptop, to the login prompt)
+- [ ] Hardware: a non-hybrid ISO boots from `sr0`; legacy BIOS boot
 - [ ] Hardware: swap while live, host sees a medium change, no re-enumeration
 - [ ] Stretch: Ventoy-style on-PC menu
 
@@ -299,4 +300,7 @@ Tick a box only when the item is merged and verified as described in its phase.
   repair). Forwarding is no longer restored on stop, which on Linux could cut a
   Droidspaces container off; Droidspaces' monitor now runs on Linux too, for the
   forwarding and the netfilter reconcile. Verified on the S10 (see Phase 3).
-
+- 2026-10-19: First real boot. The S10 served alpine-standard-3.23.0-x86_64.iso in auto
+  mode (read-only disk, MBR found); an MSI laptop's UEFI boot menu listed "UEFI: Linux
+  File-Stor Gadget0414, Partition 1" and Alpine booted to `localhost login:`. CD-ROM
+  mode and legacy BIOS are still untested.
