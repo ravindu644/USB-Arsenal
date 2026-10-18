@@ -155,6 +155,13 @@ VirtualAP itself is not running).
 
 The daemon runs in KernelSU's `su` domain; there is no custom SELinux domain.
 
+## Host side: interface names
+
+A composite gadget makes the host name its network interface by interface number
+(`enp0s20f0u9i3` instead of `enp0s20f0u9` on Linux). NetworkManager may then leave the
+new interface `disconnected` until `nmcli device connect <iface>`, or a profile matching
+it, activates it. Fixed MACs (from `ro.serialno`) keep it stable after that.
+
 ## Verified (a166p, 5.15, Fedora host)
 
 - Daemon on the Android side: socket and directory modes as above, a second instance
@@ -166,3 +173,8 @@ The daemon runs in KernelSU's `su` domain; there is no custom SELinux domain.
     reached the internet through OpenWrt.
   - A `storage start` rebind kept `usb0` on the bridge.
   - `stop` removed the links.
+- From the Ubuntu container through the bind-mounted `Run/`:
+  - As root: storage from a container path, HID, and NAT tether (the host's default
+    route went through the phone).
+  - As a member of group 3460: `status`, and storage of the user's own image.
+  - A non-member was refused.

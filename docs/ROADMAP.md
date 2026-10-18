@@ -119,8 +119,9 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Hardware (a166p): daemon, relayed storage with fd passing, relayed NAT tether
       (host online via `wlan0`), gateway into OpenWrt (host leased and online via
       OpenWrt), gateway surviving a gadget rebind
-- [ ] Hardware: client inside a Droidspaces container through the bind-mounted `Run/`
-      (root, group member, refused non-member)
+- [x] Hardware: client inside a Droidspaces container through the bind-mounted `Run/`:
+      root (storage from a container path, HID, NAT tether: host online through the
+      phone), group member (status, storage of their own image), non-member refused
 - [ ] Hardware: gateway re-plug after an OpenWrt container restart
 - [ ] Hardware: module flashed, daemon up after boot
 
@@ -189,3 +190,13 @@ Tick a box only when the item is merged and verified as described in its phase.
   tether (host online through `wlan0`), gateway into the OpenWrt container through its
   existing VirtualAP `vaplan` interface (host leased and online through OpenWrt), and
   the gateway surviving a gadget rebind.
+- 2026-10-18: Container client verified on the a166p. `Run/` is bind-mounted into the
+  Ubuntu container. As root: `check`, `storage start /var/tmp/fat.img` (fd passing from
+  the container's rootfs; host read FAT16), `hid start`, and `tether start`, which now
+  works from inside the container because the network side runs in the daemon (host
+  default route through the phone, `ping google.com` fine). As a member of group 3460:
+  `status` and `storage start --lun 1 ~/user.img` (opened with the user's own rights).
+  A non-member gets "Permission denied" and exit 1, and `version` now says
+  "daemon, but no access". `stop` as the group member gave back ADB.
+  Host-side note: with storage or HID in the gadget, the host names the NCM interface
+  `...i3`, and NetworkManager may need `nmcli device connect` the first time.

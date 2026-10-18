@@ -94,15 +94,18 @@ static void send_err(int fd, const char *msg) {
   send_exit(fd, UA_EXIT_FAIL);
 }
 
+/* 1 listening, 0 nobody there, -1 there but this user may not connect */
 int ua_daemon_probe(void) {
   struct sockaddr_un addr;
   socklen_t alen = make_addr(&addr);
   int s = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
   if (s < 0)
     return 0;
-  int alive = connect(s, (struct sockaddr *)&addr, alen) == 0;
+  int r = connect(s, (struct sockaddr *)&addr, alen) == 0 ? 1
+          : errno == EACCES                               ? -1
+                                                          : 0;
   close(s);
-  return alive;
+  return r;
 }
 
 /* Does a "Groups:" line in /proc/<pid>/status list gid */
@@ -357,7 +360,7 @@ static int daemon_stop(void) {
 }
 
 static int daemon_run(int foreground) {
-  if (ua_daemon_probe()) {
+  if (ua_daemon_probe() == 1) {
     ua_error("The daemon is already running");
     return UA_EXIT_FAIL;
   }

@@ -218,8 +218,13 @@ static int cmd_version(int argc, char **argv) {
   char sock[PATH_MAX];
   ua_socket_path(sock, sizeof(sock));
   printf(UA_NAME " " UA_VERSION "\n");
-  if (ua_daemon_probe())
+  int d = ua_daemon_probe();
+  if (d == 1)
     printf("mode: daemon (%s)\n", sock);
+  else if (d < 0)
+    printf("mode: daemon, but no access (%s; join the usb-arsenal group, "
+           "gid %d)\n",
+           sock, UA_DAEMON_GID);
   else
     printf("mode: direct\n");
   return UA_EXIT_OK;
