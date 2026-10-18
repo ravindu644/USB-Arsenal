@@ -332,3 +332,5 @@ Tick a box only when the item is merged and verified as described in its phase.
   the LUN lets go of it. Checked on the S10 with the 4.9 GB WinPE ISO: auto chose dvd,
   Fedora read UDF with 2048-byte sectors, a swap and `stop` left no loop behind, ADB came
   back.
+- 2026-10-19: The built-in `dvd` mode booted the MSI into WinPE with its UDF volume
+  mounted (auto mode, no options), end to end through `storage start` and `stop`.
