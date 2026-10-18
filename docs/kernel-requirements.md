@@ -42,6 +42,7 @@ and may need small rebases.
 | `0001` configfs: allow creating more than one gadget | Every gadget registered its uevent device under a hardcoded `android0`, so a second gadget failed with a misleading "Out of memory" | uses the piggyback backend: its functions ride inside Android's own gadget `g1` and are selected through `android0/functions`. It works, but Android rewrites `g1` on a replug or a USB mode change. |
 | `0002` configfs: support mainline gadget bring-up alongside Android | A symlinked function only reached the config through `android0/functions`, so a hand-built gadget failed to bind with "needs at least one function" | same as above; `0001` and `0002` together unlock the own-gadget backend. |
 | `0003` f_ncm: make Samsung's extras safe for more than one instance | A second NCM instance made `f_ncm` destroy the shared `android0` device and free state under Android's own NCM function, and the kernel panicked | avoids NCM on these kernels and tethers over RNDIS instead. |
+| `0004` f_ncm: give the netdev to the instance, as mainline does | The netdev only existed after bind (and was freed at every unbind), so setting `dev_addr` on a new NCM function dereferenced NULL and panicked | reads `dev_addr` first, and skips the fixed MACs when there is no netdev yet, so the host sees kernel-chosen MACs. |
 
 ### How USB Arsenal tells a patched kernel apart
 

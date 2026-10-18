@@ -252,4 +252,10 @@ Tick a box only when the item is merged and verified as described in its phase.
   Samsung piggyback notes live on in architecture.md. Kernel fixes are exported to
   `kernel-patches/4.14/` (0001-0003, verified to apply in order to M62-backport) and
   wired into kernel-requirements.md. `check` no longer lists UVC.
+- 2026-10-19: S10 with patch 0003: `check` showed NCM as safe (`ncm_instances` = 1), but
+  `tether start` panicked in `ncm_opts_dev_addr_store`. Samsung's f_ncm has no netdev
+  before bind, and the u_ether stores dereference it. Two fixes: `tether` reads
+  `dev_addr` before writing the MACs; and patch 0004 backports the mainline/5.15
+  lifecycle (netdev created in `alloc_inst`, kept across unbind, freed in `free_inst`).
+  The 0001-0004 series is verified to apply in order. On-device test of 0004 pending.
 

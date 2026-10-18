@@ -98,6 +98,11 @@ instance next to Android's `ncm.0` destroys `android0` and panics. `ua_ncm_unsaf
 `android0/ncm_instances` (the marker patch `0003` adds). When it is true, no NCM
 directory is created, not even to probe, and `tether` uses RNDIS.
 
+Samsung's f_ncm also creates its netdev only at bind, and the `u_ether_configfs` stores
+(`dev_addr`, `host_addr`, `qmult`) dereference it unchecked. So `tether` reads `dev_addr`
+before writing the MACs, and skips them if the read fails. Patch `0004` gives the netdev
+to the instance, as mainline does.
+
 ## Capability probing (`src/check.c`)
 
 Each function is probed by creating `<type>.arsenal_probe` and removing it, in the

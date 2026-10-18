@@ -62,6 +62,10 @@ Both are in kernel code that a plain configfs or sysfs write reaches. Details ar
   `/sys/class/android_usb/android0/terminal_version` exists without `ncm_instances`.**
   Samsung's f_ncm then destroys the shared `android0` and the kernel BUGs. Use RNDIS.
   `ua_ncm_unsafe()` is the one place that decides.
+- **Never write `dev_addr`, `host_addr` or `qmult` to a network function without
+  reading `dev_addr` first.** Samsung's f_ncm has no netdev before bind, and its stores
+  dereference that NULL. The read is safe everywhere, and failing means skip
+  (`kernel-patches/4.14/0004` fixes the kernel).
 
 ## Testing on a device
 
