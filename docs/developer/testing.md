@@ -45,6 +45,12 @@ Samsung's panic handlers print a long task dump that can push the oops out of ps
 `/proc/last_kmsg` usually still has it. Look for the first `WARNING:` or `BUG` from
 `usb-arsenal`, then read the kernel source at that call trace.
 
+The oops also dumps the code bytes around the PC. **Decode those** (`llvm-mc
+--disassemble` or by hand) before trusting a line number. The shipped kernel is built
+with LTO, so a rebuilt object maps offsets only roughly. Mapping `process_rx_w+0x84`
+from a non-LTO rebuild first pointed at the wrong line; the dumped bytes showed an
+inlined `skb_dequeue()` and the real bug in `ncm_unwrap_ntb()`.
+
 ## Test devices so far
 
 | Device | Kernel | Backend | Notes |

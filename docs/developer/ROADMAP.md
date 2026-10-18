@@ -259,11 +259,13 @@ Tick a box only when the item is merged and verified as described in its phase.
   lifecycle (netdev created in `alloc_inst`, kept across unbind, freed in `free_inst`).
   The 0001-0004 series is verified to apply in order. On-device test of 0004 pending.
 - 2026-10-19: S10 with 0003+0004: NCM tether came up (ncm0, host offered .130), then the
-  kernel panicked in u_ether's `process_rx_w`: Samsung's RX worker re-reads `port_usb`
-  per frame without `dev->lock`, and `gether_disconnect()` clears it during the host's
-  altsetting switch at NCM link-up. Patch 0005 reads it once under the lock (the
-  discipline `rx_complete()` and mainline already follow). The TX side has the same
-  unlocked reads, but `usb_ep_disable()` drains them before `port_usb` is cleared, so
-  they are left alone and noted. 0001-0005 verified to apply in order. On-device test
-  pending.
+  kernel panicked in u_ether's `process_rx_w`. A first reading blamed an unlocked
+  `port_usb` re-read and produced a wrong patch, withdrawn before it was built. Decoding
+  the oops' code dump showed the real fault: an inlined `skb_dequeue()` unlinking an skb
+  whose `next` was NULL. Samsung's `ncm_unwrap_ntb()` queues the original skb as the
+  last datagram and then frees it (half of mainline's multi-NTB rework merged), so
+  `rx_frames` held a freed skb. Patch 0005 backports the mainline/5.15 copy of each
+  datagram into a new skb. 0001-0005 verified to apply in order. On-device test pending.
+  Lesson, now in testing.md: decode the oops' code bytes at the PC before trusting a
+  mapping from a differently built object.
 

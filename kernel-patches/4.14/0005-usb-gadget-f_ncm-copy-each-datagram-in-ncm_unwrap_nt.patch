@@ -1,0 +1,71 @@
+From f8e0c6a249f60e695aa35fb08555385e646cb4cf Mon Sep 17 00:00:00 2001
+From: ravindu644 <droidcasts@protonmail.com>
+Date: Mon, 19 Oct 2026 00:40:22 +0530
+Subject: [PATCH] usb: gadget: f_ncm: copy each datagram in ncm_unwrap_ntb(),
+ as mainline does
+
+ncm_unwrap_ntb() queues the last datagram of an NTB by putting the
+original skb itself on the rx list (skb2 = skb), the way old mainline
+did, but this tree also took the dev_consume_skb_any(skb) at the end of
+the function from the later multi-NTB rework. The list then holds a
+freed skb, and u_ether's rx worker crashes unlinking it:
+
+  Unable to handle kernel NULL pointer dereference at 00000008
+  PC is at process_rx_w+0x84/0x1f0
+    ldp x8, x9, [x25]    ; skb->next, skb->prev
+    str x9, [x8, #8]     ; next->prev = prev, with next == NULL
+
+Reproduced on an SM-G977N with USB Arsenal tethering a Linux host over
+NCM, at the first received frames.
+
+Backport the mainline handling (as in 5.15): copy every datagram into a
+new skb with netdev_alloc_skb_ip_align() and skb_put_data() from the
+current NTB (ntb_ptr, so a transfer carrying several NTBs is parsed
+right), and free the original once at the end.
+
+Compiled with the tree's own clang command line, with and without LTO.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Signed-off-by: ravindu644 <droidcasts@protonmail.com>
+---
+ drivers/usb/gadget/function/f_ncm.c | 23 ++++++++++-------------
+ 1 file changed, 10 insertions(+), 13 deletions(-)
+
+diff --git a/drivers/usb/gadget/function/f_ncm.c b/drivers/usb/gadget/function/f_ncm.c
+index f4d81cd51..637fc79eb 100644
+--- a/drivers/usb/gadget/function/f_ncm.c
++++ b/drivers/usb/gadget/function/f_ncm.c
+@@ -1319,20 +1319,17 @@ static int ncm_unwrap_ntb(struct gether *port,
+ 		index2 = get_ncm(&tmp, opts->dgram_item_len);
+ 		dg_len2 = get_ncm(&tmp, opts->dgram_item_len);
+ 
+-		if (index2 == 0 || dg_len2 == 0) {
+-			skb2 = skb;
+-		} else {
+-			skb2 = skb_clone(skb, GFP_ATOMIC);
+-			if (skb2 == NULL)
+-				goto err;
+-		}
+-
+-		if (!skb_pull(skb2, index)) {
+-			ret = -EOVERFLOW;
++		/*
++		 * Copy the datagram into a new skb, as mainline does since it
++		 * learned to parse several NTBs per transfer. This tree took
++		 * the dev_consume_skb_any(skb) below from that change but kept
++		 * queueing the original skb as the last datagram, so the list
++		 * held a freed skb and the rx worker crashed on it.
++		 */
++		skb2 = netdev_alloc_skb_ip_align(ncm->net, dg_len - crc_len);
++		if (skb2 == NULL)
+ 			goto err;
+-		}
+-
+-		skb_trim(skb2, dg_len - crc_len);
++		skb_put_data(skb2, ntb_ptr + index, dg_len - crc_len);
+ 		skb_queue_tail(list, skb2);
+ 
+ 		ndp_len -= 2 * (opts->dgram_item_len * 2);
+-- 
+2.56.0
+

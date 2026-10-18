@@ -43,7 +43,7 @@ and may need small rebases.
 | `0002` configfs: support mainline gadget bring-up alongside Android | A symlinked function only reached the config through `android0/functions`, so a hand-built gadget failed to bind with "needs at least one function" | same as above; `0001` and `0002` together unlock the own-gadget backend. |
 | `0003` f_ncm: make Samsung's extras safe for more than one instance | A second NCM instance made `f_ncm` destroy the shared `android0` device and free state under Android's own NCM function, and the kernel panicked | avoids NCM on these kernels and tethers over RNDIS instead. |
 | `0004` f_ncm: give the netdev to the instance, as mainline does | The netdev only existed after bind (and was freed at every unbind), so setting `dev_addr` on a new NCM function dereferenced NULL and panicked | reads `dev_addr` first, and skips the fixed MACs when there is no netdev yet, so the host sees kernel-chosen MACs. |
-| `0005` u_ether: read port_usb under dev->lock in process_rx_w() | Samsung's RX worker re-read `port_usb` per frame without the lock, so a frame arriving while the host switched NCM's altsetting dereferenced NULL and panicked | cannot work around it from userspace: NCM tethering to a host can crash an unpatched kernel at link-up. Use `tether start --rndis` on such kernels. |
+| `0005` f_ncm: copy each datagram in ncm_unwrap_ntb(), as mainline does | The last datagram of each NTB was queued as the original skb, which the function then freed, so the rx worker crashed on a freed skb at the first received frames | cannot work around it from userspace: NCM tethering to a host crashes an unpatched kernel at link-up. Use `tether start --rndis` on such kernels. |
 
 ### How USB Arsenal tells a patched kernel apart
 
