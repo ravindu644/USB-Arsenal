@@ -204,7 +204,7 @@ int ua_cmd_check(int argc, char **argv) {
     line(ua_probe_function(&g, "mass_storage", NULL), 0, "mass_storage",
          "CONFIG_USB_CONFIGFS_MASS_STORAGE; needed by 'storage'");
     line(ua_probe_function(&g, "mass_storage", "lun.0/cdrom"), 0,
-         "  CD-ROM emulation",
+         "CD-ROM emulation (mass_storage)",
          "Without lun.0/cdrom, non-hybrid ISOs (Windows) cannot boot");
     line(ua_probe_function(&g, "hid", NULL), 0, "hid",
          "CONFIG_USB_CONFIGFS_F_HID; needed by 'hid'");
