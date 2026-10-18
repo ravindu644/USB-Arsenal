@@ -223,6 +223,10 @@ int ua_cmd_check(int argc, char **argv) {
     line(ds_ipt4_nat_available(), 0, "NAT for tethering",
          "The iptables nat table and MASQUERADE target "
          "(CONFIG_IP_NF_NAT, CONFIG_IP_NF_TARGET_MASQUERADE)");
+    line(ds_ipt6_available(), 0, "IPv6 NAT for tethering",
+         "The ip6tables nat table and MASQUERADE target "
+         "(CONFIG_IP6_NF_NAT, CONFIG_IP6_NF_TARGET_MASQUERADE); without "
+         "them the host gets IPv4 only");
   } else {
     printf("  Skipped: needs every MUST HAVE line first.\n");
   }

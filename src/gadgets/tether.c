@@ -25,6 +25,12 @@
 
 #define TICK_SEC 2
 
+/* NAT66 hands the host a ULA /64. Our own, not Droidspaces' fd64:7370::/48,
+ * so a container's network and the USB link can run side by side. */
+#define NAT6_PREFIX "fd75:7361::"
+#define NAT6_CIDR "fd75:7361::/64"
+#define NAT6_GW_LL "fe80::1" /* the source of every RA ds_ra_build() sends */
+
 /* The profile in force for this run; MACs come from it when it sets them */
 static const struct ua_config *tether_cfg;
 
@@ -38,6 +44,10 @@ struct tether {
   int table;     /* uplink routing table the FROM rule points at, 0 = none */
   char uplink[IFNAMSIZ];
   char saved_forward[8];
+  int nat6;   /* IPv6 NAT is up, and the DHCP thread sends RAs */
+  int table6; /* uplink IPv6 table the IPv6 FROM rule points at, 0 = none */
+  struct in6_addr prefix6;
+  char saved_forward6[8];
   unsigned ifindex; /* of the netdev we configured; a new one means rebind */
   /* gateway mode: a container (OpenWrt) serves the host instead of us */
   int gateway;
@@ -231,7 +241,8 @@ static void write_info(const struct tether *t) {
             t->gw_name ? t->gw_name : "the container", t->gw_iface,
             t->gw_ino ? "" : " (waiting for it to run)");
   else
-    fprintf(f, "%s %s/%u, sharing %s", t->iface, inet_ntoa(a), t->prefix,
+    fprintf(f, "%s %s/%u%s, sharing %s", t->iface, inet_ntoa(a), t->prefix,
+            t->nat6 ? " + " NAT6_CIDR : "",
             t->uplink[0] ? t->uplink : "(no uplink yet)");
   fclose(f);
 }
@@ -391,10 +402,35 @@ static void gw_down(void) {
 /* Point "from our subnet" at the uplink's routing table. Android only: there
  * every network has its own table and nothing routes our subnet by default.
  * On plain Linux the main table already does. */
+/* The IPv6 half of sync_uplink(). On an IPv6-only carrier the IPv4 uplink
+ * is the CLAT device v4-rmnetX, whose IPv6 routes live in the table of the
+ * rmnetX underneath. An uplink with no IPv6 table clears the rule, and the
+ * host falls back to IPv4 at once instead of waiting on a dead route. */
+static void sync_uplink6(struct tether *t, const char *iface) {
+  if (!t->nat6 || !is_android())
+    return;
+  ds_nl_ctx_t *ctx = ds_nl_open();
+  if (!ctx)
+    return;
+  int table = 0;
+  if (!strncmp(iface, "v4-", 3))
+    iface += 3;
+  ds_nl_get_iface_table(ctx, AF_INET6, iface, &table);
+  if (table != t->table6) {
+    if (t->table6 > 0)
+      ds_nl_rule6(ctx, 0, &t->prefix6, 64, 1, t->table6, RULE_PRIO_FROM);
+    if (table > 0 &&
+        ds_nl_rule6(ctx, 1, &t->prefix6, 64, 1, table, RULE_PRIO_FROM) < 0)
+      ua_warn("[NET] Cannot add the IPv6 route rule for table %d", table);
+    t->table6 = table;
+  }
+  ds_nl_close(ctx);
+}
+
 static void sync_uplink(struct tether *t, int quiet) {
   char iface[IFNAMSIZ];
   int table = 0;
-  const char *how = ua_find_uplink(t->upstream, iface, &table);
+  const char *how = ua_find_uplink(t->upstream, iface, &table, t->nat6);
   if (!how) {
     /* Once per loss, not every tick: this goes to tether.log */
     if (!quiet || t->uplink[0])
@@ -408,6 +444,8 @@ static void sync_uplink(struct tether *t, int quiet) {
     ua_log("Sharing %s (%s)", iface, how);
     safe_strncpy(t->uplink, iface, sizeof(t->uplink));
   }
+  if (how)
+    sync_uplink6(t, iface);
   if (!is_android() || table == t->table) {
     write_info(t);
     return;
@@ -424,6 +462,101 @@ static void sync_uplink(struct tether *t, int quiet) {
   t->table = table;
   ds_nl_close(ctx);
   write_info(t);
+}
+
+/* The per-interface half of NAT66, redone whenever the netdev is re-created.
+ * Our end is a router: IPv6 on even where the default is off, and never
+ * autoconfigured from what the host sends. accept_ra_rt_table exists only on
+ * Android, whose default files connected routes in a private per-interface
+ * table; 0 keeps them in main, where the TO rule sends replies. The prefix
+ * route goes in by hand too, for a netdev that existed before the knob. */
+static int nat6_iface(ds_nl_ctx_t *ctx, struct tether *t) {
+  static const char *const knobs[][2] = {{"disable_ipv6", "0"},
+                                         {"accept_ra", "0"},
+                                         {"autoconf", "0"},
+                                         {"accept_ra_rt_table", "0"}};
+  for (size_t i = 0; i < sizeof(knobs) / sizeof(knobs[0]); i++) {
+    char p[128];
+    snprintf(p, sizeof(p), "/proc/sys/net/ipv6/conf/%s/%s", t->iface,
+             knobs[i][0]);
+    write_file(p, knobs[i][1]);
+  }
+  struct in6_addr ll, gw = t->prefix6;
+  inet_pton(AF_INET6, NAT6_GW_LL, &ll);
+  gw.s6_addr[15] = 1;
+  int err = ds_nl_add_addr6(ctx, t->iface, &ll, 64);
+  if (err == 0)
+    err = ds_nl_add_addr6(ctx, t->iface, &gw, 64);
+  if (err == 0)
+    err = ds_nl_add_route6(ctx, &t->prefix6, 64,
+                           ds_nl_get_ifindex(ctx, t->iface));
+  return err;
+}
+
+/* Turning on IPv6 forwarding makes the kernel ignore RAs on every interface
+ * at accept_ra=1, so a machine that got its own address by SLAAC would lose
+ * its default route when the current one expires. 2 means "accept even while
+ * forwarding". Android already runs its uplinks at 2, and if forwarding is
+ * already on, whoever turned it on has dealt with this. */
+static void keep_host_slaac(void) {
+  char val[4] = {0};
+  if (read_file("/proc/sys/net/ipv6/conf/all/forwarding", val, sizeof(val)) >
+          0 &&
+      val[0] == '1')
+    return;
+  DIR *d = opendir("/proc/sys/net/ipv6/conf");
+  if (!d)
+    return;
+  struct dirent *e;
+  while ((e = readdir(d))) {
+    if (e->d_name[0] == '.' || !strcmp(e->d_name, "all") ||
+        !strcmp(e->d_name, "lo"))
+      continue;
+    char p[PATH_MAX];
+    snprintf(p, sizeof(p), "/proc/sys/net/ipv6/conf/%s/accept_ra", e->d_name);
+    if (read_file(p, val, sizeof(val)) > 0 && val[0] == '1')
+      write_file(p, "2");
+  }
+  closedir(d);
+}
+
+/* NAT66, after Droidspaces' setup_nat6_host (itself after LXC's lxc-net): a
+ * ULA /64 on the link, one MASQUERADE rule, forwarding, and RAs from the DHCP
+ * thread. Anything missing leaves the host on IPv4 only, as it was before. */
+static void nat6_up(struct tether *t) {
+  if (access("/proc/sys/net/ipv6/conf/all/forwarding", F_OK) != 0)
+    return;
+  /* Not a warning: stock GKI has no IPv6 nat table; `check` reports it */
+  if (!ds_ipt6_available()) {
+    ua_log("[NET] No IPv6 NAT in this kernel; the host gets IPv4 only");
+    return;
+  }
+  ds_nl_ctx_t *ctx = ds_nl_open();
+  if (!ctx)
+    return;
+  inet_pton(AF_INET6, NAT6_PREFIX, &t->prefix6);
+  int err = nat6_iface(ctx, t);
+  /* Fail closed: an address and a default route with no MASQUERADE behind
+   * them make every IPv6 connection hang instead of falling back to IPv4 */
+  if (err < 0 || ds_ipt_ensure_masquerade(AF_INET6, NAT6_CIDR) < 0 ||
+      ds_ipt_ensure_forward_accept(AF_INET6, t->iface) < 0) {
+    ua_warn("[NET] IPv6 setup on %s failed; the host gets IPv4 only", t->iface);
+    ds_ipt_remove_nat_rules(AF_INET6, NAT6_CIDR, t->iface);
+    ds_nl_close(ctx);
+    return;
+  }
+  ds_ipt_ensure_input_accept(AF_INET6, t->iface);
+  ds_ipt_ensure_mss_clamp(AF_INET6);
+  if (is_android())
+    ds_nl_rule6(ctx, 1, &t->prefix6, 64, 0, RT_TABLE_MAIN, RULE_PRIO_TO);
+  ds_nl_close(ctx);
+
+  read_file("/proc/sys/net/ipv6/conf/all/forwarding", t->saved_forward6,
+            sizeof(t->saved_forward6));
+  keep_host_slaac();
+  write_file("/proc/sys/net/ipv6/conf/all/forwarding", "1");
+  t->nat6 = 1;
+  ua_log("[NET] IPv6: advertising " NAT6_CIDR " to the host");
 }
 
 static int net_up(struct tether *t) {
@@ -460,9 +593,10 @@ static int net_up(struct tether *t) {
   /* A mobile uplink's MTU is often below the 1500 the host assumes */
   ds_ipt_ensure_mss_clamp(AF_INET);
 
+  nat6_up(t);
   sync_uplink(t, 0);
   ds_dhcp_server_start(t->dns, t->iface, t->offer_be, t->ip_be, t->mask_be,
-                       NULL);
+                       t->nat6 ? &t->prefix6 : NULL);
   t->ifindex = if_nametoindex(t->iface);
   return 0;
 }
@@ -484,16 +618,20 @@ static void follow_netdev(struct tether *t) {
     int a = ds_nl_add_addr4(ctx, t->iface, t->ip_be, t->prefix);
     if (r < 0 || (a < 0 && a != -EEXIST))
       ua_warn("[NET] Cannot bring up the new %s", t->iface);
+    if (t->nat6 && nat6_iface(ctx, t) < 0)
+      ua_warn("[NET] Cannot give the new %s its IPv6 addresses", t->iface);
     ds_nl_close(ctx);
   }
   ds_dhcp_server_start(t->dns, t->iface, t->offer_be, t->ip_be, t->mask_be,
-                       NULL);
+                       t->nat6 ? &t->prefix6 : NULL);
   t->ifindex = idx;
 }
 
 static void net_down(struct tether *t) {
   ds_dhcp_server_stop();
   ds_ipt_remove_nat_rules(AF_INET, t->cidr, t->iface);
+  if (t->nat6)
+    ds_ipt_remove_nat_rules(AF_INET6, NAT6_CIDR, t->iface);
   if (is_android()) {
     ds_nl_ctx_t *ctx = ds_nl_open();
     if (ctx) {
@@ -502,17 +640,24 @@ static void net_down(struct tether *t) {
       if (t->table > 0)
         ds_nl_del_rule4(ctx, t->net_be, t->prefix, 0, 0, t->table,
                         RULE_PRIO_FROM);
+      if (t->nat6)
+        ds_nl_rule6(ctx, 0, &t->prefix6, 64, 0, RT_TABLE_MAIN, RULE_PRIO_TO);
+      if (t->table6 > 0)
+        ds_nl_rule6(ctx, 0, &t->prefix6, 64, 1, t->table6, RULE_PRIO_FROM);
       ds_nl_close(ctx);
     }
-  } else if (t->saved_forward[0]) {
-    /* On Android netd owns ip_forward and Android's own tethering may need
-     * it by now, so only plain Linux gets its old value back */
-    write_file("/proc/sys/net/ipv4/ip_forward", t->saved_forward);
+  } else {
+    /* On Android netd owns forwarding and Android's own tethering may need
+     * it by now, so only plain Linux gets its old values back */
+    if (t->saved_forward[0])
+      write_file("/proc/sys/net/ipv4/ip_forward", t->saved_forward);
+    if (t->saved_forward6[0])
+      write_file("/proc/sys/net/ipv6/conf/all/forwarding", t->saved_forward6);
   }
 }
 
 /* The network side lives as long as this loop. It also re-asserts what
- * Android likes to undo behind our back: ip_forward, and the uplink rule when
+ * Android likes to undo behind our back: forwarding, and the uplink rule when
  * the default network moves between Wi-Fi and mobile data. */
 static int serve(struct tether *t, int ready_fd) {
   sigset_t set;
@@ -548,6 +693,11 @@ static int serve(struct tether *t, int ready_fd) {
         read_file("/proc/sys/net/ipv4/ip_forward", fwd, sizeof(fwd)) > 0 &&
         fwd[0] == '0')
       write_file("/proc/sys/net/ipv4/ip_forward", "1");
+    if (t->nat6 && is_android() &&
+        read_file("/proc/sys/net/ipv6/conf/all/forwarding", fwd, sizeof(fwd)) >
+            0 &&
+        fwd[0] == '0')
+      write_file("/proc/sys/net/ipv6/conf/all/forwarding", "1");
     follow_netdev(t);
     sync_uplink(t, 1);
   }

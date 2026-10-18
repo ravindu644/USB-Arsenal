@@ -104,6 +104,7 @@ int ua_container_netns(const char *name, pid_t pid, const char *path, char *out,
 
 /* uplink.c */
 
-const char *ua_find_uplink(const char *pin, char *iface_out, int *table_out);
+const char *ua_find_uplink(const char *pin, char *iface_out, int *table_out,
+                           int v6);
 
 #endif /* UA_NET_H */

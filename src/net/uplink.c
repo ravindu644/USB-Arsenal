@@ -75,12 +75,12 @@ static int scan_uplink_whitelist(ds_nl_ctx_t *ctx, char *iface_out,
 
 /* A pinned --upstream is taken as given: the user picked it deliberately, so
  * none of the exclude heuristics apply, only "is it up and routed". */
-static int resolve_pinned(ds_nl_ctx_t *ctx, const char *pin, char *iface_out,
-                          int *table_out) {
+static int resolve_pinned(ds_nl_ctx_t *ctx, int family, const char *pin,
+                          char *iface_out, int *table_out) {
   int tbl = RT_TABLE_MAIN;
   if (!iface_is_running(pin))
     return -ENOENT;
-  if (is_android() && ds_nl_get_iface_table(ctx, AF_INET, pin, &tbl) != 0)
+  if (is_android() && ds_nl_get_iface_table(ctx, family, pin, &tbl) != 0)
     return -ENOENT;
   safe_strncpy(iface_out, pin, IFNAMSIZ);
   *table_out = tbl;
@@ -88,33 +88,46 @@ static int resolve_pinned(ds_nl_ctx_t *ctx, const char *pin, char *iface_out,
 }
 
 /* First hit wins: a pinned interface, Android's netd default-network rule,
- * the main table's default route, then a name scan. Returns how the uplink
- * was found, or NULL when there is none. */
-const char *ua_find_uplink(const char *pin, char *iface_out, int *table_out) {
+ * the main table's default route, then a name scan. */
+static const char *probe(ds_nl_ctx_t *ctx, int family, const char *pin,
+                         char *iface_out, int *table_out) {
+  iface_out[0] = '\0';
+  *table_out = 0;
+  if (pin && pin[0])
+    return resolve_pinned(ctx, family, pin, iface_out, table_out) == 0
+               ? "pinned"
+               : NULL;
+  if (is_android() &&
+      ds_nl_get_android_default(ctx, family, iface_out, table_out) == 0 &&
+      uplink_candidate_ok(iface_out))
+    return "netd rule";
+  iface_out[0] = '\0';
+  *table_out = RT_TABLE_MAIN;
+  if (ds_nl_get_table_default_oif(ctx, family, RT_TABLE_MAIN, iface_out) == 0 &&
+      uplink_candidate_ok(iface_out))
+    return "main table";
+  /* IPv4 only: a name match is a guess, and the IMS bearer fits it (an
+   * always-up IPv6 rmnetX with its own default route), so an IPv6 scan would
+   * send the host's traffic out through the carrier's voice network */
+  iface_out[0] = '\0';
+  if (family == AF_INET &&
+      scan_uplink_whitelist(ctx, iface_out, table_out) == 0)
+    return "interface scan";
+  return NULL;
+}
+
+/* IPv4 goes through every step first, so dual-stack and CLAT networks resolve
+ * as they always did. Only with v6 set and nothing carrying IPv4 is an
+ * IPv6-only uplink taken, and then *table_out is 0: there is no IPv4 table to
+ * point at. Returns how the uplink was found, or NULL when there is none. */
+const char *ua_find_uplink(const char *pin, char *iface_out, int *table_out,
+                           int v6) {
   ds_nl_ctx_t *ctx = ds_nl_open();
   if (!ctx)
     return NULL;
-  const char *how = NULL;
-  iface_out[0] = '\0';
-  *table_out = 0;
-
-  if (pin && pin[0]) {
-    if (resolve_pinned(ctx, pin, iface_out, table_out) == 0)
-      how = "pinned";
-  } else if (is_android() &&
-             ds_nl_get_android_default(ctx, AF_INET, iface_out, table_out) ==
-                 0 &&
-             uplink_candidate_ok(iface_out)) {
-    how = "netd rule";
-  } else {
-    *table_out = RT_TABLE_MAIN;
-    if (ds_nl_get_table_default_oif(ctx, AF_INET, RT_TABLE_MAIN, iface_out) ==
-            0 &&
-        uplink_candidate_ok(iface_out))
-      how = "main table";
-    else if (scan_uplink_whitelist(ctx, iface_out, table_out) == 0)
-      how = "interface scan";
-  }
+  const char *how = probe(ctx, AF_INET, pin, iface_out, table_out);
+  if (!how && v6 && (how = probe(ctx, AF_INET6, pin, iface_out, table_out)))
+    *table_out = 0;
   ds_nl_close(ctx);
   return how;
 }

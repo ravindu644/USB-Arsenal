@@ -68,4 +68,5 @@ were not copied:
 - A composition change while tethering (for example `storage start` adding the drive)
   rebinds the gadget. If the kernel re-registers the netdev, the address and the DHCP
   socket go stale; `tether stop` + `tether start` fixes it. This is on the roadmap.
-- IPv4 only for now. `ra.c` and `ds_ipt6_available()` are already lifted for IPv6.
+- IPv6: NAT66 after Droidspaces (ULA `fd75:7361::/64`, RAs from `ra.c`, ip6tables
+  MASQUERADE when `ds_ipt6_available()`); IPv4 only on kernels without the nat table.

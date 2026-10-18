@@ -19,8 +19,9 @@ Android when it is done, so ADB and MTP return.
   drive is live.
 - **A pen drive.** Any image file or block device, read-only or writable, with up to
   eight drives at once.
-- **USB tethering.** NCM, or RNDIS for older Windows, with DHCP and NAT built in. Or hand
-  the link to an OpenWrt container and let it be the router.
+- **USB tethering.** NCM, or RNDIS for older Windows, with DHCP and NAT built in, IPv6
+  included where the kernel can NAT it. Or hand the link to an OpenWrt container and let
+  it be the router.
 - **A keyboard and a mouse.** `/dev/hidg*` nodes that any program can write reports to.
 - **All of it at once.** Storage, network and HID share one cable and survive each other
   being added or removed, and a cable replug.

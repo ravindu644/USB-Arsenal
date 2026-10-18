@@ -18,6 +18,12 @@ usb-arsenal tether start --address 10.42.0.1/24 --dns 9.9.9.9 --upstream wlan0
 - **When the phone moves between Wi-Fi and mobile data**, the route follows within two
   seconds.
 - **DNS** handed to the host is `1.1.1.1` and `8.8.8.8` unless `--dns` says otherwise.
+- **IPv6 too, where the kernel can NAT it** (`CONFIG_IP6_NF_NAT`; `check` shows the
+  "IPv6 NAT" line). The host gets an address in `fd75:7361::/64` by SLAAC and a default
+  route, NATed out of the phone's IPv6 connection, as Droidspaces does for containers.
+  Hosts still prefer IPv4 for public sites, since the prefix is a ULA. On an IPv6-only
+  carrier, IPv6 is what carries the traffic. Without the nat table, the host gets IPv4
+  only.
 - **NCM is used where it works:** it has class drivers in Windows 11, macOS and Linux.
   RNDIS (`--rndis`) is for Windows 7 and 8. Both carry fixed MAC addresses, so Windows
   does not add a new adapter every time.
@@ -64,14 +70,23 @@ uci set dhcp.usb.interface='usb'
 uci set dhcp.usb.start='100'
 uci set dhcp.usb.limit='150'
 uci set dhcp.usb.leasetime='12h'
+uci set dhcp.usb.ra='server'          # IPv6: odhcpd announces the /64 from ip6assign
+uci set dhcp.usb.dhcpv6='server'
+uci set dhcp.usb.ra_default='1'       # default router even with only a ULA prefix
 uci add_list firewall.@zone[0].network='usb'   # the lan zone
 uci commit
 /etc/init.d/network reload; /etc/init.d/dnsmasq reload; /etc/init.d/firewall reload
+/etc/init.d/odhcpd reload                       # absent on images without IPv6
 ```
+
+These are the settings VirtualAP's managed mode writes. The Android side has IPv6 off on
+`usb0`, the bridge and the veth, so it never takes an address or a route from OpenWrt's
+announcements.
 
 Android kernels usually lack nf_tables, so fw4 may not load. If the host gets an address
 but no internet, add NAT by hand:
-`iptables-legacy -t nat -A POSTROUTING -o eth0 -j MASQUERADE`.
+`iptables-legacy -t nat -A POSTROUTING -o eth0 -j MASQUERADE`, and for IPv6
+`ip6tables-legacy -t nat -A POSTROUTING -o eth0 -j MASQUERADE`.
 
 **Already set up VirtualAP's managed mode?** Its `vaplan` interface has DHCP and a
 firewall zone, so `--gateway-iface vaplan0` works with no OpenWrt changes, as long as

@@ -100,7 +100,8 @@ usb-arsenal tether stop
 ```
 
 The host gets a network adapter, an address by DHCP and a route out through the phone's
-connection. The default is `192.168.42.129/24` for the phone, with the host on `.130`.
+connection. The default is `192.168.42.129/24` for the phone, with the host on `.130`,
+plus IPv6 by SLAAC from `fd75:7361::/64` where the kernel has IPv6 NAT.
 `--gateway` hands the link to an OpenWrt container instead. [tethering.md](tethering.md)
 covers both modes and the host side.
 
