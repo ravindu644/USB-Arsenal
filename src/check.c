@@ -223,7 +223,6 @@ int ua_cmd_check(int argc, char **argv) {
     line(ds_ipt4_nat_available(), 0, "NAT for tethering",
          "The iptables nat table and MASQUERADE target "
          "(CONFIG_IP_NF_NAT, CONFIG_IP_NF_TARGET_MASQUERADE)");
-    printf("  [ ] uvc (planned, not implemented yet)\n");
   } else {
     printf("  Skipped: needs every MUST HAVE line first.\n");
   }
