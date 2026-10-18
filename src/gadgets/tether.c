@@ -35,7 +35,20 @@ struct tether {
   int table;     /* uplink routing table the FROM rule points at, 0 = none */
   char uplink[IFNAMSIZ];
   char saved_forward[8];
+  /* gateway mode: a container (OpenWrt) serves the host instead of us */
+  int gateway;
+  const char *gw_name, *gw_path, *gw_iface;
+  pid_t gw_pid;
+  ino_t gw_ino; /* the netns the cable is plugged into, 0 = none */
 };
+
+/* Gateway topology, after Droidspaces' gateway mode: usb0 never leaves our
+ * namespace. It sits on a bridge with no address, and one veth runs from
+ * that bridge into the container, its far end born there under its final
+ * name. A container restart only takes the far end with it, and a gadget
+ * rebind only gives usb0 a new identity; both are re-plugged each tick. */
+#define GW_BRIDGE "ua-usb"
+#define GW_VETH "ua-gw"
 
 void ua_help_tether(void) {
   printf(
@@ -62,48 +75,38 @@ void ua_help_tether(void) {
       "                         DHCP or NAT. For bringing your own setup.\n"
       "  -f, --foreground       Stay in the foreground instead of running\n"
       "                         the network side as a daemon\n"
+      "  -G, --gateway NAME     Gateway mode: hand the link to a Droidspaces\n"
+      "                         container (OpenWrt) instead of serving it\n"
+      "                         here. No DHCP or NAT from us; the container\n"
+      "                         provides them on its end of the cable.\n"
+      "      --gateway-pid PID  Same, for any container with this init pid\n"
+      "      --gateway-netns PATH  Same, given a network namespace file\n"
+      "      --gateway-iface IFACE  Name of the cable inside the container\n"
+      "                         (default: usb0)\n"
       "  -h, --help             Show this help\n\n"
       "Examples:\n"
       "  " UA_NAME " tether start\n"
       "  " UA_NAME " tether start --upstream wlan0 --dns 9.9.9.9\n"
       "  " UA_NAME " tether start --rndis\n"
       "  " UA_NAME " tether start --no-net\n"
+      "  " UA_NAME " tether start --gateway OpenWrt\n"
       "  " UA_NAME " tether stop\n");
 }
 
 static void pid_path(char *out, size_t size) {
-  ua_state_path("tether.pid", out, size);
+  ua_ws_path("Pids", "tether.pid", out, size);
 }
 
 static void info_path(char *out, size_t size) {
-  ua_state_path("tether.info", out, size);
+  ua_ws_path("Net", "tether.info", out, size);
 }
 
 /* The pid file names a live daemon only if that pid is still ours: a pid
  * reused by something else after a reboot must never get our SIGTERM */
 static pid_t daemon_pid(void) {
-  char p[PATH_MAX], buf[32], exe[PATH_MAX], self[PATH_MAX];
+  char p[PATH_MAX];
   pid_path(p, sizeof(p));
-  if (read_file(p, buf, sizeof(buf)) <= 0)
-    return 0;
-  pid_t pid = (pid_t)strtol(buf, NULL, 10);
-  if (pid <= 0)
-    return 0;
-  snprintf(p, sizeof(p), "/proc/%d/exe", (int)pid);
-  ssize_t a = readlink(p, exe, sizeof(exe) - 1);
-  ssize_t b = readlink("/proc/self/exe", self, sizeof(self) - 1);
-  if (a <= 0 || b <= 0)
-    return 0;
-  exe[a] = self[b] = '\0';
-  /* Same program by name, not by inode: replacing the binary while the
-   * daemon runs (adb push) leaves its exe as "... (deleted)", and stop and
-   * start may come from different copies. Missing the daemon would orphan
-   * its NAT rules. */
-  char *del = strstr(exe, " (deleted)");
-  if (del)
-    *del = '\0';
-  const char *x = strrchr(exe, '/'), *y = strrchr(self, '/');
-  return strcmp(x ? x + 1 : exe, y ? y + 1 : self) == 0 ? pid : 0;
+  return ua_read_our_pid(p);
 }
 
 void ua_tether_kill(void) {
@@ -224,9 +227,166 @@ static void write_info(const struct tether *t) {
   FILE *f = fopen(p, "we");
   if (!f)
     return;
-  fprintf(f, "%s %s/%u, sharing %s", t->iface, inet_ntoa(a), t->prefix,
-          t->uplink[0] ? t->uplink : "(no uplink yet)");
+  if (t->gateway)
+    fprintf(f, "%s bridged to %s as %s%s", t->iface,
+            t->gw_name ? t->gw_name : "the container", t->gw_iface,
+            t->gw_ino ? "" : " (waiting for it to run)");
+  else
+    fprintf(f, "%s %s/%u, sharing %s", t->iface, inet_ntoa(a), t->prefix,
+            t->uplink[0] ? t->uplink : "(no uplink yet)");
   fclose(f);
+}
+
+static void no_ipv6(const char *ifname) {
+  char p[128];
+  /* Android leaves accept_ra=2 everywhere: a port with no address would
+   * pick up one, and a default route, from the container's RAs */
+  snprintf(p, sizeof(p), "/proc/sys/net/ipv6/conf/%s/disable_ipv6", ifname);
+  write_file(p, "1");
+}
+
+/* Android answers a fresh link's first master or up with a transient EPERM;
+ * VirtualAP's six tries 300 ms apart cover it */
+static int plug(ds_nl_ctx_t *ctx, const char *ifname, const char *master) {
+  for (int i = 0; i < 6; i++) {
+    if ((!master || ds_nl_set_master(ctx, ifname, master) == 0) &&
+        ds_nl_link_up(ctx, ifname) == 0)
+      return 0;
+    usleep(300000);
+  }
+  return -1;
+}
+
+static int usb_on_bridge(const struct tether *t) {
+  char p[128], target[PATH_MAX];
+  snprintf(p, sizeof(p), "/sys/class/net/%s/master", t->iface);
+  ssize_t n = readlink(p, target, sizeof(target) - 1);
+  if (n <= 0)
+    return 0;
+  target[n] = '\0';
+  const char *b = strrchr(target, '/');
+  return !strcmp(b ? b + 1 : target, GW_BRIDGE);
+}
+
+static void gw_mac(const char *key, uint8_t mac[6]) {
+  uint32_t h = 2166136261u;
+  for (const char *k = key; *k; k++)
+    h = (h ^ (uint8_t)*k) * 16777619u;
+  mac[0] = 0x02;
+  mac[1] = 0x55;
+  mac[2] = (uint8_t)(h >> 24);
+  mac[3] = (uint8_t)(h >> 16);
+  mac[4] = (uint8_t)(h >> 8);
+  mac[5] = (uint8_t)h;
+}
+
+/* Keep the cable plugged into the container's current namespace. A host end
+ * whose far end lives in another (dead) namespace is deleted: it would pin
+ * that namespace and lead nowhere. */
+static void gw_wire(struct tether *t, int quiet) {
+  char path[64];
+  struct stat st;
+  if (ua_container_netns(t->gw_name, t->gw_pid, t->gw_path, path,
+                         sizeof(path)) < 0 ||
+      stat(path, &st) < 0) {
+    if (!quiet || t->gw_ino)
+      ua_warn("[NET] The gateway container is not running; the cable goes in "
+              "when it starts");
+    t->gw_ino = 0;
+    write_info(t);
+    return;
+  }
+  ds_nl_ctx_t *ctx = ds_nl_open();
+  if (!ctx)
+    return;
+  int have = ds_nl_link_exists(ctx, GW_VETH);
+  if (have && st.st_ino == t->gw_ino && ds_netns_has_link(path, t->gw_iface)) {
+    ds_nl_close(ctx);
+    return;
+  }
+  if (have)
+    ds_nl_del_link(ctx, GW_VETH);
+
+  uint8_t mac[6];
+  gw_mac(t->gw_iface, mac);
+  int fd = ds_open_container_netns(path);
+  int r = fd >= 0 ? ds_nl_create_veth_in(ctx, GW_VETH, t->gw_iface, fd, mac)
+                  : -errno;
+  if (fd >= 0)
+    close(fd);
+  if (r < 0) {
+    ua_warn("[NET] Cannot plug %s into the container: %s%s", t->gw_iface,
+            strerror(-r),
+            r == -EEXIST ? " (an interface by that name already exists "
+                           "there; pick another with --gateway-iface)"
+                         : "");
+    t->gw_ino = 0;
+  } else {
+    no_ipv6(GW_VETH);
+    if (plug(ctx, GW_VETH, GW_BRIDGE) < 0 ||
+        ds_netns_link_up(path, t->gw_iface) < 0)
+      ua_warn("[NET] The cable is in but not up yet");
+    t->gw_ino = st.st_ino;
+    ua_log("Plugged %s into the container as %s", t->iface, t->gw_iface);
+  }
+  ds_nl_close(ctx);
+  write_info(t);
+}
+
+static int gw_up(struct tether *t) {
+  ds_nl_ctx_t *ctx = ds_nl_open();
+  if (!ctx) {
+    ua_error("Cannot open a netlink socket: %s", strerror(errno));
+    return -1;
+  }
+  uint8_t mac[6];
+  int r = ds_nl_create_bridge(ctx, GW_BRIDGE);
+  if (r < 0) {
+    ua_error("Cannot create bridge " GW_BRIDGE ": %s", strerror(-r));
+    ds_nl_close(ctx);
+    return -1;
+  }
+  /* A bridge with no address borrows its lowest port MAC, so it would
+   * change whenever the container restarts and the far side's ARP goes
+   * stale. A MAC set by us is exempt. */
+  gw_mac(GW_BRIDGE, mac);
+  ds_nl_set_mac(ctx, GW_BRIDGE, mac);
+  no_ipv6(GW_BRIDGE);
+  write_file("/sys/class/net/" GW_BRIDGE "/bridge/nf_call_iptables", "0");
+  write_file("/sys/class/net/" GW_BRIDGE "/bridge/nf_call_ip6tables", "0");
+  no_ipv6(t->iface);
+  if (plug(ctx, GW_BRIDGE, NULL) < 0 || plug(ctx, t->iface, GW_BRIDGE) < 0) {
+    ua_error("Cannot put %s on bridge " GW_BRIDGE, t->iface);
+    ds_nl_close(ctx);
+    return -1;
+  }
+  ds_nl_close(ctx);
+  gw_wire(t, 0);
+  return 0;
+}
+
+static void gw_tick(struct tether *t) {
+  /* M62-style kernels free usb0 on unbind and make a new one on bind */
+  if (!usb_on_bridge(t)) {
+    ds_nl_ctx_t *ctx = ds_nl_open();
+    if (ctx) {
+      no_ipv6(t->iface);
+      if (plug(ctx, t->iface, GW_BRIDGE) == 0)
+        ua_log("[NET] %s back on " GW_BRIDGE, t->iface);
+      ds_nl_close(ctx);
+    }
+  }
+  gw_wire(t, 1);
+}
+
+static void gw_down(void) {
+  ds_nl_ctx_t *ctx = ds_nl_open();
+  if (!ctx)
+    return;
+  /* The host end goes first: it pins the container's namespace */
+  ds_nl_del_link(ctx, GW_VETH);
+  ds_nl_del_link(ctx, GW_BRIDGE);
+  ds_nl_close(ctx);
 }
 
 /* Point "from our subnet" at the uplink's routing table. Android only: there
@@ -338,7 +498,7 @@ static int serve(struct tether *t, int ready_fd) {
   sigaddset(&set, SIGHUP);
   sigprocmask(SIG_BLOCK, &set, NULL);
 
-  int ok = net_up(t) == 0;
+  int ok = (t->gateway ? gw_up(t) : net_up(t)) == 0;
   if (ready_fd >= 0) {
     char c = ok ? '1' : '0';
     if (write(ready_fd, &c, 1) < 0)
@@ -346,13 +506,20 @@ static int serve(struct tether *t, int ready_fd) {
     close(ready_fd);
   }
   if (!ok) {
-    net_down(t);
+    if (t->gateway)
+      gw_down();
+    else
+      net_down(t);
     return -1;
   }
 
   struct timespec tick = {TICK_SEC, 0};
   while (sigtimedwait(&set, NULL, &tick) < 0) {
     char fwd[8];
+    if (t->gateway) {
+      gw_tick(t);
+      continue;
+    }
     if (is_android() &&
         read_file("/proc/sys/net/ipv4/ip_forward", fwd, sizeof(fwd)) > 0 &&
         fwd[0] == '0')
@@ -360,7 +527,10 @@ static int serve(struct tether *t, int ready_fd) {
     sync_uplink(t, 1);
   }
   ua_log("[NET] Stopping tethering on %s", t->iface);
-  net_down(t);
+  if (t->gateway)
+    gw_down();
+  else
+    net_down(t);
   return 0;
 }
 
@@ -379,7 +549,7 @@ static int spawn_daemon(struct tether *t) {
     if (chdir("/") < 0)
       _exit(1);
     char p[PATH_MAX];
-    ua_state_path("tether.log", p, sizeof(p));
+    ua_ws_path("Logs", "tether.log", p, sizeof(p));
     int log = open(p, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
     int null = open("/dev/null", O_RDONLY);
     if (null >= 0)
@@ -423,7 +593,7 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
   struct ua_gadget g;
   if (ua_gadget_open(&g) < 0 || ua_check_requirements(&g, UA_NEED_NET) < 0)
     return UA_EXIT_FAIL;
-  if (!no_net && !ds_ipt4_nat_available()) {
+  if (!no_net && !t->gateway && !ds_ipt4_nat_available()) {
     ua_error("This kernel cannot NAT (no iptables nat table or MASQUERADE)");
     ua_log("Use --no-net to only add the network function.");
     return UA_EXIT_FAIL;
@@ -501,9 +671,14 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
   }
   if (spawn_daemon(t) < 0) {
     char p[PATH_MAX];
-    ua_state_path("tether.log", p, sizeof(p));
+    ua_ws_path("Logs", "tether.log", p, sizeof(p));
     ua_error("The network side did not come up; see %s", p);
     return undo(&g, func, added);
+  }
+  if (t->gateway) {
+    ua_log("%s is bridged to the container as %s; it serves the host", t->iface,
+           t->gw_iface);
+    return UA_EXIT_OK;
   }
   struct in_addr a = {t->ip_be}, o = {t->offer_be};
   char ip[16];
@@ -546,10 +721,14 @@ void ua_status_tether(const struct ua_gadget *g) {
 }
 
 int ua_cmd_tether(int argc, char **argv) {
-  enum { OPT_RNDIS = 256, OPT_NO_NET };
+  enum { OPT_RNDIS = 256, OPT_NO_NET, OPT_GW_PID, OPT_GW_NETNS, OPT_GW_IFACE };
   static const struct option opts[] = {
       {"rndis", no_argument, NULL, OPT_RNDIS},
       {"no-net", no_argument, NULL, OPT_NO_NET},
+      {"gateway", required_argument, NULL, 'G'},
+      {"gateway-pid", required_argument, NULL, OPT_GW_PID},
+      {"gateway-netns", required_argument, NULL, OPT_GW_NETNS},
+      {"gateway-iface", required_argument, NULL, OPT_GW_IFACE},
       {"upstream", required_argument, NULL, 'u'},
       {"address", required_argument, NULL, 'a'},
       {"dns", required_argument, NULL, 'd'},
@@ -561,18 +740,45 @@ int ua_cmd_tether(int argc, char **argv) {
   int rndis = 0, no_net = 0, fg = 0, c;
   memset(&t, 0, sizeof(t));
   parse_address("192.168.42.129/24", &t);
+  t.gw_iface = "usb0";
 
   if (argc < 2 || ua_want_help(argc, argv)) {
     ua_help_tether();
     return UA_EXIT_OK;
   }
-  while ((c = getopt_long(argc, argv, ":u:a:d:fh", opts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, ":u:a:d:fG:h", opts, NULL)) != -1) {
     switch (c) {
     case OPT_RNDIS:
       rndis = 1;
       break;
     case OPT_NO_NET:
       no_net = 1;
+      break;
+    case 'G':
+      t.gateway = 1;
+      t.gw_name = optarg;
+      break;
+    case OPT_GW_PID: {
+      char *end;
+      long v = strtol(optarg, &end, 10);
+      if (!*optarg || *end || v <= 0) {
+        ua_usage_error("tether", "--gateway-pid takes a process id");
+        return UA_EXIT_USAGE;
+      }
+      t.gateway = 1;
+      t.gw_pid = (pid_t)v;
+      break;
+    }
+    case OPT_GW_NETNS:
+      t.gateway = 1;
+      t.gw_path = optarg;
+      break;
+    case OPT_GW_IFACE:
+      if (!*optarg || strlen(optarg) >= IFNAMSIZ) {
+        ua_usage_error("tether", "Bad interface name '%s'", optarg);
+        return UA_EXIT_USAGE;
+      }
+      t.gw_iface = optarg;
       break;
     case 'u':
       if (strlen(optarg) >= IFNAMSIZ) {

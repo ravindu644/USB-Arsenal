@@ -102,6 +102,28 @@ Tick a box only when the item is merged and verified as described in its phase.
       host netns handle exists (chroot `/proc/1/ns/net`, or a bind mount)
 - [ ] IPv6 (RA is already in `ra.c`, NAT66 probe is `ds_ipt6_available()`)
 
+## Phase 5. Daemon, containers, gateway (see [daemon.md](daemon.md))
+- [x] Workspace `/data/local/USB-Arsenal` / `/var/lib/USB-Arsenal`, laid out like
+      Droidspaces' (`Logs`, `Pids`, `Net`, `Gadget`, `Run`, `usb-arsenald.pid`)
+- [x] `usb-arsenal daemon [--foreground] [--gid N]`, `daemon stop`: Droidspaces' daemon
+      ported to a filesystem socket (`Run/usb-arsenal.sock`, `0660 root:3460`)
+- [x] Access: root or the `usb-arsenal` group (`SO_PEERCRED`, `SO_PEERGROUPS`, `/proc`
+      Groups), fail closed
+- [x] Client relay for every command; `storage start` passes the image as an fd
+      (`/proc/self/fd/N` to the kernel, no path translation)
+- [x] `tether start --gateway NAME|--gateway-pid|--gateway-netns [--gateway-iface]`:
+      `usb0` on bridge `ua-usb`, veth born inside the container, re-plugged after a
+      container restart or a gadget rebind
+- [x] KernelSU/Magisk module (`make module`): picks the ABI binary, starts the daemon at
+      boot
+- [x] Hardware (a166p): daemon, relayed storage with fd passing, relayed NAT tether
+      (host online via `wlan0`), gateway into OpenWrt (host leased and online via
+      OpenWrt), gateway surviving a gadget rebind
+- [ ] Hardware: client inside a Droidspaces container through the bind-mounted `Run/`
+      (root, group member, refused non-member)
+- [ ] Hardware: gateway re-plug after an OpenWrt container restart
+- [ ] Hardware: module flashed, daemon up after boot
+
 ## Phase 4. UVC (TODO)
 - [ ] `f_uvc` plus a userspace frame feeder, after the kernel's `uvc-gadget` sample
 
@@ -161,3 +183,9 @@ Tick a box only when the item is merged and verified as described in its phase.
   Regression on the a166p with the Fedora host attached: CD-ROM plus writable disk plus
   HID together; the host wrote a file through the writable LUN and it landed in the
   phone's image; `stop` gave ADB back.
+- 2026-10-18: Daemon and client (filesystem socket, root or group 3460), workspace moved
+  to `/data/local/USB-Arsenal`, KernelSU module, gateway tether mode. Verified from the
+  Android side against the Fedora host: relayed storage via fd passing, relayed NAT
+  tether (host online through `wlan0`), gateway into the OpenWrt container through its
+  existing VirtualAP `vaplan` interface (host leased and online through OpenWrt), and
+  the gateway surviving a gadget rebind.

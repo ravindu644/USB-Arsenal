@@ -300,33 +300,138 @@ int ua_wait_prop(const char *name, const char *want, int timeout_ms) {
   }
 }
 
-/* /run is tmpfs on a normal Linux, so a reboot clears stale state the same
- * way it clears the gadget. Android has no /run; /data/local/tmp survives a
- * reboot, which is harmless because `stop` checks configfs before acting. */
-const char *ua_state_dir(void) {
-  static char dir[64];
-  if (!dir[0]) {
-    safe_strncpy(dir,
-                 is_android()                ? "/data/local/tmp/usb-arsenal"
-                 : access("/run", W_OK) == 0 ? "/run/usb-arsenal"
-                                             : "/tmp/usb-arsenal",
-                 sizeof(dir));
-    mkdir_p(dir, 0700);
-    /* Root writes the handoff here. In a world-writable parent anyone could
-     * have planted a symlink or their own directory first; refuse rather
-     * than follow it. This runs before anything changes hands. */
-    struct stat st;
-    if (lstat(dir, &st) < 0 || !S_ISDIR(st.st_mode) || st.st_uid != geteuid() ||
-        (st.st_mode & 022)) {
-      ua_error("Unsafe state directory %s (not a directory owned by us, or "
-               "writable by others)",
-               dir);
-      exit(UA_EXIT_FAIL);
-    }
-  }
-  return dir;
+/* One workspace, laid out like Droidspaces' /data/local/Droidspaces: Logs,
+ * Pids, Net, plus Gadget (handoff, lock) and Run (the daemon socket). A
+ * container gets the Linux path; its Run/ is where the host's is bind-mounted.
+ * Persistent on both; a stale handoff is voided by its boot marker. */
+const char *ua_workspace(void) {
+  return is_android() ? UA_WORKSPACE_ANDROID : UA_WORKSPACE_LINUX;
 }
 
-void ua_state_path(const char *leaf, char *out, size_t size) {
-  snprintf(out, size, "%s/%s", ua_state_dir(), leaf);
+/* Root writes the handoff here. If anyone else owned the workspace, or could
+ * write to it, they could plant a symlink for root to follow; refuse instead.
+ * Runs before anything changes hands. */
+static void ensure_workspace(void) {
+  static int done;
+  struct stat st;
+  const char *ws = ua_workspace();
+  if (done)
+    return;
+  mkdir_p(ws, 0755);
+  if (lstat(ws, &st) < 0 || !S_ISDIR(st.st_mode) || st.st_uid != 0 ||
+      (st.st_mode & 022)) {
+    ua_error("Unsafe workspace %s (not a directory owned by root, or "
+             "writable by others)",
+             ws);
+    exit(UA_EXIT_FAIL);
+  }
+  done = 1;
+}
+
+/* <workspace>/<sub>/<leaf>, sub may be NULL. As root the directories are
+ * made on the way; anyone else (a client in the usb-arsenal group) only gets
+ * the path. */
+void ua_ws_path(const char *sub, const char *leaf, char *out, size_t size) {
+  if (geteuid() == 0) {
+    ensure_workspace();
+    if (sub) {
+      snprintf(out, size, "%s/%s", ua_workspace(), sub);
+      mkdir(out, 0755);
+    }
+  }
+  if (sub)
+    snprintf(out, size, "%s/%s/%s", ua_workspace(), sub, leaf);
+  else
+    snprintf(out, size, "%s/%s", ua_workspace(), leaf);
+}
+
+/* The pid in pidfile, if that process is still one of ours. Matched by
+ * program name, not inode: replacing the binary while a daemon runs (adb
+ * push, a module update) leaves its exe as "... (deleted)", and a stop may
+ * come from a different copy than the start. A pid reused by something else
+ * after a reboot must never get our signal. */
+pid_t ua_read_our_pid(const char *pidfile) {
+  char p[PATH_MAX], buf[32], exe[PATH_MAX], self[PATH_MAX];
+  if (read_file(pidfile, buf, sizeof(buf)) <= 0)
+    return 0;
+  pid_t pid = (pid_t)strtol(buf, NULL, 10);
+  if (pid <= 0)
+    return 0;
+  snprintf(p, sizeof(p), "/proc/%d/exe", (int)pid);
+  ssize_t a = readlink(p, exe, sizeof(exe) - 1);
+  ssize_t b = readlink("/proc/self/exe", self, sizeof(self) - 1);
+  if (a <= 0 || b <= 0)
+    return 0;
+  exe[a] = self[b] = '\0';
+  char *del = strstr(exe, " (deleted)");
+  if (del)
+    *del = '\0';
+  const char *x = strrchr(exe, '/'), *y = strrchr(self, '/');
+  return strcmp(x ? x + 1 : exe, y ? y + 1 : self) == 0 ? pid : 0;
+}
+
+/* SCM_RIGHTS helpers, lifted from Droidspaces (src/utils.c) */
+
+int ua_send_fds(int sock, const void *data, size_t len, const int *fds,
+                int count) {
+  if (count < 0 || count > UA_MAX_FDS)
+    return -1;
+  struct msghdr msg = {0};
+  char buf[CMSG_SPACE(sizeof(int) * UA_MAX_FDS)];
+  memset(buf, 0, sizeof(buf));
+  struct iovec io = {.iov_base = (void *)(uintptr_t)data, .iov_len = len};
+  msg.msg_iov = &io;
+  msg.msg_iovlen = 1;
+  if (count > 0) {
+    msg.msg_control = buf;
+    msg.msg_controllen = CMSG_SPACE(sizeof(int) * (size_t)count);
+    struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+    cmsg->cmsg_level = SOL_SOCKET;
+    cmsg->cmsg_type = SCM_RIGHTS;
+    cmsg->cmsg_len = CMSG_LEN(sizeof(int) * (size_t)count);
+    memcpy(CMSG_DATA(cmsg), fds, sizeof(int) * (size_t)count);
+  }
+  ssize_t n = sendmsg(sock, &msg, MSG_NOSIGNAL);
+  return n == (ssize_t)len ? 0 : -1;
+}
+
+/* Up to max fds with the message; extras the sender attached are closed,
+ * since the kernel has already installed them here. Returns the data bytes
+ * read, -1 on error or a truncated control message. */
+ssize_t ua_recv_fds(int sock, void *data, size_t len, int *fds, int max,
+                    int *count) {
+  struct msghdr msg = {0};
+  char buf[CMSG_SPACE(sizeof(int) * UA_MAX_FDS)];
+  memset(buf, 0, sizeof(buf));
+  struct iovec io = {.iov_base = data, .iov_len = len};
+  msg.msg_iov = &io;
+  msg.msg_iovlen = 1;
+  msg.msg_control = buf;
+  msg.msg_controllen = sizeof(buf);
+  *count = 0;
+  ssize_t n = recvmsg(sock, &msg, MSG_CMSG_CLOEXEC);
+  if (n < 0)
+    return -1;
+  for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg); cmsg;
+       cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+    if (cmsg->cmsg_level != SOL_SOCKET || cmsg->cmsg_type != SCM_RIGHTS)
+      continue;
+    int got = (int)((cmsg->cmsg_len - CMSG_LEN(0)) / sizeof(int));
+    const int *src = (const int *)CMSG_DATA(cmsg);
+    for (int i = 0; i < got; i++) {
+      int fd;
+      memcpy(&fd, src + i, sizeof(fd));
+      if (*count < max)
+        fds[(*count)++] = fd;
+      else
+        close(fd);
+    }
+  }
+  if (msg.msg_flags & MSG_CTRUNC) {
+    for (int i = 0; i < *count; i++)
+      close(fds[i]);
+    *count = 0;
+    return -1;
+  }
+  return n;
 }

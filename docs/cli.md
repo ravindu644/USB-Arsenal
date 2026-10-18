@@ -37,8 +37,9 @@ set`) use. Help follows https://clig.dev: every command explains itself, with ex
 | `status` | | |
 | `storage` | `start IMAGE`, `eject`, `stop` | `-m/--mode auto\|cdrom\|disk\|rw`, `-l/--lun N` |
 | `hid` | `start`, `stop` | `-p/--perm MODE`, `-g/--group GROUP` |
-| `tether` | `start`, `stop` | `--rndis`, `-u/--upstream IFACE`, `-a/--address CIDR`, `-d/--dns IP[,IP]`, `--no-net`, `-f/--foreground` |
+| `tether` | `start`, `stop` | `--rndis`, `-u/--upstream IFACE`, `-a/--address CIDR`, `-d/--dns IP[,IP]`, `--no-net`, `-f/--foreground`, `-G/--gateway NAME`, `--gateway-pid PID`, `--gateway-netns PATH`, `--gateway-iface IFACE` |
 | `stop` | | |
+| `daemon` | `stop` | `-f/--foreground`, `-g/--gid GID` |
 | `help [command]`, `version` | | |
 
 ## Composition
@@ -54,9 +55,13 @@ configfs itself; the only state file is the handoff record (see
 ## Processes
 
 `storage` and `hid` are one-shot: the gadget lives in the kernel, not in our process.
-`tether start` forks a daemon that holds the DHCP server and the NAT rules, and writes
-`tether.pid` in the state directory. `tether stop` and `stop` send it SIGTERM.
+`tether start` forks a process that holds the network side (DHCP and NAT, or the gateway
+cable), and writes `Pids/tether.pid`. `tether stop` and `stop` send it SIGTERM.
 
-State directory: `/data/local/tmp/usb-arsenal` on Android, `/run/usb-arsenal` elsewhere
-(`/tmp/usb-arsenal` if `/run` is not writable). The tether daemon logs to `tether.log`
-there.
+When `usb-arsenal daemon` is running, every command except `daemon`, `help` and
+`version` is relayed to it and runs there; see [daemon.md](daemon.md). `UA_NO_PROXY=1`
+forces direct mode.
+
+Workspace: `/data/local/USB-Arsenal` on Android, `/var/lib/USB-Arsenal` on Linux and
+inside containers, laid out like Droidspaces' (`Logs/`, `Pids/`, `Net/`, `Gadget/`,
+`Run/`); see [daemon.md](daemon.md#workspace).

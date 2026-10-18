@@ -150,17 +150,17 @@ static const char *const kernel_ok[] = {
 };
 #define UA_STORAGE_LABEL "u:object_r:media_rw_data_file:s0"
 
-static void selinux_fix(const char *path) {
+static void selinux_fix(int fd, const char *path) {
   char label[256];
-  ssize_t n = getxattr(path, "security.selinux", label, sizeof(label) - 1);
+  ssize_t n = fgetxattr(fd, "security.selinux", label, sizeof(label) - 1);
   if (n <= 0)
     return; /* no label, no SELinux to satisfy */
   label[n] = '\0';
   for (size_t i = 0; i < sizeof(kernel_ok) / sizeof(kernel_ok[0]); i++)
     if (strstr(label, kernel_ok[i]))
       return;
-  if (setxattr(path, "security.selinux", UA_STORAGE_LABEL,
-               sizeof(UA_STORAGE_LABEL), 0) == 0)
+  if (fsetxattr(fd, "security.selinux", UA_STORAGE_LABEL,
+                sizeof(UA_STORAGE_LABEL), 0) == 0)
     ua_log("Relabelled %s (%s -> %s) so the kernel may read it", path, label,
            UA_STORAGE_LABEL);
   else
@@ -170,39 +170,35 @@ static void selinux_fix(const char *path) {
             path, label, strerror(errno));
 }
 
-static int do_start(const char *image, enum mode mode, int lun) {
-  char path[PATH_MAX];
-  if (!realpath(image, path)) {
-    ua_error("%s: %s", image, strerror(errno));
-    return UA_EXIT_FAIL;
-  }
-  int fd = open(path, (mode == MODE_RW ? O_RDWR : O_RDONLY) | O_CLOEXEC);
-  if (fd < 0) {
-    ua_error("%s: %s", path, strerror(errno));
-    return UA_EXIT_FAIL;
-  }
+/* The image arrives open, either opened here or by a client in another
+ * mount namespace and passed over the daemon socket. The kernel gets
+ * /proc/self/fd/N: it follows the magic link to the real file wherever that
+ * lives, so no path ever has to mean the same thing on both sides. name is
+ * only for messages. */
+static int do_start(int fd, const char *name, enum mode mode, int lun) {
+  char path[64];
+  snprintf(path, sizeof(path), "/proc/self/fd/%d", fd);
   if (mode == MODE_AUTO)
     mode = detect_mode(fd);
   long long size = image_size(fd);
-  close(fd);
 
   if (mode == MODE_CDROM && size >= 0 && size < CDROM_MIN_BYTES) {
-    ua_error("%s is too small for a CD-ROM (minimum 600 KB)", path);
+    ua_error("%s is too small for a CD-ROM (minimum 600 KB)", name);
     return UA_EXIT_FAIL;
   }
   if (mode == MODE_CDROM && size > CDROM_MAX_BYTES)
     ua_warn("%s is %.2f GB, but the kernel's CD-ROM emulation stops at 2.36 "
             "GB. The host will read a truncated disc. Use --mode disk with a "
             "disk image instead (see '" UA_NAME " storage --help').",
-            path, (double)size / 1e9);
+            name, (double)size / 1e9);
 
   struct ua_gadget g;
   if (ua_gadget_open(&g) < 0 || ua_check_requirements(&g, UA_NEED_STORAGE) < 0)
     return UA_EXIT_FAIL;
 
   struct stat st;
-  if (g.android_gadget && stat(path, &st) == 0 && S_ISREG(st.st_mode))
-    selinux_fix(path);
+  if (g.android_gadget && fstat(fd, &st) == 0 && S_ISREG(st.st_mode))
+    selinux_fix(fd, name);
 
   char fdir[PATH_MAX], ldir[PATH_MAX];
   if (ua_gadget_func_dir(&g, FUNC, fdir, sizeof(fdir)) < 0 ||
@@ -221,7 +217,7 @@ static int do_start(const char *image, enum mode mode, int lun) {
       (v[0] == '1') == (mode == MODE_CDROM)) {
     int r = lun_load(ldir, path, mode, 0);
     if (r == 0) {
-      ua_log("LUN %d now holds %s (%s)", lun, path, mode_names[mode]);
+      ua_log("LUN %d now holds %s (%s)", lun, name, mode_names[mode]);
       return UA_EXIT_OK;
     }
     if (r != -EBUSY)
@@ -252,7 +248,7 @@ static int do_start(const char *image, enum mode mode, int lun) {
   }
   if (ua_gadget_commit(&g) < 0)
     return UA_EXIT_FAIL;
-  ua_log("Serving %s as a %s on LUN %d", path,
+  ua_log("Serving %s as a %s on LUN %d", name,
          mode == MODE_CDROM ? "CD-ROM"
          : mode == MODE_RW  ? "writable disk"
                             : "read-only disk",
@@ -328,72 +324,154 @@ void ua_status_storage(const struct ua_gadget *g) {
   }
 }
 
-int ua_cmd_storage(int argc, char **argv) {
+struct sargs {
+  enum mode mode;
+  int lun, fd;
+  const char *action;
+  int image; /* index of IMAGE in argv, 0 if none */
+};
+
+/* Shared by the command and by a client about to relay it: the client has
+ * to find IMAGE to open it on its side. report=0 parses silently and leaves
+ * the complaining to the daemon. Returns -1 to go on, else an exit code. */
+static int parse(int argc, char **argv, struct sargs *a, int report) {
   static const struct option opts[] = {
       {"mode", required_argument, NULL, 'm'},
       {"lun", required_argument, NULL, 'l'},
+      {"fd", required_argument, NULL, 'F'}, /* set by the client relay */
       {"help", no_argument, NULL, 'h'},
       {NULL, 0, NULL, 0},
   };
-  enum mode mode = MODE_AUTO;
-  int lun = 0, c;
-
-  if (argc < 2 || ua_want_help(argc, argv)) {
-    ua_help_storage();
-    return UA_EXIT_OK;
-  }
+  int c;
+  char *end;
+  memset(a, 0, sizeof(*a));
+  a->fd = -1;
+  a->action = "";
+  optind = 0;
   while ((c = getopt_long(argc, argv, ":m:l:h", opts, NULL)) != -1) {
     switch (c) {
     case 'm': {
       int found = 0;
       for (int i = 0; i < 4; i++)
         if (!strcmp(optarg, mode_names[i]))
-          mode = (enum mode)i, found = 1;
+          a->mode = (enum mode)i, found = 1;
       if (!found) {
-        ua_usage_error("storage", "Unknown mode '%s'", optarg);
+        if (report)
+          ua_usage_error("storage", "Unknown mode '%s'", optarg);
         return UA_EXIT_USAGE;
       }
       break;
     }
     case 'l': {
-      char *end;
       long v = strtol(optarg, &end, 10);
       if (*optarg == '\0' || *end || v < 0 || v > 7) {
-        ua_usage_error("storage", "--lun takes a number from 0 to 7");
+        if (report)
+          ua_usage_error("storage", "--lun takes a number from 0 to 7");
         return UA_EXIT_USAGE;
       }
-      lun = (int)v;
+      a->lun = (int)v;
+      break;
+    }
+    case 'F': {
+      long v = strtol(optarg, &end, 10);
+      if (*optarg == '\0' || *end || v < 3) {
+        if (report)
+          ua_usage_error("storage", "--fd takes an open descriptor number");
+        return UA_EXIT_USAGE;
+      }
+      a->fd = (int)v;
       break;
     }
     case 'h':
-      ua_help_storage();
+      if (report)
+        ua_help_storage();
       return UA_EXIT_OK;
     case ':':
-      ua_usage_error("storage", "Option '%s' needs a value", argv[optind - 1]);
+      if (report)
+        ua_usage_error("storage", "Option '%s' needs a value",
+                       argv[optind - 1]);
       return UA_EXIT_USAGE;
     default:
-      ua_usage_error("storage", "Bad option '%s'", ua_bad_option(argv));
+      if (report)
+        ua_usage_error("storage", "Bad option '%s'", ua_bad_option(argv));
       return UA_EXIT_USAGE;
     }
   }
-
   int nargs = argc - optind;
-  const char *action = nargs > 0 ? argv[optind] : "";
-  if (!strcmp(action, "start")) {
-    if (nargs != 2) {
-      ua_usage_error("storage", "start takes exactly one IMAGE");
+  if (nargs > 0)
+    a->action = argv[optind];
+  if (!strcmp(a->action, "start")) {
+    int want = a->fd >= 0 ? 1 : 2;
+    if (nargs != want) {
+      if (report)
+        ua_usage_error("storage", "start takes exactly one IMAGE");
       return UA_EXIT_USAGE;
     }
-    return do_start(argv[optind + 1], mode, lun);
+    a->image = a->fd >= 0 ? 0 : optind + 1;
+    return -1;
   }
   if (nargs != 1) {
-    ua_usage_error("storage", nargs ? "Too many arguments" : "Missing action");
+    if (report)
+      ua_usage_error("storage",
+                     nargs ? "Too many arguments" : "Missing action");
     return UA_EXIT_USAGE;
   }
-  if (!strcmp(action, "eject"))
-    return do_eject(lun);
-  if (!strcmp(action, "stop"))
+  return -1;
+}
+
+static int open_image(const char *image, enum mode mode) {
+  return open(image, (mode == MODE_RW ? O_RDWR : O_RDONLY) | O_CLOEXEC);
+}
+
+/* For the client relay: open IMAGE here, in the caller's namespaces and with
+ * the caller's own permissions, and say where it sits in argv so the relay
+ * can swap it for --fd. Returns that index, 0 when there is nothing to open,
+ * -1 when the image cannot be opened (already reported). */
+int ua_storage_client_fd(int argc, char **argv, int *fd) {
+  struct sargs a;
+  if (parse(argc, argv, &a, 0) != -1 || !a.image)
+    return 0;
+  if ((*fd = open_image(argv[a.image], a.mode)) < 0) {
+    ua_error("%s: %s", argv[a.image], strerror(errno));
+    return -1;
+  }
+  return a.image;
+}
+
+int ua_cmd_storage(int argc, char **argv) {
+  struct sargs a;
+  if (argc < 2 || ua_want_help(argc, argv)) {
+    ua_help_storage();
+    return UA_EXIT_OK;
+  }
+  int r = parse(argc, argv, &a, 1);
+  if (r != -1)
+    return r;
+  if (!strcmp(a.action, "start")) {
+    char name[PATH_MAX] = "";
+    int fd = a.fd;
+    if (fd >= 0) {
+      char link[64];
+      snprintf(link, sizeof(link), "/proc/self/fd/%d", fd);
+      ssize_t n = readlink(link, name, sizeof(name) - 1);
+      name[n > 0 ? n : 0] = '\0';
+    } else {
+      const char *image = argv[a.image];
+      if ((fd = open_image(image, a.mode)) < 0) {
+        ua_error("%s: %s", image, strerror(errno));
+        return UA_EXIT_FAIL;
+      }
+      if (!realpath(image, name))
+        safe_strncpy(name, image, sizeof(name));
+    }
+    r = do_start(fd, name[0] ? name : "image", a.mode, a.lun);
+    close(fd); /* the kernel holds its own reference by now */
+    return r;
+  }
+  if (!strcmp(a.action, "eject"))
+    return do_eject(a.lun);
+  if (!strcmp(a.action, "stop"))
     return do_stop();
-  ua_usage_error("storage", "Unknown action '%s'", action);
+  ua_usage_error("storage", "Unknown action '%s'", a.action);
   return UA_EXIT_USAGE;
 }

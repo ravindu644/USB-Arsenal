@@ -63,7 +63,7 @@ The own-gadget backend has no such problem; the M62 patches make it available.
   kills the `adb shell` the command may be running from. The handoff must finish anyway.
 - `kill -9` still gets through. `usb-arsenal stop` reads the handoff file and finishes
   the job. It is idempotent and is a no-op when nothing is held.
-- `/data/local/tmp` survives a reboot but the gadget does not. The handoff file carries
+- The workspace (`/data/local/USB-Arsenal`, `/var/lib/USB-Arsenal`) survives a reboot but the gadget does not. The handoff file carries
   the boot_id and is ignored (and deleted) on a different boot.
 
 ## Inside a container on Android

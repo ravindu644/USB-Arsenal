@@ -142,7 +142,7 @@ static int find_node(const struct ua_gadget *g, const char *func, char *out,
 }
 
 static void perm_path(char *out, size_t size) {
-  ua_state_path("hid.perm", out, size);
+  ua_ws_path("Gadget", "hid.perm", out, size);
 }
 
 static void save_perm(mode_t perm, gid_t gid) {

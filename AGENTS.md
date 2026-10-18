@@ -24,7 +24,8 @@ The architecture is not fixed yet. INIT.md gives direction, you design it.
 `make native`, `make aarch64`, `make armhf`, `make x86_64`, `make x86`: static musl
 builds into `output/usb-arsenal`. Toolchains are found as `<triplet>-gcc` in
 `$MUSL_CROSS`, `~/toolchains/<triplet>-cross/bin`, `PATH` or `/opt/cross/bin`.
-`make format` runs clang-format over `src/`. Bare `make` prints help.
+`make format` runs clang-format over `src/`. `make module` builds every arch into a
+KernelSU/Magisk zip (`module/`). Bare `make` prints help.
 
 **No wildcard SRCS**: add each new `.c` to the list in the Makefile. No
 header-dependency tracking: `make clean` after editing a header. The editor gets its

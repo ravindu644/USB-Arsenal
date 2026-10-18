@@ -33,6 +33,8 @@ static const struct command commands[] = {
     {"tether", ua_cmd_tether, ua_help_tether,
      "Give the host a network over USB"},
     {"stop", cmd_stop, help_stop, "Tear everything down, restore the owner"},
+    {"daemon", ua_cmd_daemon, ua_help_daemon,
+     "Run the root daemon other copies relay to"},
     {"help", cmd_help, NULL, "Show help for a command"},
     {"version", cmd_version, NULL, "Print the version"},
 };
@@ -213,8 +215,51 @@ static int cmd_help(int argc, char **argv) {
 static int cmd_version(int argc, char **argv) {
   (void)argc;
   (void)argv;
+  char sock[PATH_MAX];
+  ua_socket_path(sock, sizeof(sock));
   printf(UA_NAME " " UA_VERSION "\n");
+  if (ua_daemon_probe())
+    printf("mode: daemon (%s)\n", sock);
+  else
+    printf("mode: direct\n");
   return UA_EXIT_OK;
+}
+
+/* Hand the whole command line to the daemon, globals included, so it runs
+ * exactly as typed but on the host. -2 means no daemon: run it here. For
+ * `storage start`, IMAGE is opened on this side and travels as fd 3. */
+static int relay(int argc, char **argv, int cmd_index) {
+  char *av[128];
+  int fd = -1, n = 0;
+  if (argc > 120)
+    return -2;
+  int img = 0;
+  if (!strcmp(argv[cmd_index], "storage")) {
+    /* parse() permutes in place; a scratch copy keeps argv intact */
+    char *scratch[128];
+    int sc = argc - cmd_index;
+    for (int i = 0; i < sc; i++)
+      scratch[i] = argv[cmd_index + i];
+    scratch[sc] = NULL;
+    img = ua_storage_client_fd(sc, scratch, &fd);
+    if (img < 0)
+      return UA_EXIT_FAIL;
+    if (img > 0) {
+      /* find that same string in the original argv */
+      const char *image = scratch[img];
+      img = 0;
+      for (int i = cmd_index + 1; i < argc; i++)
+        if (argv[i] == image)
+          img = i;
+    }
+  }
+  for (int i = 1; i < argc; i++)
+    av[n++] = (img && i == img) ? "--fd=3" : argv[i];
+  av[n] = NULL;
+  int r = ua_client_run(n, av, &fd, fd >= 0 ? 1 : 0);
+  if (fd >= 0)
+    close(fd);
+  return r;
 }
 
 int main(int argc, char **argv) {
@@ -267,8 +312,17 @@ int main(int argc, char **argv) {
   }
   /* Commands parse their own argv with getopt_long; optind 0 makes both
    * glibc and musl forget the "+" mode used above */
-  int sub_argc = argc - optind;
-  char **sub_argv = argv + optind;
+  int cmd_index = optind;
+  const char *no_proxy = getenv("UA_NO_PROXY");
+  if (cmd->fn != ua_cmd_daemon && cmd->fn != cmd_help &&
+      cmd->fn != cmd_version && !(no_proxy && no_proxy[0] == '1') &&
+      !ua_want_help(argc - cmd_index, argv + cmd_index)) {
+    int r = relay(argc, argv, cmd_index);
+    if (r != -2)
+      return r;
+  }
+  int sub_argc = argc - cmd_index;
+  char **sub_argv = argv + cmd_index;
   optind = 0;
   return cmd->fn(sub_argc, sub_argv);
 }

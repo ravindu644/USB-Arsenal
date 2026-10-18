@@ -46,6 +46,9 @@
 /* Our own gadget directory, and the instance name every function we create
  * carries. On the piggyback backend the functions live inside Android's g1,
  * and the "ua" instance is how we tell ours apart from Android's. */
+#define UA_WORKSPACE_ANDROID "/data/local/USB-Arsenal"
+#define UA_WORKSPACE_LINUX "/var/lib/USB-Arsenal"
+
 #define UA_GADGET "usb_arsenal"
 #define UA_CONFIG "c.1"
 
@@ -102,8 +105,14 @@ int ua_getprop(const char *name, char *out, size_t size);
 int ua_setprop(const char *name, const char *value);
 int ua_wait_file(const char *path, const char *want, int timeout_ms);
 int ua_wait_prop(const char *name, const char *want, int timeout_ms);
-const char *ua_state_dir(void);
-void ua_state_path(const char *leaf, char *out, size_t size);
+pid_t ua_read_our_pid(const char *pidfile);
+#define UA_MAX_FDS 8
+int ua_send_fds(int sock, const void *data, size_t len, const int *fds,
+                int count);
+ssize_t ua_recv_fds(int sock, void *data, size_t len, int *fds, int max,
+                    int *count);
+const char *ua_workspace(void);
+void ua_ws_path(const char *sub, const char *leaf, char *out, size_t size);
 
 /* gadget.c */
 
@@ -156,9 +165,22 @@ void ua_usage_error(const char *cmd, const char *fmt, ...)
 int ua_want_help(int argc, char **argv);
 const char *ua_bad_option(char **argv);
 
+/* daemon.c */
+
+/* Members of this group may use the daemon besides root. Outside Android's
+ * AID ranges; containers create it with groupadd -g 3460 usb-arsenal. */
+#define UA_DAEMON_GID 3460
+
+int ua_cmd_daemon(int argc, char **argv);
+void ua_help_daemon(void);
+int ua_daemon_probe(void);
+void ua_socket_path(char *out, size_t size);
+int ua_client_run(int argc, char **argv, const int *fds, int nfds);
+
 /* gadgets/storage.c */
 
 int ua_cmd_storage(int argc, char **argv);
+int ua_storage_client_fd(int argc, char **argv, int *fd);
 void ua_help_storage(void);
 void ua_status_storage(const struct ua_gadget *g);
 

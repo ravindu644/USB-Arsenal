@@ -48,7 +48,7 @@ static void boot_marker(char *out, size_t size) {
 }
 
 static void handoff_path(char *out, size_t size) {
-  ua_state_path("handoff", out, size);
+  ua_ws_path("Gadget", "handoff", out, size);
 }
 
 int ua_gadget_taken(void) {
@@ -142,7 +142,7 @@ static sigset_t crit_old;
 void ua_crit_enter(void) {
   if (crit_depth++ == 0) {
     char p[PATH_MAX];
-    ua_state_path("lock", p, sizeof(p));
+    ua_ws_path("Gadget", "lock", p, sizeof(p));
     crit_lock = open(p, O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (crit_lock >= 0)
       while (flock(crit_lock, LOCK_EX) < 0 && errno == EINTR)
@@ -488,7 +488,7 @@ int ua_gadget_begin(struct ua_gadget *g) {
   }
 
   if (handoff_save(&h) < 0) {
-    ua_error("Cannot write the handoff state in %s: %s", ua_state_dir(),
+    ua_error("Cannot write the handoff state in %s: %s", ua_workspace(),
              strerror(errno));
     ua_crit_leave();
     return -1;
@@ -667,7 +667,7 @@ int ua_gadget_commit(struct ua_gadget *g) {
     struct handoff h;
     char sel[320];
     if (handoff_load(&h) < 0) {
-      ua_error("Lost the handoff state in %s", ua_state_dir());
+      ua_error("Lost the handoff state in %s", ua_workspace());
       goto fail;
     }
     write_attr(g->path, "bDeviceClass", "0xEF");

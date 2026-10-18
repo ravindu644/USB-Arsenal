@@ -94,6 +94,14 @@ int ds_ra_is_solicit(const uint8_t *frame, size_t len);
 void ds_ra_build(uint8_t *out, const uint8_t mac[6],
                  const struct in6_addr *prefix);
 
+/* netns.c */
+
+int ds_open_container_netns(const char *netns_path);
+int ds_netns_link_up(const char *netns_path, const char *ifname);
+int ds_netns_has_link(const char *netns_path, const char *ifname);
+int ua_container_netns(const char *name, pid_t pid, const char *path, char *out,
+                       size_t size);
+
 /* uplink.c */
 
 const char *ua_find_uplink(const char *pin, char *iface_out, int *table_out);

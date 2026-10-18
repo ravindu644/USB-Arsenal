@@ -27,6 +27,7 @@ SRCS = $(SRC_DIR)/main.c \
        $(SRC_DIR)/utils.c \
        $(SRC_DIR)/check.c \
        $(SRC_DIR)/gadget.c \
+       $(SRC_DIR)/daemon.c \
        $(SRC_DIR)/gadgets/storage.c \
        $(SRC_DIR)/gadgets/hid.c \
        $(SRC_DIR)/gadgets/tether.c \
@@ -34,7 +35,8 @@ SRCS = $(SRC_DIR)/main.c \
        $(SRC_DIR)/net/iptables.c \
        $(SRC_DIR)/net/dhcp.c \
        $(SRC_DIR)/net/ra.c \
-       $(SRC_DIR)/net/uplink.c
+       $(SRC_DIR)/net/uplink.c \
+       $(SRC_DIR)/net/netns.c
 
 CFLAGS  = -Wall -Wextra -Wpedantic -Werror -O2 -flto=auto -std=gnu99 -I$(SRC_DIR)/include -no-pie -pthread
 CFLAGS += -Wformat=2 -Wformat-security -Wformat-overflow=2 -Wformat-truncation=2
@@ -61,7 +63,7 @@ find-cc = $(shell \
 		echo "/opt/cross/bin/$(1)-gcc"; \
 	fi)
 
-.PHONY: all help clean native x86_64 aarch64 armhf x86 format
+.PHONY: all help clean native x86_64 aarch64 armhf x86 format module
 
 all: help
 
@@ -81,6 +83,7 @@ help:
 	@echo "  NO_STRIP=1     - Keep symbols"
 	@echo ""
 	@echo "Other:"
+	@echo "  make module    - Build every arch into a KernelSU/Magisk module zip"
 	@echo "  make format    - Run clang-format over src/"
 	@echo "  make clean     - Remove build output (run after editing a header)"
 
@@ -132,6 +135,20 @@ armhf:
 	@CROSS_CC="$(call find-cc,arm-linux-musleabihf)"; \
 	if [ -n "$$CROSS_CC" ]; then $(MAKE) -j$(NPROC) $(BINARY_NAME) CC=$$CROSS_CC; \
 	else echo "Error: arm-linux-musleabihf-gcc not found (set MUSL_CROSS)"; exit 1; fi
+
+# One zip for every device: customize.sh keeps the binary for the device ABI
+module:
+	@rm -rf $(OUT_DIR)/module
+	@mkdir -p $(OUT_DIR)/module/bin
+	@# objects live per arch under .obj/, so the four builds do not collide
+	@for a in aarch64 armhf x86_64 x86; do \
+		$(MAKE) --no-print-directory $$a || exit 1; \
+		mv $(OUT_DIR)/$(BINARY_NAME) $(OUT_DIR)/module/bin/$(BINARY_NAME)-$$a || exit 1; \
+	done
+	@cp module/module.prop module/customize.sh module/service.sh module/uninstall.sh $(OUT_DIR)/module/
+	@sed -i 's/^version=.*/version=v$(VERSION)/' $(OUT_DIR)/module/module.prop
+	@cd $(OUT_DIR)/module && rm -f ../$(BINARY_NAME)-$(VERSION).zip && zip -qr9 ../$(BINARY_NAME)-$(VERSION).zip .
+	@echo "[+] Built: $(OUT_DIR)/$(BINARY_NAME)-$(VERSION).zip"
 
 format:
 	@command -v clang-format >/dev/null 2>&1 || { echo "Error: clang-format not found"; exit 1; }
