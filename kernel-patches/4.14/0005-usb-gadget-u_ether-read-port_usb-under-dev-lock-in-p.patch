@@ -1,0 +1,73 @@
+From 96fd154f92da7641c04a51c6ce4d1640eb32f6a9 Mon Sep 17 00:00:00 2001
+From: ravindu644 <droidcasts@protonmail.com>
+Date: Mon, 19 Oct 2026 00:36:10 +0530
+Subject: [PATCH] usb: gadget: u_ether: read port_usb under dev->lock in
+ process_rx_w()
+
+Samsung's process_rx_w() checks dev->port_usb once, then dereferences it
+again for every frame in its CONFIG_USB_NCM_SUPPORT_MTU_CHANGE branch,
+without dev->lock. gether_disconnect() clears port_usb under that lock,
+and it runs in the middle of a normal NCM bring-up, when the host
+switches the data interface's altsetting. A frame processed in that
+window panics the kernel:
+
+  Unable to handle kernel NULL pointer dereference at 00000008
+  PC is at process_rx_w+0x84/0x1f0  (u_ether.c: !strcmp(dev->port_usb->...))
+
+Reproduced on an SM-G977N tethering a Linux host over NCM with USB
+Arsenal, right after the host set its max datagram size.
+
+Read port_usb once at the start of the work, under dev->lock as
+rx_complete() already does (and as mainline does everywhere, where the
+rx path has no worker), and decide there whether the link is NCM.
+
+Compiled with the tree's own clang command line, with and without LTO.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Signed-off-by: ravindu644 <droidcasts@protonmail.com>
+---
+ drivers/usb/gadget/function/u_ether.c | 20 ++++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/usb/gadget/function/u_ether.c b/drivers/usb/gadget/function/u_ether.c
+index 9349548d7..fd1ddec7f 100644
+--- a/drivers/usb/gadget/function/u_ether.c
++++ b/drivers/usb/gadget/function/u_ether.c
+@@ -454,8 +454,24 @@ static void process_rx_w(struct work_struct *work)
+ 	struct eth_dev	*dev = container_of(work, struct eth_dev, rx_work);
+ 	struct sk_buff	*skb;
+ 	int		status = 0;
++	unsigned long	flags;
++	bool		connected, is_ncm = false;
+ 
+-	if (!dev->port_usb)
++	/*
++	 * gether_disconnect() clears port_usb under dev->lock, and does so in
++	 * the middle of a normal NCM bring-up when the host switches the data
++	 * interface's altsetting. Read it once, under the same lock, as
++	 * rx_complete() does (and as mainline does everywhere); re-reading it
++	 * per frame below dereferenced NULL in that window.
++	 */
++	spin_lock_irqsave(&dev->lock, flags);
++	connected = dev->port_usb != NULL;
++#ifdef CONFIG_USB_NCM_SUPPORT_MTU_CHANGE
++	if (connected)
++		is_ncm = !strcmp(dev->port_usb->func.name, "ncm");
++#endif
++	spin_unlock_irqrestore(&dev->lock, flags);
++	if (!connected)
+ 		return;
+ 
+ 	while ((skb = skb_dequeue(&dev->rx_frames))) {
+@@ -466,7 +482,7 @@ static void process_rx_w(struct work_struct *work)
+ 		/*
+ 		  Need to revisit net->mtu	does not include header size incase of changed MTU
+ 		*/
+-			if (!strcmp(dev->port_usb->func.name, "ncm")) {
++			if (is_ncm) {
+ 				if (status < 0
+ 					|| ETH_HLEN > skb->len
+ 					|| skb->len > (dev->net->mtu + ETH_HLEN)) {
+-- 
+2.56.0
+
