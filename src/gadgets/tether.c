@@ -7,7 +7,7 @@
  * `tether`: an f_ncm (or f_rndis) network function, plus a small daemon
  * that gives the host an address, NAT and a route out. The networking is
  * Droidspaces' (src/net/); this file only wires it to the gadget's
- * interface. See docs/research/04-tethering.md.
+ * interface. See docs/developer/research/04-tethering.md.
  */
 
 #include "../net/net.h"
@@ -652,8 +652,20 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
       safe_strncpy(dev, tether_cfg->tether_dev_mac, sizeof(dev));
     if (tether_cfg && tether_cfg->tether_host_mac[0])
       safe_strncpy(host, tether_cfg->tether_host_mac, sizeof(host));
-    write_in(dir, "dev_addr", dev);
-    write_in(dir, "host_addr", host);
+    /* Samsung's 4.x f_ncm creates its netdev only at bind, and its
+     * u_ether_configfs stores dereference that NULL netdev: writing dev_addr
+     * to an unbound instance panics the kernel (kernel-patches/4.14/0003
+     * fixes it). The show side has always checked, so a read that fails
+     * means there is nothing to set the address on yet. Mainline creates the
+     * netdev with the instance, and the read just succeeds. */
+    char cur[PATH_MAX + 16], mac[32];
+    snprintf(cur, sizeof(cur), "%s/dev_addr", dir);
+    if (read_file(cur, mac, sizeof(mac)) > 0) {
+      write_in(dir, "dev_addr", dev);
+      write_in(dir, "host_addr", host);
+    } else {
+      ua_debug("%s has no netdev before bind; the kernel picks the MACs", func);
+    }
     if (!strcmp(func, RNDIS) && !g.piggyback)
       rndis_os_desc(&g, dir);
     if (ua_gadget_commit(&g) < 0)
