@@ -76,7 +76,8 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [ ] Hardware: swap while live, host sees a medium change, no re-enumeration
 - [x] Port PiKVM's DVD-ROM emulation to `kernel-patches/4.14/0006`, on top of the
       upstream READ TOC fixes as `0004` and `0005` (see research/03)
-- [ ] Hardware: a CD-ROM image over 2.36 GB boots into Windows with `0004` to `0006`
+- [x] Hardware: a CD-ROM image over 2.36 GB boots into Windows with `0004` to `0006`
+      (S10, 4.9 GB WinPE 11 ISO, `--mode cdrom`, MSI UEFI, UDF mounted)
 - [x] Hardware: a 4.9 GB Windows PE ISO boots and mounts its UDF volume from a 2048-byte
       loop device in disk mode, stock kernel (S10, MSI, UEFI)
 - [x] `storage --mode dvd`: big plain ISOs through a 2048-byte autoclear loop device,
@@ -339,3 +340,7 @@ Tick a box only when the item is merged and verified as described in its phase.
   format 1, which Windows needs. Rebuilt the M62 stack as the two upstream READ TOC fixes
   (`0004`, `0005`) plus PiKVM's patch as is (`0006`); the old single patch is on M62's
   `backup/dvd-v1`.
+- 2026-10-19: With `0004` to `0006` on the S10, the 4.9 GB WinPE ISO in `--mode cdrom`
+  booted the MSI and Windows mounted its UDF volume from the DVD-ROM. The host's
+  multi-session query (READ TOC format 1) now answers. Both routes past 2.36 GB work:
+  `dvd` mode on stock kernels, `cdrom` mode on a patched one.
