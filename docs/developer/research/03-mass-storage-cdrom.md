@@ -62,7 +62,15 @@ for DVD emulation instead. Nobody upstreamed one.
   DISC INFORMATION, READ TRACK INFORMATION, READ DISC STRUCTURE (physical format), the
   0x2A capabilities mode page, and a fixed lead-out in the TOC. Images below the limit
   stay CD-ROMs. About 390 lines in `f_mass_storage.c` and `storage_common.[ch]`, GPL-2,
-  no userspace interface change. Backported to 4.14 as `kernel-patches/4.14/0004`.
+  no userspace interface change. Backported to 4.14 as `kernel-patches/4.14/0006`.
+
+  First attempt on the S10: the clamp was gone (Fedora read all 4.9 GB of `sr0`, and its
+  last sectors), WinPE booted, but Windows never mounted the disc. 4.14's READ TOC only
+  answers format 0, and Windows asks for format 1 (multi-session info) to find the last
+  session before mounting UDF. Upstream added formats 2 and 1 in 2022 (`89ada0fe669a`
+  for Mac OS-X, then `3b91edd624ab` "Make CD-ROM emulation works with Windows OS"); 5.10+
+  carry them, PiKVM's patch assumes them. They are now `4.14/0004` and `0005`, and
+  PiKVM's patch applies as is on top as `0006`.
 
 **Without a kernel patch: a 2048-byte disk (verified).** EDK2's `PartitionDxe/ElTorito.c`
 parses El Torito on any block device whose block size divides 2048 ("If the ISO image has

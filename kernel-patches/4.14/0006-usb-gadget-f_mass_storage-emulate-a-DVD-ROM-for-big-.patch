@@ -1,8 +1,8 @@
-From 142d3cb07a2cb24fdde7361ed7ae70697a20d1da Mon Sep 17 00:00:00 2001
+From 47b72abcfb18752c6b3290653522bc9d65a5e1fa Mon Sep 17 00:00:00 2001
 From: Maxim Devaev <mdevaev@gmail.com>
-Date: Mon, 19 Oct 2026 02:22:33 +0530
-Subject: [PATCH] usb: gadget: f_mass_storage: emulate a DVD-ROM for big CD-ROM
- images
+Date: Mon, 19 Oct 2026 03:05:59 +0530
+Subject: [PATCH 6/6] usb: gadget: f_mass_storage: emulate a DVD-ROM for big
+ CD-ROM images
 
 fsg_lun_open() truncates a CD-ROM image to 256*60*75 - 1 frames (about
 2.36 GB) because the lead-out has to fit in a one-byte MSF minute. A
@@ -16,21 +16,20 @@ answered, MODE SENSE gains the C/DVD capabilities page, and the TOC
 carries a fabricated lead-out as real DVD drives do. Smaller images
 stay CD-ROMs.
 
-Backport of PiKVM's 1102-pikvm-msd-dvd-support.patch to 4.14: the TOC
-change applied to 4.14's single-format do_read_toc(), the READ TOC
-CDB mask left as is, and a local put_be24() since
-put_unaligned_be24() only arrived in 5.x.
+PiKVM's 1102-pikvm-msd-dvd-support.patch, applied as is on top of the
+upstream READ TOC fixes (89ada0fe669a, 3b91edd624ab), with a local
+put_be24() since put_unaligned_be24() only arrived in 5.x.
 
 Link: https://github.com/pikvm/packages/blob/master/packages/linux-rpi-pikvm/1102-pikvm-msd-dvd-support.patch
 Signed-off-by: ravindu644 <droidcasts@protonmail.com>
 ---
- drivers/usb/gadget/function/f_mass_storage.c | 374 ++++++++++++++++++-
+ drivers/usb/gadget/function/f_mass_storage.c | 384 ++++++++++++++++++-
  drivers/usb/gadget/function/storage_common.c |  15 +-
  drivers/usb/gadget/function/storage_common.h |  14 +
- 3 files changed, 388 insertions(+), 15 deletions(-)
+ 3 files changed, 396 insertions(+), 17 deletions(-)
 
 diff --git a/drivers/usb/gadget/function/f_mass_storage.c b/drivers/usb/gadget/function/f_mass_storage.c
-index ab89ef2fa..366aa77a9 100644
+index 7c8bdb3c8..ed3d71c84 100644
 --- a/drivers/usb/gadget/function/f_mass_storage.c
 +++ b/drivers/usb/gadget/function/f_mass_storage.c
 @@ -1177,6 +1177,16 @@ static int do_read_header(struct fsg_common *common, struct fsg_buffhd *bh)
@@ -50,28 +49,42 @@ index ab89ef2fa..366aa77a9 100644
  	if (common->cmnd[1] & ~0x02) {		/* Mask away MSF */
  		curlun->sense_data = SS_INVALID_FIELD_IN_CDB;
  		return -EINVAL;
-@@ -1215,7 +1225,19 @@ static int do_read_toc(struct fsg_common *common, struct fsg_buffhd *bh)
+@@ -1231,7 +1241,19 @@ static int do_read_toc(struct fsg_common *common, struct fsg_buffhd *bh)
  
- 	buf[13] = 0x16;			/* Lead-out track is data */
- 	buf[14] = 0xAA;			/* Lead-out track number */
--	store_cdrom_address(&buf[16], msf, curlun->num_sectors);
-+	if (curlun->cd_as_dvd) {
-+		/*
-+		 * According to specifications, for DVD images
-+		 * the lead-out address should be fabricated.
-+		 * It seems it's not using by drivers at all,
-+		 * so it can contain any big valid MSF address.
-+		 * This address MSF:0,0x23,0,0 is taken
-+		 * from the example in the doc.
-+		 */
-+		store_cdrom_address(&buf[16], msf, 157350);
-+	} else {
-+		store_cdrom_address(&buf[16], msf, curlun->num_sectors);
-+	}
- 	return 20;
- }
+ 		buf[13] = 0x16;		/* Lead-out track is data */
+ 		buf[14] = 0xAA;		/* Lead-out track number */
+-		store_cdrom_address(&buf[16], msf, curlun->num_sectors);
++		if (curlun->cd_as_dvd) {
++			/*
++			 * According to specifications, for DVD images
++			 * the lead-out address should be fabricated.
++			 * It seems it's not using by drivers at all,
++			 * so it can contain any big valid MSF address.
++			 * This address MSF:0,0x23,0,0 is taken
++			 * from the example in the doc.
++			 */
++			store_cdrom_address(&buf[16], msf, 157350);
++		} else {
++			store_cdrom_address(&buf[16], msf, curlun->num_sectors);
++		}
+ 		return len;
  
-@@ -1230,6 +1252,23 @@ static int do_mode_sense(struct fsg_common *common, struct fsg_buffhd *bh)
+ 	case 2:
+@@ -1256,7 +1278,12 @@ static int do_read_toc(struct fsg_common *common, struct fsg_buffhd *bh)
+ 		buf -= 11;		/* go back to A2 descriptor */
+ 
+ 		/* For A2, 7, 8, 9, 10 - zero, Pmin, Psec, Pframe of Lead out */
+-		store_cdrom_address(&buf[7], msf, curlun->num_sectors);
++		if (curlun->cd_as_dvd) {
++			/* The same magic number as for the case 0/1 */
++			store_cdrom_address(&buf[7], msf, 157350);
++		} else {
++			store_cdrom_address(&buf[7], msf, curlun->num_sectors);
++		}
+ 		return len;
+ 
+ 	default:
+@@ -1277,6 +1304,23 @@ static int do_mode_sense(struct fsg_common *common, struct fsg_buffhd *bh)
  	int		valid_page = 0;
  	int		len, limit;
  
@@ -95,7 +108,7 @@ index ab89ef2fa..366aa77a9 100644
  	if ((common->cmnd[1] & ~0x08) != 0) {	/* Mask away DBD */
  		curlun->sense_data = SS_INVALID_FIELD_IN_CDB;
  		return -EINVAL;
-@@ -1262,10 +1301,9 @@ static int do_mode_sense(struct fsg_common *common, struct fsg_buffhd *bh)
+@@ -1309,10 +1353,9 @@ static int do_mode_sense(struct fsg_common *common, struct fsg_buffhd *bh)
  
  	/* No block descriptors */
  
@@ -109,7 +122,7 @@ index ab89ef2fa..366aa77a9 100644
  	if (page_code == 0x08 || all_pages) {
  		valid_page = 1;
  		buf[0] = 0x08;		/* Page code */
-@@ -1287,6 +1325,24 @@ static int do_mode_sense(struct fsg_common *common, struct fsg_buffhd *bh)
+@@ -1334,6 +1377,24 @@ static int do_mode_sense(struct fsg_common *common, struct fsg_buffhd *bh)
  		buf += 12;
  	}
  
@@ -134,7 +147,7 @@ index ab89ef2fa..366aa77a9 100644
  	/*
  	 * Check that a valid page was requested and the mode data length
  	 * isn't too long.
-@@ -1406,6 +1462,257 @@ static int do_mode_select(struct fsg_common *common, struct fsg_buffhd *bh)
+@@ -1453,6 +1514,257 @@ static int do_mode_select(struct fsg_common *common, struct fsg_buffhd *bh)
  	return -EINVAL;
  }
  
@@ -392,7 +405,7 @@ index ab89ef2fa..366aa77a9 100644
  
  /*-------------------------------------------------------------------------*/
  
-@@ -1827,6 +2134,63 @@ static int do_scsi_command(struct fsg_common *common)
+@@ -1874,6 +2186,63 @@ static int do_scsi_command(struct fsg_common *common)
  	down_read(&common->filesem);	/* We're using the backing file */
  	switch (common->cmnd[0]) {
  
@@ -456,6 +469,16 @@ index ab89ef2fa..366aa77a9 100644
  	case INQUIRY:
  		common->data_size_from_cmnd = common->cmnd[4];
  		reply = check_command(common, 6, DATA_DIR_TO_HOST,
+@@ -1990,7 +2359,8 @@ static int do_scsi_command(struct fsg_common *common)
+ 		common->data_size_from_cmnd =
+ 			get_unaligned_be16(&common->cmnd[7]);
+ 		reply = check_command(common, 10, DATA_DIR_TO_HOST,
+-				      (0xf<<6) | (3<<1), 1,
++				      /* TODO: Why? */
++				      0xffffffff, 1, /* (0xf<<6) | (3<<1), 1, */
+ 				      "READ TOC");
+ 		if (reply == 0)
+ 			reply = do_read_toc(common, bh);
 diff --git a/drivers/usb/gadget/function/storage_common.c b/drivers/usb/gadget/function/storage_common.c
 index b43c6dbfc..fb4303307 100644
 --- a/drivers/usb/gadget/function/storage_common.c

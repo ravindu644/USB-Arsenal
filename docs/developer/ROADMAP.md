@@ -74,9 +74,9 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Hardware: the same ISO boots from `sr0` in `--mode cdrom` (El Torito, UEFI)
 - [ ] Hardware: a non-hybrid ISO (Windows) boots from `sr0`; legacy BIOS boot
 - [ ] Hardware: swap while live, host sees a medium change, no re-enumeration
-- [x] Port PiKVM's DVD-ROM emulation to `kernel-patches/4.14/0004` (CD-ROM images over
-      2.36 GB, see research/03); builds clean on M62
-- [ ] Hardware: a CD-ROM image over 2.36 GB boots with `0004`
+- [x] Port PiKVM's DVD-ROM emulation to `kernel-patches/4.14/0006`, on top of the
+      upstream READ TOC fixes as `0004` and `0005` (see research/03)
+- [ ] Hardware: a CD-ROM image over 2.36 GB boots into Windows with `0004` to `0006`
 - [x] Hardware: a 4.9 GB Windows PE ISO boots and mounts its UDF volume from a 2048-byte
       loop device in disk mode, stock kernel (S10, MSI, UEFI)
 - [x] `storage --mode dvd`: big plain ISOs through a 2048-byte autoclear loop device,
@@ -334,3 +334,8 @@ Tick a box only when the item is merged and verified as described in its phase.
   back.
 - 2026-10-19: The built-in `dvd` mode booted the MSI into WinPE with its UDF volume
   mounted (auto mode, no options), end to end through `storage start` and `stop`.
+- 2026-10-19: The 4.14 DVD patch on the S10: Fedora read the whole 4.9 GB `sr0`
+  (`scsi3-mmc drive`), but WinPE booted without its UDF volume. 4.14's READ TOC lacks
+  format 1, which Windows needs. Rebuilt the M62 stack as the two upstream READ TOC fixes
+  (`0004`, `0005`) plus PiKVM's patch as is (`0006`); the old single patch is on M62's
+  `backup/dvd-v1`.

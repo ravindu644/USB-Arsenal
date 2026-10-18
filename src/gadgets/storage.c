@@ -311,7 +311,7 @@ static int do_start(int fd, const char *name, enum mode mode, int lun) {
   }
   if (mode == MODE_CDROM && size > CDROM_MAX_BYTES)
     ua_warn("%s is %.2f GB, but the kernel's CD-ROM emulation stops at 2.36 "
-            "GB unless it carries the DVD patch (kernel-patches/4.14/0004). "
+            "GB unless it carries the DVD patch (kernel-patches/4.14/0006). "
             "Otherwise the host reads a truncated disc; --mode dvd has no "
             "limit.",
             name, (double)size / 1e9);
