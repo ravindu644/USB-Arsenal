@@ -74,6 +74,9 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Hardware: the same ISO boots from `sr0` in `--mode cdrom` (El Torito, UEFI)
 - [ ] Hardware: a non-hybrid ISO (Windows) boots from `sr0`; legacy BIOS boot
 - [ ] Hardware: swap while live, host sees a medium change, no re-enumeration
+- [ ] Port PiKVM's DVD-ROM emulation to `kernel-patches/4.14/` (CD-ROM images over
+      2.36 GB, see research/03)
+- [ ] Try a Windows ISO in disk mode, then on a 2048-byte loop device (no kernel patch)
 - [ ] Stretch: Ventoy-style on-PC menu
 
 ## Phase 2. `hid`
@@ -306,3 +309,8 @@ Tick a box only when the item is merged and verified as described in its phase.
   File-Stor Gadget0414, Partition 1" and Alpine booted to `localhost login:`. The same
   ISO in `--mode cdrom` (host saw `sr0`, "File-CD Gadget") booted too. ADB came back
   after `stop` both times. Legacy BIOS and a non-hybrid ISO are still untested.
+- 2026-10-19: Researched the 2.36 GB CD-ROM clamp. It comes from MSF addressing in READ
+  TOC, is in every kernel up to the 6.6 GKI, and upstream NAKed removing it in 2015.
+  PiKVM ships a DVD-ROM emulation patch (November 2025) that lifts it properly; EDK2's
+  El Torito parser on a 512 or 2048-byte disk may avoid it with no patch. Both recorded
+  in research/03 and as open items.

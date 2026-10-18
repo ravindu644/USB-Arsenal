@@ -28,11 +28,8 @@ from the image, and `--mode` overrides it.
 ## Limits that bite (every kernel surveyed)
 
 - **Maximum size.** `fsg_lun_open` clamps a CD-ROM to `256*60*75 - 1` frames of 2048
-  bytes, about 2.36 GB, and only logs it ("file too big",
-  `p10-pro-krnl/drivers/usb/gadget/function/storage_common.c:245-253`, same code on every
-  version). A modern Windows ISO (5 to 7 GB) is silently truncated and fails part-way
-  through setup. We warn above the limit. The fix is disk mode with an NTFS image
-  (Rufus, woeusb) plus UEFI:NTFS. A FAT32 copy fails because `install.wim` is over 4 GB.
+  bytes, about 2.36 GB, and only logs it ("file too big"). See "Getting past 2.36 GB"
+  below. We warn above the limit.
 - **Minimum size.** 300 frames (600 KB). We refuse below that.
 - **Read-only.** `cdrom=1` forces read-only.
 - **READ TOC.** 4.9 to 4.19 answer format 0 only, with start_track at most 1
@@ -40,6 +37,45 @@ from the image, and `--mode` overrides it.
   t385 has Samsung's raw format-2 TOC (`_SUPPORT_MAC_`). Some picky UEFI or Mac
   firmware may need 5.10+.
 - **Single data track,** no audio.
+
+## Getting past 2.36 GB
+
+**Where the limit comes from.** `store_cdrom_address()` writes READ TOC and READ HEADER
+addresses in MSF form when the host asks for it, and the minutes go in one byte. 256
+minutes of 75 frames a second is the last lead-out it can describe, so `fsg_lun_open`
+truncates the whole medium to fit. Data reads use READ(10) with a 32-bit LBA and never
+needed the clamp. The clamp is in every tree we have, from 3.18 to the 6.6 GKI
+(`google_kernel_pixel10pro-2026-01/common/.../storage_common.c:247`), and in mainline.
+
+**Upstream said no.** Dave Young sent a patch deleting the clamp in March 2015
+(lkml 1503.0/06234). Alan Stern NAKed it: the gadget emulates a CD drive, not an image,
+and a real drive with a 5 GB disc is a DVD drive with a different command set. He asked
+for DVD emulation instead. Nobody upstreamed one.
+
+**Downstream did it two ways.**
+- Delete the clamp only (tjmnmk/gadget_cdrom `00-remove_iso_limit.patch`, an OpenBMC
+  series from 2021). Reads work because they are LBA based; only an MSF TOC request
+  gets a wrapped lead-out. The author calls it "not a good way".
+- Real DVD-ROM emulation: PiKVM's `1102-pikvm-msd-dvd-support.patch` (Maxim Devaev,
+  November 2025, in pikvm/packages `linux-rpi-pikvm`, KVMD 4.49+). Above the MSF limit
+  the LUN sets `cd_as_dvd` and answers GET CONFIGURATION with the DVD-ROM profile, READ
+  DISC INFORMATION, READ TRACK INFORMATION, READ DISC STRUCTURE (physical format), the
+  0x2A capabilities mode page, and a fixed lead-out in the TOC. Images below the limit
+  stay CD-ROMs. About 390 lines in `f_mass_storage.c` and `storage_common.[ch]`, GPL-2,
+  no userspace interface change. This is the one to port into `kernel-patches/`.
+
+**Without a kernel patch (untested idea).** EDK2's `PartitionDxe/ElTorito.c` parses El
+Torito on any block device whose block size divides 2048 ("If the ISO image has been
+copied onto a different storage media"), so UEFI firmware built on EDK2 may boot a plain
+ISO served in disk mode, with no size clamp. What stays open is Windows after the boot
+loader: its UDF anchor sits at block 256 counted in 2048-byte blocks, which a 512-byte
+disk does not match. Backing the LUN with a loop device set to 2048-byte blocks
+(`LOOP_SET_BLOCK_SIZE`, 4.14+) makes `fsg_lun_open` take the `S_ISBLK` path and report
+2048-byte sectors, so the UDF geometry matches again. Needs a Windows ISO and a test on
+real firmware before anything is built.
+
+The old fallback still works everywhere: an NTFS disk image (Rufus, woeusb) plus
+UEFI:NTFS. A FAT32 copy fails because `install.wim` is over 4 GB.
 
 ## Write order
 
