@@ -64,15 +64,31 @@ for DVD emulation instead. Nobody upstreamed one.
   stay CD-ROMs. About 390 lines in `f_mass_storage.c` and `storage_common.[ch]`, GPL-2,
   no userspace interface change. Backported to 4.14 as `kernel-patches/4.14/0004`.
 
-**Without a kernel patch (untested idea).** EDK2's `PartitionDxe/ElTorito.c` parses El
-Torito on any block device whose block size divides 2048 ("If the ISO image has been
-copied onto a different storage media"), so UEFI firmware built on EDK2 may boot a plain
-ISO served in disk mode, with no size clamp. What stays open is Windows after the boot
-loader: its UDF anchor sits at block 256 counted in 2048-byte blocks, which a 512-byte
-disk does not match. Backing the LUN with a loop device set to 2048-byte blocks
-(`LOOP_SET_BLOCK_SIZE`, 4.14+) makes `fsg_lun_open` take the `S_ISBLK` path and report
-2048-byte sectors, so the UDF geometry matches again. Needs a Windows ISO and a test on
-real firmware before anything is built.
+**Without a kernel patch: a 2048-byte disk (verified).** EDK2's `PartitionDxe/ElTorito.c`
+parses El Torito on any block device whose block size divides 2048 ("If the ISO image has
+been copied onto a different storage media"), and disk mode has no size clamp. Two steps,
+both tested on the S10 (stock f_mass_storage) with a 4.9 GB Sergei Strelec WinPE 11 ISO
+and an MSI laptop (UEFI):
+
+1. The ISO file in plain disk mode (512-byte sectors): the firmware listed it, the Windows
+   boot manager loaded `boot.wim` and WinPE reached the desktop. But WinPE never mounted
+   the UDF volume, so everything outside `boot.wim` was missing. UDF counts its anchor
+   at block 256 in units of the sector size, so on a 512-byte disk it looks at 128 KiB
+   instead of 512 KiB. Linux retries with 2048 and mounts it; Windows does not.
+2. The ISO behind a loop device with 2048-byte blocks (`LOOP_SET_BLOCK_SIZE`, 4.14+),
+   that loop device in disk mode: `fsg_lun_open` takes the `S_ISBLK` path and reports
+   2048-byte sectors (Fedora: `LOG-SEC 2048`, UDF found on the first scan). WinPE booted
+   and mounted `USB_STRELEC` (4.56 GB, UDF) with all its programs.
+
+SELinux: the kernel's storage thread must read the loop node. On the S10, `u:r:kernel:s0`
+has no `read` on `loop_device` (only on Samsung's `vendor_block_device` and two others),
+so the host saw "Unrecovered read error" on sector 0 until
+`allow kernel loop_device blk_file { open read getattr ioctl }` was loaded
+(`ksud sepolicy patch`; a module ships it as `sepolicy.rule`).
+
+Also: toybox `losetup` has no block-size option and refuses paths over 64 bytes, and with
+`loop.max_part=7` a loop's minor is `n * 8`, so a fallback `mknod` must read the
+minor from sysfs.
 
 The old fallback still works everywhere: an NTFS disk image (Rufus, woeusb) plus
 UEFI:NTFS. A FAT32 copy fails because `install.wim` is over 4 GB.

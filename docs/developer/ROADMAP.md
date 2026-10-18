@@ -77,7 +77,10 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Port PiKVM's DVD-ROM emulation to `kernel-patches/4.14/0004` (CD-ROM images over
       2.36 GB, see research/03); builds clean on M62
 - [ ] Hardware: a CD-ROM image over 2.36 GB boots with `0004`
-- [ ] Try a Windows ISO in disk mode, then on a 2048-byte loop device (no kernel patch)
+- [x] Hardware: a 4.9 GB Windows PE ISO boots and mounts its UDF volume from a 2048-byte
+      loop device in disk mode, stock kernel (S10, MSI, UEFI)
+- [ ] `storage`: serve big non-hybrid ISOs through a 2048-byte loop device automatically;
+      ship the `loop_device` sepolicy rule in the module
 - [ ] Stretch: Ventoy-style on-PC menu
 
 ## Phase 2. `hid`
@@ -315,3 +318,8 @@ Tick a box only when the item is merged and verified as described in its phase.
   PiKVM ships a DVD-ROM emulation patch (November 2025) that lifts it properly; EDK2's
   El Torito parser on a 512 or 2048-byte disk may avoid it with no patch. Both recorded
   in research/03 and as open items.
+- 2026-10-19: Booted a 4.9 GB Windows ISO (Sergei Strelec WinPE 11) from the S10 on its
+  stock f_mass_storage. In plain disk mode WinPE booted but could not mount its UDF
+  volume (512-byte sectors put UDF's anchor in the wrong place). Behind a loop device
+  with 2048-byte blocks, served in disk mode, it booted and mounted everything. Needs
+  one SELinux rule so the kernel may read `loop_device`. Details in research/03.
