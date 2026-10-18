@@ -28,7 +28,13 @@
  * existing means an instance is already there: never make another one,
  * not even to probe. */
 int ua_ncm_unsafe(void) {
-  return access("/sys/class/android_usb/android0/terminal_version", F_OK) == 0;
+  /* A kernel carrying the fix (an instance count instead of per-instance
+   * create and destroy) says so with android0/ncm_instances. Without it,
+   * Samsung's extras present means the bug is present. Asked by looking,
+   * never by trying: trying is what panics. */
+  return access("/sys/class/android_usb/android0/terminal_version", F_OK) ==
+             0 &&
+         access("/sys/class/android_usb/android0/ncm_instances", F_OK) != 0;
 }
 
 int ua_probe_function(const struct ua_gadget *g, const char *type,
@@ -205,8 +211,9 @@ int ua_cmd_check(int argc, char **argv) {
     if (ua_ncm_unsafe())
       line(-1, 0, "ncm (unsafe on this Samsung kernel; tether uses rndis)",
            "Another NCM instance would make f_ncm destroy android0 and the "
-           "kernel BUG. Fix: in create_terminal_attribute(), do not "
-           "device_destroy() the shared android0 on failure.");
+           "kernel BUG. The kernel fix (docs/kernel-requirements.md) adds "
+           "android0/ncm_instances, and NCM is used again once it is "
+           "there.");
     else
       line(ua_probe_function(&g, "ncm", NULL), 0, "ncm",
            "CONFIG_USB_CONFIGFS_NCM; preferred by 'tether'");

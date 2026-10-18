@@ -37,13 +37,33 @@ backend, which Android's USB HAL cannot disturb:
 
 Background: [references/samsung-gadget-duct-tapes.md](references/samsung-gadget-duct-tapes.md).
 
-## Recommended patch for Samsung 4.x kernels
+## Recommended patch for Samsung 4.x kernels (`f_ncm.c`)
 
-`f_ncm.c` `create_terminal_attribute()` calls `device_destroy()` on the shared
-`android0` device when a second NCM instance cannot add `terminal_version`. That
-frees Android's gadget device and panics the kernel later. USB Arsenal never creates
-that second instance (it uses RNDIS there), but the kernel should drop that
-`device_destroy()` call anyway. See
+Samsung's NCM extras (`CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE`) are one per system but
+were created and destroyed per NCM instance:
+1. `create_terminal_attribute()` calls `device_destroy()` on the shared `android0` when
+   a second instance cannot add `terminal_version`.
+2. `ncm_function_init()` overwrites the global `_ncm_dev` and registers the
+   `usb_ncm` misc device again at every function alloc.
+3. `ncm_function_cleanup()` deregisters that misc device and frees `_ncm_dev` when
+   *any* instance is freed, under the instance that still uses them.
+
+The patch (applied to `M62-backport`):
+- counts NCM instances under a mutex;
+- creates the attributes once and never destroys `android0`;
+- initialises `_ncm_dev` and the misc device only once;
+- cleans them up only after the last instance;
+- exposes the count as `/sys/class/android_usb/android0/ncm_instances`.
+
+How USB Arsenal decides:
+
+| `terminal_version` | `ncm_instances` | Meaning | `tether` uses |
+|---|---|---|---|
+| absent | absent | no Samsung extras, or no NCM instance yet; safe | NCM |
+| present | present | patched kernel; safe | NCM |
+| present | absent | unpatched Samsung kernel; a second NCM instance panics | RNDIS |
+
+It is decided by looking, never by trying. See
 [research/01-kernel-survey.md](research/01-kernel-survey.md).
 
 ## Raspberry Pi and other boards
