@@ -1,0 +1,15 @@
+# Build output
+/output/
+/out/
+*.o
+*.a
+*.so
+compile_commands.json
+.cache/
+
+# Editor
+.clangd/
+*.swp
+
+# OS
+.DS_Store
