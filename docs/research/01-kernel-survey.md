@@ -106,3 +106,57 @@ prefers it, and why stock exynos kernels can tether but not boot an ISO.
 
 Present on 3.18 already: `use`, `b_vendor_code`, `qw_sign` (configfs.c:815-924), the
 config link (:934), and `interface.*` compatible_id / sub_compatible_id (:1229-1314).
+
+## Two kernel traps that panicked the S10 (M62, 4.14)
+
+Found on hardware on 2026-10-18. Both are in kernel code that USB Arsenal drives
+through plain configfs and sysfs writes.
+
+### `soft_connect` "connect" double-starts the controller (4.14 and older cores)
+
+```c
+/* M62 drivers/usb/gadget/udc/core.c:1454 usb_udc_softconn_store */
+if (sysfs_streq(buf, "connect")) {
+        usb_gadget_udc_start(udc);      /* unconditional */
+        usb_gadget_connect(udc->gadget);
+```
+
+The 5.15 core tracks `udc->started` (a166p `core.c:1123`); 4.14 does not.
+`dwc3_gadget_start()` requests its IRQ before checking for a bound driver (M62
+`dwc3/gadget.c:2476-2491`). On an already started controller it frees the IRQ while
+it is still in use, which logs "Trying to free already-free IRQ" and corrupts the
+controller. The next unbind panics.
+
+The fix is in `pullup()` (`src/gadget.c`):
+- if the UDC `state` leaves "not attached" within 1 s, the host is already
+  enumerating, so nothing is written;
+- otherwise it writes the balanced pair `disconnect` (`udc_stop`) then `connect`
+  (`udc_start`).
+
+On M62 our configuration string also enables Samsung's symlink change mode, so
+`UDC_store` raises the pullup itself and `soft_connect` is never needed.
+
+### Samsung `f_ncm` destroys `android0` on a second NCM instance
+
+```c
+/* f_ncm.c create_terminal_attribute(), CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE */
+android_dev = create_function_device("terminal_version");  /* == android0 */
+err = device_create_file(android_dev, &dev_attr_terminal_version);
+if (err) {
+        device_destroy(android_dev->class, android_dev->devt); /* android0! */
+```
+
+- `ncm_alloc_inst()` runs this on every NCM `mkdir`.
+- Android's `g1` already has `ncm.0`, so a second instance fails with a duplicate
+  `terminal_version`, and the error path destroys `android0`.
+- The next NCM instance hits `kernel BUG at fs/sysfs/file.c:333`. The same freed device
+  under Android's gadget is a panic waiting to happen.
+- The code is in M62, exynos9820, exynos990, a015f/g and t295.
+
+USB Arsenal's guard: when `android0/terminal_version` exists, no NCM directory is ever
+created, not even for the capability probe. `check` flags NCM as unsafe and `tether`
+uses RNDIS. Samsung's `rndis_alloc_inst` allocates everything per instance and is fine.
+
+The real fix is a kernel one: drop the `device_destroy()` in that error path, since the
+device belongs to Android's gadget, not to this NCM instance.
+

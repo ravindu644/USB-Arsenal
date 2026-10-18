@@ -644,13 +644,29 @@ static int link_functions(struct ua_gadget *g, char *tokens, size_t tsize) {
   return failed ? -1 : n;
 }
 
+/* Android's udc core comments out the pullup after bind on some kernels
+ * (the HACK), so the host sees nothing. soft_connect raises it, but its
+ * "connect" calls usb_gadget_udc_start() unconditionally before the core
+ * learned to track a started UDC (no "started" guard in 4.14). On a dwc3
+ * that bind already started, dwc3_gadget_start() requests its IRQ, finds a
+ * driver bound, and frees that IRQ on the way out while it is still in use;
+ * the next unbind then panics the phone (seen on the S10 with the M62
+ * kernel). So: leave it alone when the host is already enumerating us, and
+ * otherwise use the balanced pair, disconnect (udc_stop) then connect
+ * (udc_start), which never starts a started controller. */
 static void pullup(const struct ua_gadget *g) {
-  char p[PATH_MAX];
-  /* Android's udc core comments out the pullup after bind and waits for
-   * userspace. Asserting it ourselves is a no-op on kernels without the
-   * hack, and a host that sees nothing without it on kernels with it. */
-  if (pathf(p, sizeof(p), "/sys/class/udc/%s/soft_connect", g->udc) == 0 &&
-      write_file(p, "connect") < 0)
+  char p[PATH_MAX], st[64];
+  if (pathf(p, sizeof(p), "/sys/class/udc/%s/state", g->udc) < 0)
+    return;
+  for (int waited = 0; waited < UA_PULLUP_WAIT_MS; waited += 100) {
+    if (read_file(p, st, sizeof(st)) > 0 && strcmp(st, "not attached") != 0)
+      return; /* the host is talking to us: the pullup is up */
+    usleep(100000);
+  }
+  if (pathf(p, sizeof(p), "/sys/class/udc/%s/soft_connect", g->udc) < 0)
+    return;
+  ua_debug("no enumeration after bind, cycling soft_connect");
+  if (write_file(p, "disconnect") < 0 || write_file(p, "connect") < 0)
     ua_debug("soft_connect: %s", strerror(errno));
 }
 

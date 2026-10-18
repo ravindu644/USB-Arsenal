@@ -57,6 +57,7 @@
 #define UA_HANDOFF_TIMEOUT_MS 5000  /* Android dropping/raising its gadget */
 #define UA_ENUM_TIMEOUT_MS 3000     /* host reaching "configured" after bind */
 #define UA_RESTORE_TIMEOUT_MS 10000 /* Android's mode back, adbd included */
+#define UA_PULLUP_WAIT_MS 1000      /* enumeration starting after bind */
 
 /* Exit codes, the way git and most CLIs split them */
 #define UA_EXIT_OK 0
@@ -168,6 +169,7 @@ void ua_help_identity(void);
 #define UA_NEED_HID (1 << 1)
 #define UA_NEED_NET (1 << 2)
 
+int ua_ncm_unsafe(void);
 int ua_probe_function(const struct ua_gadget *g, const char *type,
                       const char *attr);
 int ua_check_requirements(struct ua_gadget *g, int need);

@@ -37,6 +37,15 @@ backend, which Android's USB HAL cannot disturb:
 
 Background: [references/samsung-gadget-duct-tapes.md](references/samsung-gadget-duct-tapes.md).
 
+## Recommended patch for Samsung 4.x kernels
+
+`f_ncm.c` `create_terminal_attribute()` calls `device_destroy()` on the shared
+`android0` device when a second NCM instance cannot add `terminal_version`. That
+frees Android's gadget device and panics the kernel later. USB Arsenal never creates
+that second instance (it uses RNDIS there), but the kernel should drop that
+`device_destroy()` call anyway. See
+[research/01-kernel-survey.md](research/01-kernel-survey.md).
+
 ## Raspberry Pi and other boards
 
 ```

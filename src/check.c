@@ -19,10 +19,24 @@
  * 1 if the kernel can create a <type> function (and, if attr is given, that
  * function has that attribute). Probes inside the gadget we would use, or a
  * throwaway one when ours does not exist yet. */
+/* Samsung's f_ncm (CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE, every 4.x tree we
+ * have) hangs a terminal_version attribute on the shared android0 device
+ * for each NCM instance. A second instance fails to add it, and the error
+ * path calls device_destroy() on android0 itself (f_ncm.c
+ * create_terminal_attribute). The next NCM instance, or Android's own
+ * gadget, then touches a freed device and the kernel BUGs. The attribute
+ * existing means an instance is already there: never make another one,
+ * not even to probe. */
+int ua_ncm_unsafe(void) {
+  return access("/sys/class/android_usb/android0/terminal_version", F_OK) == 0;
+}
+
 int ua_probe_function(const struct ua_gadget *g, const char *type,
                       const char *attr) {
   char root[PATH_MAX], fdir[PATH_MAX], a[PATH_MAX];
   int temp = 0, ok = 0;
+  if (!strcmp(type, "ncm") && ua_ncm_unsafe())
+    return 0;
 
   if (g->piggyback || access(g->path, F_OK) == 0) {
     safe_strncpy(root, g->path, sizeof(root));
@@ -188,8 +202,14 @@ int ua_cmd_check(int argc, char **argv) {
          "Without lun.0/cdrom, non-hybrid ISOs (Windows) cannot boot");
     line(ua_probe_function(&g, "hid", NULL), 0, "hid",
          "CONFIG_USB_CONFIGFS_F_HID; needed by 'hid'");
-    line(ua_probe_function(&g, "ncm", NULL), 0, "ncm",
-         "CONFIG_USB_CONFIGFS_NCM; preferred by 'tether'");
+    if (ua_ncm_unsafe())
+      line(-1, 0, "ncm (unsafe on this Samsung kernel; tether uses rndis)",
+           "Another NCM instance would make f_ncm destroy android0 and the "
+           "kernel BUG. Fix: in create_terminal_attribute(), do not "
+           "device_destroy() the shared android0 on failure.");
+    else
+      line(ua_probe_function(&g, "ncm", NULL), 0, "ncm",
+           "CONFIG_USB_CONFIGFS_NCM; preferred by 'tether'");
     line(ua_probe_function(&g, "rndis", NULL), 0, "rndis",
          "CONFIG_USB_CONFIGFS_RNDIS; 'tether --rndis' fallback for Windows "
          "7 and older hosts");

@@ -280,6 +280,16 @@ echo 10c00000.dwc3 > /config/usb_gadget/<gadget>/UDC
 echo connect > /sys/class/udc/10c00000.dwc3/soft_connect   # host enumerates now, no replug
 ```
 
+> **Correction (2026-10-18, found by USB Arsenal on this same kernel):** on 4.14,
+> `soft_connect` "connect" calls `usb_gadget_udc_start()` unconditionally. If the
+> controller is already started (it is after a bind; Samsung's symlink change mode
+> even raises the pullup itself), `dwc3_gadget_start()` frees the controller's IRQ
+> while it is in use, and the next unbind panics the phone. Only poke `soft_connect`
+> when the UDC `state` is still "not attached", and then as the balanced pair
+> `disconnect` + `connect`. Also, never create a second NCM instance on these kernels:
+> Samsung's f_ncm destroys `android0` when it fails to add `terminal_version`. See
+> docs/research/01-kernel-survey.md.
+
 Both PoCs above instead finish with `echo 1 > android0/enable`, which already  
 calls `usb_gadget_connect()` — so they do **not** need `soft_connect`. You only  
 need it for the pure mainline flow (`ln -s …` + `echo <udc> > UDC`) on the  

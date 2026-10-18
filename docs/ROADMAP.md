@@ -95,8 +95,8 @@ Tick a box only when the item is merged and verified as described in its phase.
       and a failed start removes the function it added
 - [ ] Hardware: host gets a lease, `ping 1.1.1.1` works; after `stop`, Android's own USB
       tethering still works
-- [ ] Re-apply the address and restart DHCP when a composition change re-registers the
-      netdev (today: `tether stop` + `start`)
+- [x] Re-apply the address and restart DHCP when a composition change re-registers the
+      netdev (M62: verified, host re-leased after a storage re-plug)
 - [ ] Container support, see [research/05-netns.md](research/05-netns.md): Droidspaces
       `usb_net_passthrough` (host-side move), plus setns-move-setns in USB Arsenal when a
       host netns handle exists (chroot `/proc/1/ns/net`, or a bind mount)
@@ -149,7 +149,7 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [ ] Verify on a Pixel (gadget HAL that rebinds `g1` on its own)
 
 ## Verification on hardware
-- [ ] Exynos9820 on M62-backport (own gadget, pullup HACK)
+- [x] Exynos9820 on M62-backport (S10, own gadget, pullup HACK): storage, HID, RNDIS tether, re-plug follow; after fixing two kernel panics, see the status log
 - [ ] Stock Samsung 4.14/4.19 (piggyback)
 - [ ] Samsung 5.10/5.15 (own gadget)
 
@@ -231,4 +231,18 @@ Tick a box only when the item is merged and verified as described in its phase.
   Android shell (symlink). The host saw the profile's VID/PID, strings, serial and SCSI
   inquiry string, and leased from the profile's tether subnet. A live `set` re-plugged
   once. A deleted target was reported, and the defaults applied.
+- 2026-10-18: S10 on the M62 kernel (4.14). Two kernel panics, both fixed and
+  documented in research/01:
+  1. Our unconditional `soft_connect` "connect" double-started dwc3, which freed its IRQ
+     while in use, and the next unbind panicked. `pullup()` now only acts when nothing
+     enumerates, and then as a balanced disconnect + connect.
+  2. Samsung's f_ncm destroys `android0` when a second NCM instance cannot add
+     `terminal_version`, and our capability probe was that second instance. NCM
+     directories are now never created when `android0/terminal_version` exists;
+     `tether` uses RNDIS there.
+
+  Then verified on the S10: storage plus HID (host saw the disk and both devices),
+  RNDIS tether (host leased 192.168.42.130), and the tether daemon following the netdev
+  M62 re-creates on every re-plug (host re-leased, disk alongside). `stop` gave back
+  MTP. The kernel log stayed clean.
 

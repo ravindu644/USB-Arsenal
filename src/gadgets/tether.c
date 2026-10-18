@@ -38,6 +38,7 @@ struct tether {
   int table;     /* uplink routing table the FROM rule points at, 0 = none */
   char uplink[IFNAMSIZ];
   char saved_forward[8];
+  unsigned ifindex; /* of the netdev we configured; a new one means rebind */
   /* gateway mode: a container (OpenWrt) serves the host instead of us */
   int gateway;
   const char *gw_name, *gw_path, *gw_iface;
@@ -462,7 +463,32 @@ static int net_up(struct tether *t) {
   sync_uplink(t, 0);
   ds_dhcp_server_start(t->dns, t->iface, t->offer_be, t->ip_be, t->mask_be,
                        NULL);
+  t->ifindex = if_nametoindex(t->iface);
   return 0;
+}
+
+/* Kernels with Samsung's UEVENT configfs (M62 4.14) free the netdev when the
+ * gadget unbinds and make a new one at bind, so any other function starting
+ * or stopping hands us a fresh rndis0/usb0: no address, down, and a DHCP
+ * socket still bound to the dead ifindex. Spot the new index and redo the
+ * per-interface half. The NAT rules match by name and subnet, so they hold. */
+static void follow_netdev(struct tether *t) {
+  unsigned idx = if_nametoindex(t->iface);
+  if (!idx || idx == t->ifindex)
+    return;
+  ua_log("[NET] %s was re-created by a rebind, configuring it again", t->iface);
+  ds_dhcp_server_stop();
+  ds_nl_ctx_t *ctx = ds_nl_open();
+  if (ctx) {
+    int r = ds_nl_link_up(ctx, t->iface);
+    int a = ds_nl_add_addr4(ctx, t->iface, t->ip_be, t->prefix);
+    if (r < 0 || (a < 0 && a != -EEXIST))
+      ua_warn("[NET] Cannot bring up the new %s", t->iface);
+    ds_nl_close(ctx);
+  }
+  ds_dhcp_server_start(t->dns, t->iface, t->offer_be, t->ip_be, t->mask_be,
+                       NULL);
+  t->ifindex = idx;
 }
 
 static void net_down(struct tether *t) {
@@ -522,6 +548,7 @@ static int serve(struct tether *t, int ready_fd) {
         read_file("/proc/sys/net/ipv4/ip_forward", fwd, sizeof(fwd)) > 0 &&
         fwd[0] == '0')
       write_file("/proc/sys/net/ipv4/ip_forward", "1");
+    follow_netdev(t);
     sync_uplink(t, 1);
   }
   ua_log("[NET] Stopping tethering on %s", t->iface);
@@ -605,6 +632,8 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
   int added = 0;
   if (!func || !ua_gadget_live(&g)) {
     /* A function already there (linked, gadget not live) is kept as is */
+    if (!func && !rndis && ua_ncm_unsafe())
+      ua_log("NCM would crash this Samsung kernel (see 'check'); using RNDIS");
     if (!func)
       func = (rndis || !ua_probe_function(&g, "ncm", NULL)) ? RNDIS : NCM;
     char dir[PATH_MAX], dev[32], host[32];
