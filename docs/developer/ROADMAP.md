@@ -71,7 +71,8 @@ Tick a box only when the item is merged and verified as described in its phase.
       as `sr0` iso9660, swaps work
 - [x] Hardware: a hybrid Linux ISO actually boots a PC as a disk (S10, Alpine 3.23
       x86_64, UEFI on an MSI laptop, to the login prompt)
-- [ ] Hardware: a non-hybrid ISO boots from `sr0`; legacy BIOS boot
+- [x] Hardware: the same ISO boots from `sr0` in `--mode cdrom` (El Torito, UEFI)
+- [ ] Hardware: a non-hybrid ISO (Windows) boots from `sr0`; legacy BIOS boot
 - [ ] Hardware: swap while live, host sees a medium change, no re-enumeration
 - [ ] Stretch: Ventoy-style on-PC menu
 
@@ -302,5 +303,6 @@ Tick a box only when the item is merged and verified as described in its phase.
   forwarding and the netfilter reconcile. Verified on the S10 (see Phase 3).
 - 2026-10-19: First real boot. The S10 served alpine-standard-3.23.0-x86_64.iso in auto
   mode (read-only disk, MBR found); an MSI laptop's UEFI boot menu listed "UEFI: Linux
-  File-Stor Gadget0414, Partition 1" and Alpine booted to `localhost login:`. CD-ROM
-  mode and legacy BIOS are still untested.
+  File-Stor Gadget0414, Partition 1" and Alpine booted to `localhost login:`. The same
+  ISO in `--mode cdrom` (host saw `sr0`, "File-CD Gadget") booted too. ADB came back
+  after `stop` both times. Legacy BIOS and a non-hybrid ISO are still untested.
