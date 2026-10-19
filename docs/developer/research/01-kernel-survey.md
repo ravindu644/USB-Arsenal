@@ -33,8 +33,8 @@ pullup does go up on bind there.
 - **Stock Samsung 4.14 / 4.19.** `mkdir` of a second gadget collides on `android0` and
   fails as ENOMEM. A link puts the function on `gi->linked_func`, not `cfg->func_list`
   (exynos9820 configfs.c:729), so a hand-built gadget fails bind with "needs at least
-  one function". Only `android0/functions` moves it across. This is the piggyback
-  backend. There is one exception: a config string other than `"Conf 1"` set before
+  one function". Only `android0/functions` moves it across, so USB Arsenal needs patches
+  `0001` and `0002` here and refuses without them. There is one exception: a config string other than `"Conf 1"` set before
   linking turns on "symlink change mode" (exynos9820 :466, exynos990 :434). We set
   `"USB Arsenal"`, which is harmless everywhere else.
 - **M62-backport.** Commit `aa8867995` (`kernel-patches/4.14/0001`) gives every gadget its own uevent

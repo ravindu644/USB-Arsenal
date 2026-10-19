@@ -17,8 +17,8 @@ the controller from Android and giving it back.
   it). `check` reports them, and every command fails closed on what it needs.
 - Configfs is the floor. Kernels without it (stock 3.18) are refused with a reason; the
   legacy `android_usb` gadget is out of scope.
-- Two backends behind one interface: **own gadget** (primary), and **piggyback** inside
-  Android's `g1` for stock Samsung kernels that cannot create a second gadget.
+- One backend: our own gadget next to Android's `g1`. Stock Samsung 4.x kernels, which
+  cannot create a second gadget, are refused and pointed at `kernel-patches/4.14/`.
 - One UDC is used automatically. With more than one, `--udc` is required.
 - git-style CLI: `usb-arsenal <command> <action> [options]`, each command with a full
   `--help`. See [usage.md](../usage.md).
@@ -38,7 +38,6 @@ Tick a box only when the item is merged and verified as described in its phase.
       ignored after a reboot (boot_id)
 - [x] Own-gadget backend: release Android (`sys.usb.config none`), build, bind,
       `soft_connect`, wait for `configured`
-- [x] Piggyback backend: functions in `g1`, selected via `android0/functions`, `enable`
 - [x] Teardown restores the previous owner; every failure after `begin` routes through it
 - [x] Stop signals held during the handoff; SIGHUP/SIGPIPE ignored so a dying adb shell
       cannot interrupt it
@@ -51,8 +50,6 @@ Tick a box only when the item is merged and verified as described in its phase.
       recovers. a166p (5.15): `g1` rebound, `kill -9` recovered, `adb devices` saw the
       phone again. S10 (M62 4.14): `stop` after an NCM tether gave back
       `mtp,conn_gadget,adb` and ADB returned
-- [ ] Piggyback: confirm whether unlinking our functions after `enable 0` hits the
-      `linked_func` WARN on stock Samsung
 
 ## Phase 1. `storage`
 - [x] `start IMAGE` with `--mode auto|cdrom|disk|rw` and `--lun N`
@@ -126,7 +123,7 @@ Tick a box only when the item is merged and verified as described in its phase.
       and a failed start removes the function it added
 - [x] Hardware: host gets a lease and is online (a166p, S10)
 - [x] Hardware: after `stop`, Android's own USB tethering still works (a166p, once
-      `android0` is no longer destroyed; see the 2026-10-20 log)
+      `android0` is no longer destroyed; see the 2026-10-19 log)
 - [x] Re-apply the address and restart DHCP when a composition change re-registers the
       netdev (M62: verified, host re-leased after a storage re-plug)
 - [x] Container support: superseded by the daemon (Phase 5), which runs in the host
@@ -192,7 +189,6 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Exynos9820 on M62-backport (S10, own gadget, pullup HACK): storage, HID, RNDIS
       and NCM tether (with `kernel-patches/4.14/`), IPv6, re-plug follow, ADB back after
       `stop`; see the status log for the panics fixed on the way
-- [ ] Stock Samsung 4.14/4.19 (piggyback)
 - [x] Samsung 5.15 (a166p, own gadget): every command, containers, gateway mode
 
 ## Status log
@@ -357,23 +353,23 @@ Tick a box only when the item is merged and verified as described in its phase.
   the module, its `sepolicy.rule` was loaded (kernel may read `loop_device`), and
   `usb-arsenal storage start` from `/system/bin`, relayed to the daemon, served the WinPE
   ISO in `dvd` mode; `stop` handed the port back and the loop went with it.
-- 2026-10-20: A 2012 Samsung NP300E. The 4.9 GB WinPE ISO in `--mode cdrom` (S10 with
+- 2026-10-19: A 2012 Samsung NP300E. The 4.9 GB WinPE ISO in `--mode cdrom` (S10 with
   `0004` to `0006`) booted in UEFI mode to Windows Boot Manager and in legacy mode
   ("USB CD:: Linux File-CD Gadget") to Strelec's BIOS menu. `--mode dvd` did not appear
   in its boot menu in either mode, so `dvd` is for newer UEFI firmware and the patched
   `cdrom` is the one for older PCs.
-- 2026-10-20: HID types. From the a166p's Droidspaces Ubuntu container (over SSH,
+- 2026-10-19: HID types. From the a166p's Droidspaces Ubuntu container (over SSH,
   `hid start` relayed to the daemon), boot keyboard reports written to `/dev/hidg1`
   typed "hello from usb arsenal" into Sublime Text on Fedora, and mouse reports on
   `/dev/hidg2` drew a square. The container saw the nodes because it mounts the kernel's
   devtmpfs, where the kernel creates them itself. `stop` from the container brought ADB
   back.
-- 2026-10-20: Hot swap. From the a166p's container, `storage start --mode disk` swapped
+- 2026-10-19: Hot swap. From the a166p's container, `storage start --mode disk` swapped
   SWAP_A for SWAP_B on a live LUN (Fedora had unmounted it): "LUN 0 now holds", the same
   USB device number before and after, and the host kernel logged only a partition
   re-read, no disconnect. Images in the container's rootfs were relabelled from
   `unlabeled` and read fine.
-- 2026-10-20: The a166p's USB tethering was greyed out and Android showed no USB
+- 2026-10-19: The a166p's USB tethering was greyed out and Android showed no USB
   notification. `android0` had been destroyed: `android_device_destroy()` finds its device
   by devt, all `androidN` share devt 0, so every gadget we removed (about 110 since boot)
   destroyed the oldest, starting with `g1`'s. Now our gadget is kept, unbound and empty,
@@ -381,19 +377,28 @@ Tick a box only when the item is merged and verified as described in its phase.
   `check`, `hid start`, `storage start` (re-plug) and `stop` left `android0` alive, Android
   heard CONNECTED and CONFIGURED after the hand-back, and a second `stop` said "Nothing to
   stop".
-- 2026-10-20: Android's own USB tethering after USB Arsenal, on the a166p with the
+- 2026-10-19: Android's own USB tethering after USB Arsenal, on the a166p with the
   keep-gadget fix: the USB notification was back, Settings enabled USB tethering
   (`rndis,adb`), Fedora got 10.39.186.64/24 by DHCP, pinged the phone, and resolved names
   through its DNS. ADB stayed up.
-- 2026-10-20: Uplink handoff on the a166p. `tether` started on mobile data (FROM rule
+- 2026-10-19: Uplink handoff on the a166p. `tether` started on mobile data (FROM rule
   `lookup rmnet0`; no quota, so the host's pings failed). Wi-Fi on: at 15:59:53 the rule
   was `lookup wlan0`, and Fedora's once-a-second ping of 1.1.1.1 through the USB link
   went from failing to answering at 15:59:54, then answered every time until `stop`.
   `stop` handed the port back to Android's own tethering (`rndis,adb`), `android0` intact.
-- 2026-10-20: IPv6 in gateway mode on the a166p. `tether start --gateway OpenWrt
+- 2026-10-19: IPv6 in gateway mode on the a166p. `tether start --gateway OpenWrt
   --gateway-iface vaplan0` reused VirtualAP's `vaplan` config (ip6assign 64, ra and
   dhcpv6 server, ra_default) with no OpenWrt changes. Fedora got
   fd13:d8d1:f9e7:1::/64 by SLAAC and a default route from OpenWrt's RA, pinged OpenWrt
   and 2606:4700:4700::1111, and ifconfig.co over IPv6 showed the public address of the
   phone's Wi-Fi (OpenWrt's NAT66, then Droidspaces'). Android side: `usb0`, `ua-usb` and
   `ua-gw` all had disable_ipv6=1 and no address. `stop` removed both and handed back.
+- 2026-10-19: Removed the piggyback backend (riding inside Android's `g1` on stock
+  Samsung 4.x). It was never verified on hardware, it rewrote `android0/functions`,
+  `enable` and `g1`'s class, and Android's HAL rewrites `g1` on every plug and mode
+  change, so users would have met races that break ADB and MTP. A missing feature beats a
+  broken one: stock Samsung 4.x is now refused with the reason and `kernel-patches/4.14/`
+  `0001` and `0002`.
+  Stock Samsung is detected by the `mkdir` itself: it fails as ENOMEM in
+  `device_create()` for a second `android0`, before anything is set up, so nothing
+  changes.

@@ -14,23 +14,14 @@
 
 const char *ua_udc_opt;
 
-#define ANDROID0 "/sys/class/android_usb/android0"
-
 /* What we took from the previous owner, written before we touch anything so
  * `stop` can put it back after a crash or a kill -9. */
 struct handoff {
-  char backend[16];     /* own | piggyback */
   char udc[64];         /* the controller we took */
   char usb_config[128]; /* Android: sys.usb.config before we started */
-  char functions[256];  /* piggyback: android0/functions before we started */
-  char cls[3][16];      /* piggyback: g1's device class triple */
   char boot[40];        /* boot_id: a handoff from an earlier boot is void */
   char g1_udc[64];      /* Android's g1 was bound to this before we took it */
-  char enable[8];       /* piggyback: android0/enable before we started */
 };
-
-static const char *const class_attrs[3] = {"bDeviceClass", "bDeviceSubClass",
-                                           "bDeviceProtocol"};
 
 static int handoff_load(struct handoff *h);
 
@@ -67,13 +58,8 @@ static int handoff_save(const struct handoff *h) {
       close(fd);
     return -1;
   }
-  fprintf(f,
-          "backend=%s\nudc=%s\nusb_config=%s\nfunctions=%s\nboot=%s\n"
-          "g1_udc=%s\nenable=%s\n",
-          h->backend, h->udc, h->usb_config, h->functions, h->boot, h->g1_udc,
-          h->enable);
-  for (int i = 0; i < 3; i++)
-    fprintf(f, "%s=%s\n", class_attrs[i], h->cls[i]);
+  fprintf(f, "udc=%s\nusb_config=%s\nboot=%s\ng1_udc=%s\n", h->udc,
+          h->usb_config, h->boot, h->g1_udc);
   /* The whole point of this file is surviving a crash, so it has to be on
    * disk before the controller changes hands */
   int ok = fflush(f) == 0 && fsync(fileno(f)) == 0;
@@ -93,23 +79,14 @@ static int handoff_load(struct handoff *h) {
     if (!v)
       continue;
     *v++ = '\0';
-    if (!strcmp(line, "backend"))
-      safe_strncpy(h->backend, v, sizeof(h->backend));
-    else if (!strcmp(line, "udc"))
+    if (!strcmp(line, "udc"))
       safe_strncpy(h->udc, v, sizeof(h->udc));
     else if (!strcmp(line, "usb_config"))
       safe_strncpy(h->usb_config, v, sizeof(h->usb_config));
-    else if (!strcmp(line, "functions"))
-      safe_strncpy(h->functions, v, sizeof(h->functions));
     else if (!strcmp(line, "boot"))
       safe_strncpy(h->boot, v, sizeof(h->boot));
     else if (!strcmp(line, "g1_udc"))
       safe_strncpy(h->g1_udc, v, sizeof(h->g1_udc));
-    else if (!strcmp(line, "enable"))
-      safe_strncpy(h->enable, v, sizeof(h->enable));
-    for (int i = 0; i < 3; i++)
-      if (!strcmp(line, class_attrs[i]))
-        safe_strncpy(h->cls[i], v, sizeof(h->cls[i]));
   }
   fclose(f);
 
@@ -311,38 +288,34 @@ int ua_gadget_open(struct ua_gadget *g) {
       (pathf(p, sizeof(p), "%s/g1", g->cfs) == 0 && access(p, F_OK) == 0 &&
        access("/sys/class/android_usb", F_OK) == 0);
 
-  if (taken)
-    g->piggyback = !strcmp(h.backend, "piggyback");
-  else if (access(own, F_OK) == 0)
-    g->piggyback = 0;
-  else if (mkdir(own, 0755) == 0) {
-    if (!keep_gadget())
-      rmdir(own);
-  } else if (g->android_gadget && access(ANDROID0 "/functions", W_OK) == 0)
-    /* Stock Samsung configfs: every gadget registers as android0, so the
-     * second mkdir fails (as ENOMEM). Ride along inside g1 instead. */
-    g->piggyback = 1;
-  else {
-    ua_error("Cannot create a gadget in %s: %s", g->cfs, strerror(errno));
-    return -1;
-  }
-
-  if (g->piggyback) {
-    if (pathf(g->path, sizeof(g->path), "%s/g1", g->cfs) < 0 ||
-        first_config(g->path, g->config, sizeof(g->config)) < 0) {
-      ua_error("Piggyback backend needs Android's g1 gadget with a config");
+  if (access(own, F_OK) != 0) {
+    /* Stock Samsung configfs names every gadget's uevent device android0, so a
+     * second one fails in device_create() before anything is set up and the
+     * mkdir returns ENOMEM. Nothing changes; it is the cheapest detector. */
+    if (mkdir(own, 0755) < 0) {
+      int err = errno;
+      if (err == ENOMEM && g->android_gadget &&
+          access("/sys/class/android_usb/android0/functions", F_OK) == 0) {
+        ua_error("This is stock Samsung configfs, which cannot create a "
+                 "second gadget next to Android's");
+        ua_log("It needs kernel-patches/4.14/0001 and 0002. Nothing was "
+               "changed.");
+      } else {
+        ua_error("Cannot create a gadget in %s: %s", g->cfs, strerror(err));
+      }
       return -1;
     }
-  } else {
-    safe_strncpy(g->path, own, sizeof(g->path));
-    if (pathf(g->config, sizeof(g->config), "%s/configs/" UA_CONFIG, own) < 0)
-      return -1;
+    if (!keep_gadget())
+      rmdir(own);
   }
+
+  safe_strncpy(g->path, own, sizeof(g->path));
+  if (pathf(g->config, sizeof(g->config), "%s/configs/" UA_CONFIG, own) < 0)
+    return -1;
   return 0;
 }
 
-/* Our functions carry the "ua" instance. In our own gadget every function is
- * ours anyway; inside g1 this is what keeps Android's hands off-limits. */
+/* Our functions carry the "ua" instance */
 static int is_ours(const char *func) {
   const char *dot = strchr(func, '.');
   return dot && !strncmp(dot + 1, "ua", 2);
@@ -365,8 +338,6 @@ int ua_gadget_live(const struct ua_gadget *g) {
   char p[PATH_MAX], buf[64];
   if (!ua_gadget_taken())
     return 0;
-  if (g->piggyback)
-    return read_file(ANDROID0 "/enable", buf, sizeof(buf)) > 0 && buf[0] == '1';
   return pathf(p, sizeof(p), "%s/UDC", g->path) == 0 &&
          read_file(p, buf, sizeof(buf)) > 0;
 }
@@ -459,10 +430,6 @@ int ua_gadget_begin(struct ua_gadget *g) {
   if (ua_gadget_taken()) {
     /* Already ours: unbind so functions can change. Attributes like the HID
      * report descriptor are locked while the function is in use. */
-    if (g->piggyback) {
-      write_attr(ANDROID0, "enable", "0");
-      return 0;
-    }
     if (ua_gadget_live(g))
       write_attr(g->path, "UDC", "none\n");
     /* Idempotent, and covers a crash between saving the handoff and
@@ -477,8 +444,6 @@ int ua_gadget_begin(struct ua_gadget *g) {
 
   struct handoff h;
   memset(&h, 0, sizeof(h));
-  safe_strncpy(h.backend, g->piggyback ? "piggyback" : "own",
-               sizeof(h.backend));
   safe_strncpy(h.udc, g->udc, sizeof(h.udc));
   boot_marker(h.boot, sizeof(h.boot));
 
@@ -486,7 +451,7 @@ int ua_gadget_begin(struct ua_gadget *g) {
   int owned = udc_owner(g, owner, sizeof(owner));
   if (owned && g->android_gadget && !strcmp(owner, "g1"))
     safe_strncpy(h.g1_udc, g->udc, sizeof(h.g1_udc));
-  else if (!g->piggyback && owned) {
+  else if (owned) {
     /* Not Android's: we do not unbind someone else's gadget */
     ua_error("%s is in use by the gadget '%s'", g->udc, owner);
     ua_log("Unbind it first: echo none > %s/%s/UDC", g->cfs, owner);
@@ -501,27 +466,11 @@ int ua_gadget_begin(struct ua_gadget *g) {
     if (!h.usb_config[0] || !strcmp(h.usb_config, "none"))
       safe_strncpy(h.usb_config, "mtp", sizeof(h.usb_config));
   }
-  if (g->piggyback) {
-    char p[PATH_MAX];
-    read_file(ANDROID0 "/functions", h.functions, sizeof(h.functions));
-    read_file(ANDROID0 "/enable", h.enable, sizeof(h.enable));
-    for (int i = 0; i < 3; i++)
-      if (pathf(p, sizeof(p), "%s/%s", g->path, class_attrs[i]) == 0)
-        read_file(p, h.cls[i], sizeof(h.cls[i]));
-  }
-
   if (handoff_save(&h) < 0) {
     ua_error("Cannot write the handoff state in %s: %s", ua_workspace(),
              strerror(errno));
     ua_crit_leave();
     return -1;
-  }
-
-  if (g->piggyback) {
-    /* Stock Samsung: enable 0 drops the current composition but leaves g1
-     * and Android's functions in place, which is what lets us restore it */
-    write_attr(ANDROID0, "enable", "0");
-    return 0;
   }
 
   if (g->android_gadget)
@@ -611,17 +560,14 @@ int ua_gadget_remove(struct ua_gadget *g, const char *func) {
       rmdir(sub);
   }
   if (rmdir(p) < 0 && errno != ENOENT) {
-    /* Stock Samsung leaks a function it never moved off linked_func. It is
-     * harmless and reused under the same name next time. */
     ua_warn("Cannot remove %s: %s", p, strerror(errno));
     return -1;
   }
   return 0;
 }
 
-/* Link every function of ours that is not linked yet, and build the
- * comma-separated type list the android0 HAL attribute wants. */
-static int link_functions(struct ua_gadget *g, char *tokens, size_t tsize) {
+/* Link every function of ours that is not linked yet; returns how many are */
+static int link_functions(struct ua_gadget *g) {
   char fdir[PATH_MAX];
   if (pathf(fdir, sizeof(fdir), "%s/functions", g->path) < 0)
     return -1;
@@ -630,9 +576,8 @@ static int link_functions(struct ua_gadget *g, char *tokens, size_t tsize) {
     return -1;
   int n = 0, failed = 0;
   struct dirent *e;
-  tokens[0] = '\0';
   while ((e = readdir(d))) {
-    char src[PATH_MAX], dst[PATH_MAX], type[64];
+    char src[PATH_MAX], dst[PATH_MAX];
     if (e->d_name[0] == '.' || !is_ours(e->d_name))
       continue;
     if (pathf(src, sizeof(src), "%s/%s", fdir, e->d_name) < 0 ||
@@ -644,13 +589,6 @@ static int link_functions(struct ua_gadget *g, char *tokens, size_t tsize) {
       continue;
     }
     n++;
-    /* One token per function type: "hid" selects every hid.* instance */
-    safe_strncpy(type, e->d_name, sizeof(type));
-    type[strcspn(type, ".")] = '\0';
-    if (!strstr(tokens, type)) {
-      size_t len = strlen(tokens);
-      snprintf(tokens + len, tsize - len, "%s%s", len ? "," : "", type);
-    }
   }
   closedir(d);
   return failed ? -1 : n;
@@ -691,8 +629,8 @@ static void wait_configured(const struct ua_gadget *g) {
 }
 
 int ua_gadget_commit(struct ua_gadget *g) {
-  char tokens[256], udc[80];
-  int n = link_functions(g, tokens, sizeof(tokens));
+  char udc[80];
+  int n = link_functions(g);
   if (n < 0)
     goto fail;
   if (n == 0) {
@@ -702,42 +640,17 @@ int ua_gadget_commit(struct ua_gadget *g) {
   }
   snprintf(udc, sizeof(udc), "%s\n", g->udc);
 
-  if (g->piggyback) {
-    struct handoff h;
-    char sel[320];
-    if (handoff_load(&h) < 0) {
-      ua_error("Lost the handoff state in %s", ua_workspace());
-      goto fail;
-    }
-    write_attr(g->path, "bDeviceClass", "0xEF");
-    write_attr(g->path, "bDeviceSubClass", "0x02");
-    write_attr(g->path, "bDeviceProtocol", "0x01");
-    /* The functions write is what moves our links from Samsung's staging
-     * list into the config. Keep adb so the user does not lose it. */
-    snprintf(sel, sizeof(sel), "%s%s", tokens,
-             strstr(h.functions, "adb") ? ",adb" : "");
-    if (write_attr(ANDROID0, "functions", sel) < 0) {
-      ua_error("android0 rejected functions '%s': %s", sel, strerror(errno));
-      goto fail;
-    }
-    write_attr(g->path, "UDC", udc); /* EBUSY if still bound: fine */
-    if (write_attr(ANDROID0, "enable", "1") < 0) {
-      ua_error("android0 enable failed: %s", strerror(errno));
-      goto fail;
-    }
-  } else {
-    if (write_attr(g->path, "UDC", udc) < 0) {
-      int err = errno;
-      ua_error("Binding to %s failed: %s", g->udc, strerror(err));
-      if (err == EINVAL)
-        ua_log("Samsung configfs without the bring-up fix (kernel-patches/"
-               "4.14/0002) cannot bind a hand-built gadget.");
-      else if (err == EBUSY)
-        ua_log("Another gadget or a legacy g_* driver holds the controller.");
-      goto fail;
-    }
-    pullup(g);
+  if (write_attr(g->path, "UDC", udc) < 0) {
+    int err = errno;
+    ua_error("Binding to %s failed: %s", g->udc, strerror(err));
+    if (err == EINVAL)
+      ua_log("Samsung configfs without the bring-up fix (kernel-patches/"
+             "4.14/0002) cannot bind a hand-built gadget.");
+    else if (err == EBUSY)
+      ua_log("Another gadget or a legacy g_* driver holds the controller.");
+    goto fail;
   }
+  pullup(g);
   wait_configured(g);
   ua_crit_leave();
   ua_hid_reapply(g);
@@ -830,21 +743,7 @@ void ua_gadget_teardown(struct ua_gadget *g) {
   /* Everything of ours goes, NCM included: its network side must not keep
    * serving an interface that is about to vanish */
   ua_tether_kill();
-  if (g->piggyback && have) {
-    char udc[80];
-    write_attr(ANDROID0, "enable", "0");
-    /* Unlink while ours are still in func_list, before the functions write
-     * below moves them back to the staging list stock unlink cannot see */
-    remove_ours(g);
-    if (h.functions[0])
-      write_attr(ANDROID0, "functions", h.functions);
-    for (int i = 0; i < 3; i++)
-      if (h.cls[i][0])
-        write_attr(g->path, class_attrs[i], h.cls[i]);
-    snprintf(udc, sizeof(udc), "%s\n", g->udc);
-    write_attr(g->path, "UDC", udc);
-    write_attr(ANDROID0, "enable", h.enable[0] ? h.enable : "1");
-  } else if (!g->piggyback && access(g->path, F_OK) == 0) {
+  if (access(g->path, F_OK) == 0) {
     char buf[64];
     if (pathf(p, sizeof(p), "%s/UDC", g->path) == 0 &&
         read_file(p, buf, sizeof(buf)) > 0) {
@@ -867,7 +766,7 @@ void ua_gadget_teardown(struct ua_gadget *g) {
     }
   }
 
-  if (!g->piggyback && g->android_gadget) {
+  if (g->android_gadget) {
     if (have)
       android_restore(g, &h);
     /* Our gadget was there but the record of what we took is gone (a crash
@@ -879,7 +778,7 @@ void ua_gadget_teardown(struct ua_gadget *g) {
 
   /* The record goes only once the controller is really back. If g1 did not
    * come back, keeping it means the next `stop` tries again. */
-  if (have && !g->piggyback && h.g1_udc[0] && !g1_bound(g))
+  if (have && h.g1_udc[0] && !g1_bound(g))
     ua_error("Android's gadget is not bound yet; run '" UA_NAME " stop' again");
   else
     handoff_drop();

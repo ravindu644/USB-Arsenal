@@ -966,7 +966,7 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
     } else {
       ua_debug("%s has no netdev before bind; the kernel picks the MACs", func);
     }
-    if (!strcmp(func, RNDIS) && !g.piggyback)
+    if (!strcmp(func, RNDIS))
       rndis_os_desc(&g, dir);
     if (ua_gadget_commit(&g) < 0)
       return UA_EXIT_FAIL;

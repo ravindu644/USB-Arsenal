@@ -65,5 +65,3 @@ needs no root.
   any VID/PID works on every host. A borrowed real vendor ID (Google `18d1`, Samsung
   `04e8`) works too, but it belongs to that vendor, so that is your call. A host with
   that vendor's driver for that exact PID may try to bind it.
-- The piggyback backend (stock Samsung kernels) rides in Android's `g1`, whose IDs and
-  strings stay Android's. The command defaults still apply.

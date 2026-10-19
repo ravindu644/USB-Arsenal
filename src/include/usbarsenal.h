@@ -44,8 +44,7 @@
 #define UA_VERSION "0.1.0"
 
 /* Our own gadget directory, and the instance name every function we create
- * carries. On the piggyback backend the functions live inside Android's g1,
- * and the "ua" instance is how we tell ours apart from Android's. */
+ * carries */
 #define UA_WORKSPACE_ANDROID "/data/local/USB-Arsenal"
 #define UA_WORKSPACE_LINUX "/var/lib/USB-Arsenal"
 
@@ -116,9 +115,8 @@ void ua_ws_path(const char *sub, const char *leaf, char *out, size_t size);
 struct ua_gadget {
   char cfs[PATH_MAX];    /* .../usb_gadget */
   char udc[64];          /* controller name from /sys/class/udc */
-  char path[PATH_MAX];   /* our gadget, or g1 on the piggyback backend */
+  char path[PATH_MAX];   /* our gadget */
   char config[PATH_MAX]; /* the config our functions are linked into */
-  int piggyback;
   int android_gadget; /* Android's g1 owns this UDC when we are not using it */
 };
 

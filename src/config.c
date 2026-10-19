@@ -390,11 +390,6 @@ static int replug_if_live(void) {
   struct ua_gadget g;
   if (ua_gadget_open(&g) < 0)
     return 0;
-  if (g.piggyback) {
-    ua_log("Piggyback backend: the IDs and strings stay Android's; the "
-           "command defaults apply");
-    return 0;
-  }
   if (!ua_gadget_live(&g))
     return 0;
   ua_log("Re-plugging the gadget so the host sees the new identity");

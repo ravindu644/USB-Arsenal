@@ -11,8 +11,7 @@ Code: `src/gadgets/tether.c`, with `src/net/` lifted from Droidspaces.
   gone from GKI after 5.10. Windows only loads its driver unprompted when the device
   carries Microsoft OS descriptors with compatible ID `RNDIS` / `5162001`, so
   `rndis_os_desc()` writes `os_desc/use`, `b_vendor_code=0xcd`, `qw_sign=MSFT100`, and
-  links the config into `os_desc/`. This is skipped on the piggyback backend, where
-  `g1`'s `os_desc` belongs to Android.
+  links the config into `os_desc/`.
 - The device class is Misc/IAD (0xEF/0x02/0x01) for every composite, which is what
   Windows wants for an NCM or RNDIS function inside one.
 - MACs are fixed per device (FNV hash of `ro.serialno` or `/etc/machine-id`, locally

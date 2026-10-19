@@ -29,7 +29,7 @@ ignored it in both UEFI and legacy mode). Use `--mode cdrom` on a kernel with th
 patch (see [kernel-requirements.md](kernel-requirements.md)), or a newer PC.
 
 **After USB Arsenal, Android shows no USB notification and USB tethering is greyed out.**
-Versions before 2026-10-20 removed their gadget on `stop`, and Android's configfs then
+Versions before 2026-10-19 (evening) removed their gadget on `stop`, and Android's configfs then
 destroys `android0` by mistake (see developer/architecture.md). ADB still works. Reboot
 the phone once; current versions keep their gadget, unbound and empty, and never trigger
 it. `ls /sys/class/android_usb` should show `android0`.
@@ -58,10 +58,10 @@ The kernel has Samsung's f_ncm bug: a second NCM instance panics it. USB Arsenal
 over RNDIS there. Patch `0003` in `kernel-patches/4.14/` fixes the kernel, and NCM comes
 back by itself. See [kernel-requirements.md](kernel-requirements.md).
 
-**`check` says "piggyback backend".**
-A stock Samsung kernel that cannot build a second gadget. Everything works, but Android
-rewrites its gadget on a replug or a USB mode change, which drops USB Arsenal's
-functions. Patches `0001` and `0002` fix that.
+**"This is stock Samsung configfs, which cannot create a second gadget".**
+A stock Samsung 4.x kernel: its configfs cannot build a gadget next to Android's (the
+`mkdir` fails as ENOMEM, and nothing is changed). USB Arsenal does not run on it;
+patches `0001` and `0002` in `kernel-patches/4.14/` fix the kernel. See [kernel-requirements.md](kernel-requirements.md).
 
 **"Permission denied" talking to the daemon.**
 Only root and the `usb-arsenal` group (gid 3460) may use it. `usb-arsenal version` says

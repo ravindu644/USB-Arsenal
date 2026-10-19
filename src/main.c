@@ -144,8 +144,6 @@ static int cmd_status(int argc, char **argv) {
   char p[PATH_MAX], state[64] = "unknown";
   snprintf(p, sizeof(p), "/sys/class/udc/%s/state", g.udc);
   read_file(p, state, sizeof(state));
-  printf("Backend:    %s\n",
-         g.piggyback ? "piggyback (inside Android's g1)" : "own gadget");
   printf("Controller: %s (%s)\n", g.udc, state);
   if (!ua_gadget_live(&g)) {
     printf("Gadget:     not active\n");
@@ -183,7 +181,7 @@ static int cmd_stop(int argc, char **argv) {
   struct ua_gadget g;
   if (ua_gadget_open(&g) < 0)
     return UA_EXIT_FAIL;
-  if (!ua_gadget_taken() && (g.piggyback || !ua_gadget_in_use(g.cfs))) {
+  if (!ua_gadget_taken() && !ua_gadget_in_use(g.cfs)) {
     ua_tether_kill();
     ua_log("Nothing to stop");
     return UA_EXIT_OK;

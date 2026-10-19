@@ -44,8 +44,10 @@ int ua_probe_function(const struct ua_gadget *g, const char *type,
   if (!strcmp(type, "ncm") && ua_ncm_unsafe())
     return 0;
 
-  if (g->piggyback || access(g->path, F_OK) == 0) {
+  if (access(g->path, F_OK) == 0) {
     safe_strncpy(root, g->path, sizeof(root));
+  } else if (access("/sys/class/android_usb", F_OK) == 0) {
+    return 0; /* removing a probe gadget here destroys android0 */
   } else {
     snprintf(root, sizeof(root), "%s/" PROBE_GADGET, g->cfs);
     if (mkdir(root, 0755) < 0 && errno != EEXIST)
@@ -181,19 +183,9 @@ int ua_cmd_check(int argc, char **argv) {
   missing += !have_udc;
 
   int have_backend = have_cfs && have_udc && root && ua_gadget_open(&g) == 0;
-  if (!have_backend)
-    line(0, 1, "A gadget backend",
-         missing ? "Needs the lines above first"
-                 : "Could not create a gadget; see the errors above");
-  else if (g.piggyback)
-    line(-1, 1, "Piggyback backend (inside Android's g1)",
-         "This kernel cannot create a second gadget, so USB Arsenal rides "
-         "along in g1. Android rewrites it on replug or a USB mode change. "
-         "Kernel patches 'usb: gadget: configfs: allow creating more than "
-         "one gadget' and 'support mainline gadget bring-up alongside "
-         "Android' unlock the own-gadget backend.");
-  else
-    line(1, 1, "Own gadget backend", NULL);
+  line(have_backend, 1, "Own USB gadget",
+       missing ? "Needs the lines above first"
+               : "Could not create a gadget; see the errors above");
   missing += !have_backend;
 
   printf("\n[FUNCTIONS]\n");

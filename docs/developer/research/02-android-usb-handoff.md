@@ -40,21 +40,6 @@ on top. Its HAL writes `functions`, then `UDC`, then `enable`.
 While we hold the controller, any attempt by `g1` to bind gets EBUSY from the UDC core.
 Stopping adbd through the property also stops `MonitorFfs` from trying.
 
-## Piggyback backend (stock Samsung)
-
-1. Save `android0/functions` and `g1`'s device class triple.
-2. `enable 0`, then create our functions in `g1` under the `ua` instance prefix and link
-   them into `g1`'s config.
-3. Set the IAD class, write our function types (plus `adb` if it was on) to
-   `android0/functions`, write the UDC, then `enable 1`. `enable` raises the pullup.
-4. Teardown: `enable 0`, unlink and remove ours **first**, while they are still in
-   `func_list` where stock unlink can find them, then restore the saved `functions` and
-   class, write the UDC, `enable 1`.
-
-Known limit: any `sys.usb.config` change while we are up (replug, MTP toggle, Developer
-options) makes the vendor rc rewrite `android0/functions`, which wipes our functions.
-The own-gadget backend has no such problem; the M62 patches make it available.
-
 ## Crash safety
 
 - The handoff runs with SIGINT, SIGTERM, SIGHUP and SIGQUIT blocked (`ua_crit_enter`),

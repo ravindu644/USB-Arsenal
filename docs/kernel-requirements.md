@@ -39,8 +39,8 @@ and may need small rebases.
 
 | Patch | Fixes | Without it, USB Arsenal... |
 |---|---|---|
-| `0001` configfs: allow creating more than one gadget | Every gadget registered its uevent device under a hardcoded `android0`, so a second gadget failed with a misleading "Out of memory" | uses the piggyback backend: its functions ride inside Android's own gadget `g1` and are selected through `android0/functions`. It works, but Android rewrites `g1` on a replug or a USB mode change. |
-| `0002` configfs: support mainline gadget bring-up alongside Android | A symlinked function only reached the config through `android0/functions`, so a hand-built gadget failed to bind with "needs at least one function" | same as above; `0001` and `0002` together unlock the own-gadget backend. |
+| `0001` configfs: allow creating more than one gadget | Every gadget registered its uevent device under a hardcoded `android0`, so a second gadget failed with a misleading "Out of memory" | does not run: the `mkdir` of its own gadget fails as ENOMEM (nothing is changed), and it names the patches. |
+| `0002` configfs: support mainline gadget bring-up alongside Android | A symlinked function only reached the config through `android0/functions`, so a hand-built gadget failed to bind with "needs at least one function" | creates its gadget but cannot bind it, fails with EINVAL and names this patch. Both are needed. |
 | `0003` f_ncm: fix Samsung's changes for a second instance and rx | Samsung's f_ncm only survives the one NCM instance its HAL creates. A second instance destroyed the shared `android0` device; the netdev existed only after bind, so setting `dev_addr` dereferenced NULL; and the last datagram of each NTB was queued as an skb that was then freed. Each one panicked the kernel. | avoids NCM on these kernels and tethers over RNDIS, and reads `dev_addr` before setting MACs. |
 | `0004`, `0005` f_mass_storage: make CD-ROM emulation work with Mac OS-X / Windows | Upstream `89ada0fe669a` and `3b91edd624ab` (5.10+ already have them): READ TOC formats 1 and 2. Windows asks for format 1 (the last session) before it mounts a CD's UDF volume | a big ISO in `--mode cdrom` boots WinPE but Windows never mounts the disc. `--mode dvd` is unaffected. |
 | `0006` f_mass_storage: emulate a DVD-ROM for big CD-ROM images | Every kernel (mainline too) truncates a CD-ROM image to 2.36 GB, because the lead-out must fit an MSF address. PiKVM's DVD support, applied as is on `0004` and `0005`: bigger images become a DVD-ROM. Verified on the S10: a 4.9 GB Windows PE ISO boots and mounts. Not Samsung specific; for newer kernels start from `6.12/0001` | warns, and the host reads a truncated disc. |
@@ -66,7 +66,8 @@ a165f 5.10); sm8550 (5.15), Exynos 990 (4.19) and t295 (4.9) need small rebases 
 `f_mass_storage.c`. `--mode dvd` does not need it.
 
 `ncm_instances` is added by `0003`; it also shows how many NCM instances exist. For
-`0001` and `0002`, `check` shows which backend the kernel allows: "own gadget" with
-them, "piggyback" without.
+`0001` and `0002`, `check` shows whether a gadget of our own can be created ("Own USB
+gadget"); without them the `mkdir` fails as ENOMEM, which changes nothing, and `check`
+names the patches.
 
 Background: [developer/research/01-kernel-survey.md](developer/research/01-kernel-survey.md).

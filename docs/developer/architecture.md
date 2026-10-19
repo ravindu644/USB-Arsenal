@@ -61,23 +61,18 @@ functions, attributes written while unlinked) → `commit`. Failures go to `tear
 - **SIGHUP and SIGPIPE are ignored** process-wide, because releasing Android kills adbd
   and the shell the command may be running from.
 
-### Backends
+### The gadget
 
-- **Own gadget (`usb_arsenal`):** a separate configfs gadget. Used whenever a second
-  gadget can be created.
-- **Piggyback:** stock Samsung 4.14/4.19 configfs cannot create a second gadget (every
-  gadget registered its uevent device as a hardcoded `android0`, so the `mkdir` failed as
-  ENOMEM). It also staged symlinked functions in `linked_func`, and only a write to
-  `android0/functions` moved them into the bind list. So the piggyback backend:
-  1. creates its functions inside Android's `g1` with the `ua` instance prefix;
-  2. links them;
-  3. writes `enable 0`, then the function types (plus `adb` if it was on) to
-     `android0/functions`, then the UDC, then `enable 1`;
-  4. on teardown, removes them while they are still in `func_list`, restores the saved
-     functions, device class and `enable`.
-
-  Android rewrites `g1` on any `sys.usb.config` change, which is the backend's known
-  limit. Patches `0001` and `0002` in `kernel-patches/4.14/` remove the need for it.
+USB Arsenal builds its own configfs gadget, `usb_arsenal`, next to Android's `g1`, and
+never touches `g1` beyond unbinding and rebinding it. Stock Samsung 4.14/4.19 configfs
+cannot create a second gadget (every gadget registers its uevent device as a hardcoded
+`android0`, so the `mkdir` fails as ENOMEM, and symlinked functions stay in `linked_func`
+until `android0/functions` is written). There USB Arsenal refuses and names patches `0001`
+and `0002` in `kernel-patches/4.14/`, which fix both. The failed `mkdir` (ENOMEM, from
+`device_create()` refusing a second `android0` before anything is set up) is the
+detector: it changes nothing but a sysfs duplicate-name line in `dmesg`. Riding inside `g1` instead was tried
+and removed: Android's HAL rewrites `g1` on every plug and mode change, and racing it
+breaks ADB and MTP.
 
 ### Pullup: the Android HACK, and a trap
 
