@@ -41,7 +41,7 @@
 #include <unistd.h>
 
 #define UA_NAME "usb-arsenal"
-#define UA_VERSION "0.1.0"
+#define UA_VERSION "1.0.0"
 
 /* Our own gadget directory, and the instance name every function we create
  * carries */
