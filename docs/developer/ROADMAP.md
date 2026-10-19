@@ -72,7 +72,8 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Hardware: a hybrid Linux ISO actually boots a PC as a disk (S10, Alpine 3.23
       x86_64, UEFI on an MSI laptop, to the login prompt)
 - [x] Hardware: the same ISO boots from `sr0` in `--mode cdrom` (El Torito, UEFI)
-- [ ] Hardware: a non-hybrid ISO (Windows) boots from `sr0`; legacy BIOS boot
+- [x] Hardware: a non-hybrid ISO (Windows) boots from `sr0`; legacy BIOS boot (with
+      `0004` to `0006`, see Phase 1 below and the status log)
 - [ ] Hardware: swap while live, host sees a medium change, no re-enumeration
 - [x] Port PiKVM's DVD-ROM emulation to `kernel-patches/4.14/0006`, on top of the
       upstream READ TOC fixes as `0004` and `0005` (see research/03)
