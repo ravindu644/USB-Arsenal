@@ -99,7 +99,8 @@ Tick a box only when the item is merged and verified as described in its phase.
       every rebind (the kernel recreates the nodes as 0600 root)
 - [x] Hardware (a166p to Fedora): the host registers a keyboard and a mouse; reports
       written to `/dev/hidg1`/`hidg2` are collected by the host
-- [ ] Hardware: a keypress report types on the host (only empty reports were sent)
+- [x] Hardware: a keypress report types on the host, the mouse moves (a166p to Fedora,
+      written from a container through the kernel's devtmpfs)
 
 ## Phase 3. `tether`
 - [x] NCM first, RNDIS fallback (`--rndis`, or automatic when NCM is missing)
@@ -357,3 +358,9 @@ Tick a box only when the item is merged and verified as described in its phase.
   ("USB CD:: Linux File-CD Gadget") to Strelec's BIOS menu. `--mode dvd` did not appear
   in its boot menu in either mode, so `dvd` is for newer UEFI firmware and the patched
   `cdrom` is the one for older PCs.
+- 2026-10-20: HID types. From the a166p's Droidspaces Ubuntu container (over SSH,
+  `hid start` relayed to the daemon), boot keyboard reports written to `/dev/hidg1`
+  typed "hello from usb arsenal" into Sublime Text on Fedora, and mouse reports on
+  `/dev/hidg2` drew a square. The container saw the nodes because it mounts the kernel's
+  devtmpfs, where the kernel creates them itself. `stop` from the container brought ADB
+  back.
