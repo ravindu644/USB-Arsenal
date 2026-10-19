@@ -148,6 +148,7 @@ int ua_gadget_func_dir(const struct ua_gadget *g, const char *func, char *dir,
                        size_t size);
 void ua_crit_enter(void);
 void ua_crit_leave(void);
+void ua_crit_child(void);
 
 /* config.c */
 
@@ -174,8 +175,10 @@ void ua_help_identity(void);
 #define UA_NEED_STORAGE (1 << 0)
 #define UA_NEED_HID (1 << 1)
 #define UA_NEED_NET (1 << 2)
+#define UA_NEED_UVC (1 << 3)
 
 int ua_ncm_unsafe(void);
+int ua_uvc_safe(const struct ua_gadget *g);
 int ua_probe_function(const struct ua_gadget *g, const char *type,
                       const char *attr);
 int ua_check_requirements(struct ua_gadget *g, int need);
@@ -221,5 +224,13 @@ int ua_cmd_tether(int argc, char **argv);
 void ua_help_tether(void);
 void ua_status_tether(const struct ua_gadget *g);
 void ua_tether_kill(void);
+
+/* gadgets/uvc.c */
+
+int ua_cmd_uvc(int argc, char **argv);
+void ua_help_uvc(void);
+void ua_status_uvc(const struct ua_gadget *g);
+void ua_uvc_reapply(const struct ua_gadget *g);
+void ua_uvc_kill(void);
 
 #endif /* USBARSENAL_H */

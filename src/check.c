@@ -37,6 +37,14 @@ int ua_ncm_unsafe(void) {
          access("/sys/class/android_usb/android0/ncm_instances", F_OK) != 0;
 }
 
+/* Every tree whose f_uvc has function_name also waits in unbind for
+ * userspace to let go (func_connected_queue); the 4.x ones have neither, and
+ * stopping a stream on 4.14 hung the phone. ponytail: the attribute stands in
+ * for "the newer f_uvc"; replace it if a backport ever splits the two. */
+int ua_uvc_safe(const struct ua_gadget *g) {
+  return ua_probe_function(g, "uvc", "function_name");
+}
+
 int ua_probe_function(const struct ua_gadget *g, const char *type,
                       const char *attr) {
   char root[PATH_MAX], fdir[PATH_MAX], a[PATH_MAX];
@@ -93,6 +101,17 @@ int ua_check_requirements(struct ua_gadget *g, int need) {
   if ((need & UA_NEED_HID) && !ua_probe_function(g, "hid", NULL)) {
     ua_error("This kernel has no hid gadget function "
              "(CONFIG_USB_CONFIGFS_F_HID)");
+    missing++;
+  }
+  if ((need & UA_NEED_UVC) && !ua_probe_function(g, "uvc", NULL)) {
+    ua_error("This kernel has no uvc gadget function "
+             "(CONFIG_USB_CONFIGFS_F_UVC)");
+    missing++;
+  } else if ((need & UA_NEED_UVC) && !ua_uvc_safe(g)) {
+    ua_error(
+        "This kernel's f_uvc is the old 4.x one: a stream stop hung an S10 "
+        "on 4.14, so 'uvc' is refused here "
+        "(docs/developer/research/06-uvc.md)");
     missing++;
   }
   if ((need & UA_NEED_NET) && !ua_probe_function(g, "ncm", NULL) &&
@@ -215,6 +234,13 @@ int ua_cmd_check(int argc, char **argv) {
          "Without lun.0/cdrom, non-hybrid ISOs (Windows) cannot boot");
     line("hid", ua_probe_function(&g, "hid", NULL), 0, "hid",
          "CONFIG_USB_CONFIGFS_F_HID; needed by 'hid'");
+    if (ua_probe_function(&g, "uvc", NULL) && !ua_uvc_safe(&g))
+      line("uvc", -1, 0, "uvc (old f_uvc, refused)",
+           "This 4.x f_uvc hung an S10 when the host stopped a stream; 'uvc' "
+           "needs the newer one (Android 5.10+, which has function_name)");
+    else
+      line("uvc", ua_probe_function(&g, "uvc", NULL), 0, "uvc",
+           "CONFIG_USB_CONFIGFS_F_UVC; needed by 'uvc'");
     if (ua_ncm_unsafe())
       line("ncm", -1, 0,
            "ncm (unsafe on this Samsung kernel; tether uses rndis)",
@@ -237,8 +263,8 @@ int ua_cmd_check(int argc, char **argv) {
          "them the host gets IPv4 only");
   } else if (json_mode) {
     /* Every key always present, so a reader never has to guess */
-    static const char *const fkeys[] = {"mass_storage", "cdrom", "hid", "ncm",
-                                        "rndis",        "nat",   "nat6"};
+    static const char *const fkeys[] = {"mass_storage", "cdrom", "hid", "uvc",
+                                        "ncm",          "rndis", "nat", "nat6"};
     for (size_t i = 0; i < sizeof(fkeys) / sizeof(fkeys[0]); i++)
       ua_json_int(fkeys[i], 0, &json_first);
   } else {

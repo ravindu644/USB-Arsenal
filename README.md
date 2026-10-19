@@ -24,6 +24,8 @@ Android when it is done, so ADB and MTP return.
   included where the kernel can NAT it. Or hand the link to an OpenWrt container and let
   it be the router.
 - **A keyboard and a mouse.** `/dev/hidg*` nodes that any program can write reports to.
+- **A webcam.** A standard UVC camera that needs no driver on the PC. For now it shows a
+  test pattern; it needs an Android 5.10+ kernel, and MediaTek phones a kernel patch.
 - **All of it at once.** Storage, network and HID share one cable and survive each other
   being added or removed, and a cable replug.
 - **Works from containers.** A root daemon on the Android side owns the port, so the same
@@ -70,6 +72,7 @@ The [installation guide](docs/installation.md) covers both in detail.
 usb-arsenal storage start ubuntu-24.04.iso       # a disk (or CD-ROM) on the PC
 usb-arsenal storage start --mode rw pendrive.img  # a writable pen drive
 usb-arsenal hid start                             # /dev/hidg0 and /dev/hidg1
+usb-arsenal uvc start                             # a webcam showing colour bars
 usb-arsenal tether start                          # the PC gets internet over USB
 usb-arsenal tether start --gateway OpenWrt        # let an OpenWrt container serve it
 usb-arsenal status
@@ -82,10 +85,11 @@ usb-arsenal stop                                  # everything off, ADB and MTP 
 - Galaxy S10 on the [M62-backport](https://github.com/ravindu644/M62-backport) kernel (Exynos 9820, kernel 4.14).
 
 The host was a Fedora PC: it read the disks and CD-ROMs, typed nothing but saw the HID
-devices, and got online through the tether. An MSI laptop booted Alpine Linux from an
-ISO on the S10 (UEFI, as a disk and as a CD-ROM) and a 4.9 GB Windows PE ISO in `dvd`
-mode. A 2012 Samsung laptop booted the same ISO as a DVD-ROM (patched kernel) in legacy
-BIOS and UEFI mode, but not in `dvd` mode, which needs newer firmware. The KernelSU module
+devices, got online through the tether, and streamed the A16's webcam pattern at 640x480
+and 1280x720 (with the f_uvc patch). An MSI laptop booted Alpine Linux from an ISO on
+the S10 (UEFI, as a disk and as a CD-ROM) and a 4.9 GB Windows PE ISO in `dvd` mode. A
+2012 Samsung laptop booted the same ISO as a DVD-ROM (patched kernel) in legacy BIOS and
+UEFI mode, but not in `dvd` mode, which needs newer firmware. The KernelSU module
 was flashed on the S10 and starts the daemon at boot. Other phones, kernels and hosts are
 untested; reports are welcome.
 
@@ -120,8 +124,9 @@ Developer notes (architecture, kernel research, roadmap) live in
 
 ## Credits
 
-- The Linux USB gadget subsystem: `f_mass_storage`, `f_hid`, `f_ncm`, `f_rndis` and
-  configfs do the real work.
+- The Linux USB gadget subsystem: `f_mass_storage`, `f_hid`, `f_ncm`, `f_rndis`,
+  `f_uvc` and configfs do the real work.
+- AOSP's DeviceAsWebcam, whose request handling the webcam follows.
 - [Droidspaces](https://github.com/ravindu644/Droidspaces-OSS): the networking code
   (netlink, DHCP, NAT) and the daemon design come from it, by the same author.
 - VirtualAP, whose managed mode inspired the OpenWrt gateway mode.

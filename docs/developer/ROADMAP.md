@@ -178,7 +178,12 @@ Tick a box only when the item is merged and verified as described in its phase.
       Android-side profile symlinked, deletion reported
 
 ## Phase 4. UVC (TODO)
-- [ ] `f_uvc` plus a userspace frame feeder, after the kernel's `uvc-gadget` sample
+- [x] Research: how AOSP's DeviceAsWebcam drives `f_uvc` ([research/06](research/06-uvc.md))
+- [x] `uvc start` (descriptors in configfs) plus a built-in YUYV test pattern (guide:
+      [uvc-guide.md](uvc-guide.md)). Hardware (a166p, 5.15 with `kernel-patches/5.15/0003`):
+      Fedora streamed 640x480 at 30 fps and 1280x720 at 10 fps, and again after an `hid`
+      re-plug; `stop` handed back. Refused on the 4.x f_uvc (S10 hang, research/06)
+- [ ] `uvc feed`: frames from an app (stdin or a shared-memory descriptor)
 
 ## Stretch
 - [x] `check --json` for a future app frontend (Droidspaces' encoder; Droidspaces itself
@@ -450,3 +455,45 @@ Tick a box only when the item is merged and verified as described in its phase.
   picker belongs in a future app). The module install was verified on the a166p:
   `usb-arsenal` is on PATH as `/system/bin/usb-arsenal` after the reboot, and the
   workspace's `bin/usb-arsenal` link resolves to the module's binary.
+- 2026-10-19: `uvc start`/`stop` with a YUYV test pattern (`src/gadgets/uvc.c`). The core
+  stops the webcam process before every unbind and starts it after every bind, before the
+  pullup, because f_uvc keeps the whole gadget off the bus until userspace subscribes, and
+  4.14 misbehaves when the node is closed after an unbind (research/06). On the a166p:
+  `check` lists uvc, Fedora enumerated "USB Arsenal" as `/dev/video2`, `hid start`
+  re-plugged it and the process came back, `uvc stop` and `stop` handed the port back with
+  `android0` intact. No stream yet: MediaTek's mtu3 stalls every control-OUT data stage that
+  userspace answers, so the host's PROBE SET_CUR failed with -32. The fix is
+  `kernel-patches/{5.10,5.15,6.6}/0003` (mainline has the same code), not built yet. The
+  S10 (dwc3) needs `CONFIG_USB_CONFIGFS_F_UVC` turned on to test the 4.14 path.
+- 2026-10-19: S10 with `CONFIG_USB_CONFIGFS_F_UVC` (kernel #6, `kernel-patches/4.14/0007`).
+  PROBE/COMMIT worked over dwc3 and the process started streaming, but the host got no
+  frames, and the phone hung when the host stopped the stream. Its log was lost to boot
+  loops caused by a KernelSU-Next sepolicy soft lockup (not USB). Details and the suspect
+  in research/06. `uvc` is not to be run on 4.14 again without a live kernel log.
+- 2026-10-19: `uvc` now requires the newer f_uvc (it has `function_name`, and with it the
+  unbind wait); the 4.x one is refused by `check` and `uvc start`. Verified on the S10:
+  refused before the port changed hands, ADB stayed up. Next: the a166p with the mtu3
+  patch.
+- 2026-10-19: The first mtu3 patch did not help on the a166p: SET_CUR still failed with
+  -32. Tracing mtu3 with ftrace (`mtu3_handle_setup`, `mtu3_log`) and the uvc process's
+  SETUP log with `-v` showed why: the data packet is acked by the hardware before
+  software sees it, so the host aborts within 48 µs, and late answers then shift onto the
+  next request. `0003` now defers acking the SETUP until the request is queued (5.15
+  amended, 5.10 and 6.6 replaced; 6.6 by hand). Not built yet. The re-plug and hand-back
+  worked again on the a166p, `android0` intact.
+- 2026-10-19: Second mtu3 patch (defer the SETUP ack) on the a166p: still -32. The trace
+  showed mtu3 taking the data packet regardless, so the fix moved into f_uvc: queue the
+  data stage in `setup()` and swallow userspace's response to it (`0003` for 5.10, 5.15
+  and 6.6, replacing the mtu3 patch; 5.10 ported by hand). Google's 6.6 f_uvc has
+  nothing to backport here: it is the same code, and Pixels get by on dwc3. Not built
+  yet.
+- 2026-10-19: The webcam streams. On the a166p with the f_uvc `0003`, PROBE/COMMIT went
+  through and the host set alt 1, but every isochronous request was empty: since 5.15
+  f_uvc only pumps buffers queued after STREAMON, and `uvc` queued them before (the
+  uvc-gadget sample's order). Queued after STREAMON instead, as DeviceAsWebcam does.
+  Fedora then captured 60 frames at 640x480 / 30 fps and 10 at 1280x720 / 10 fps with
+  the colour bars intact, and 30 more after an `hid` re-plug. The exit path no longer calls
+  STREAMOFF (it warned without a pending alt change); the kernel log stayed clean, `stop`
+  handed back to `adb`, `android0` intact.
+- 2026-10-20: `tests/dummy_hcd.sh` on Fedora after the recursive remover: all 9 checks pass
+  (storage modes and swaps, HID next to storage, NCM, status, hid stop, idempotent stop).

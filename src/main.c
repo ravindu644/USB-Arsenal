@@ -32,6 +32,7 @@ static const struct command commands[] = {
     {"hid", ua_cmd_hid, ua_help_hid, "Keyboard and mouse nodes (/dev/hidgN)"},
     {"tether", ua_cmd_tether, ua_help_tether,
      "Give the host a network over USB"},
+    {"uvc", ua_cmd_uvc, ua_help_uvc, "A USB webcam (test pattern for now)"},
     {"stop", cmd_stop, help_stop, "Tear everything down, restore the owner"},
     {"identity", ua_cmd_identity, ua_help_identity,
      "Profiles: IDs, strings, serial, defaults"},
@@ -160,6 +161,7 @@ static int cmd_status(int argc, char **argv) {
   ua_status_storage(&g);
   ua_status_hid(&g);
   ua_status_tether(&g);
+  ua_status_uvc(&g);
   return UA_EXIT_OK;
 }
 

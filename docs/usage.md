@@ -125,6 +125,28 @@ plus IPv6 by SLAAC from `fd75:7361::/64` where the kernel has IPv6 NAT.
 `--gateway` hands the link to an OpenWrt container instead. [tethering.md](tethering.md)
 covers both modes and the host side.
 
+## uvc
+
+```sh
+usb-arsenal uvc start
+usb-arsenal uvc stop
+```
+
+`start` adds a USB webcam. The host sees a standard UVC camera named "USB Arsenal" and
+needs no driver. For now it shows a test pattern, colour bars with a moving white band,
+in YUYV at 640x480 and 30 fps or 1280x720 and 10 fps. Frames from an app come later.
+
+A background process answers the host's requests and queues the frames, and the kernel
+keeps the whole gadget off the bus until that process has the webcam open. `status`
+shows the process. It is stopped before each re-plug and started again after it. Its
+log is `Logs/uvc.log` in the workspace.
+
+The kernel needs `CONFIG_USB_CONFIGFS_F_UVC` with the newer f_uvc found in Android 5.10
+and later kernels. The 4.x f_uvc hung a phone when the host stopped a stream, so `check`
+marks it as refused and `uvc start` will not use it. MediaTek phones also need the mtu3
+patch in [kernel-requirements.md](kernel-requirements.md). Without it the camera appears
+on the host, but no stream starts.
+
 ## identity
 
 ```sh

@@ -144,6 +144,19 @@ void ua_crit_leave(void) {
   }
 }
 
+/* A child forked inside the critical section (the UVC process) must not keep
+ * the state lock, which it shares with us through fork, or every later
+ * command waits on it; and it needs SIGTERM to reach it */
+void ua_crit_child(void) {
+  if (crit_depth > 0) {
+    if (crit_lock >= 0)
+      close(crit_lock);
+    crit_lock = -1;
+    crit_depth = 0;
+    sigprocmask(SIG_SETMASK, &crit_old, NULL);
+  }
+}
+
 static int pathf(char *out, size_t size, const char *fmt, ...)
     __attribute__((format(printf, 3, 4)));
 static int pathf(char *out, size_t size, const char *fmt, ...) {
@@ -436,8 +449,10 @@ int ua_gadget_begin(struct ua_gadget *g) {
   if (ua_gadget_taken()) {
     /* Already ours: unbind so functions can change. Attributes like the HID
      * report descriptor are locked while the function is in use. */
-    if (ua_gadget_live(g))
+    if (ua_gadget_live(g)) {
+      ua_uvc_kill();
       write_attr(g->path, "UDC", UNBIND);
+    }
     /* Idempotent, and covers a crash between saving the handoff and
      * building the gadget the first time round */
     if (build_skeleton(g) < 0) {
@@ -559,6 +574,33 @@ static int keep_ours(const char *dir, const struct dirent *e) {
   return is_ours(e->d_name);
 }
 
+/* A function's tree holds groups we made (lun.1, a UVC header or frame) and
+ * links between them (uvc's header -> format, class -> header). Links first,
+ * everywhere, since a linked group refuses rmdir; then groups deepest first.
+ * The kernel's default groups (lun.0, os_desc, uvc's streaming) refuse rmdir,
+ * which is fine: they go with the function. */
+static void unlink_tree(const char *dir) {
+  char names[MAX_ENTRIES][NAME_MAX + 1], p[PATH_MAX];
+  int n = list_dir(dir, names, keep_link);
+  for (int i = 0; i < n; i++)
+    if (pathf(p, sizeof(p), "%s/%s", dir, names[i]) == 0)
+      unlink(p);
+  n = list_dir(dir, names, keep_dir);
+  for (int i = 0; i < n; i++)
+    if (pathf(p, sizeof(p), "%s/%s", dir, names[i]) == 0)
+      unlink_tree(p);
+}
+
+static void rmdir_tree(const char *dir) {
+  char names[MAX_ENTRIES][NAME_MAX + 1], p[PATH_MAX];
+  int n = list_dir(dir, names, keep_dir);
+  for (int i = 0; i < n; i++)
+    if (pathf(p, sizeof(p), "%s/%s", dir, names[i]) == 0) {
+      rmdir_tree(p);
+      rmdir(p);
+    }
+}
+
 int ua_gadget_remove(struct ua_gadget *g, const char *func) {
   char p[PATH_MAX];
   if (pathf(p, sizeof(p), "%s/%s", g->config, func) == 0 && unlink(p) < 0 &&
@@ -566,15 +608,8 @@ int ua_gadget_remove(struct ua_gadget *g, const char *func) {
     ua_warn("Cannot unlink %s: %s", p, strerror(errno));
   if (ua_gadget_func_dir(g, func, p, sizeof(p)) < 0)
     return -1;
-  /* Groups made under the function (lun.1 and up) must go first. Its own
-   * default groups (lun.0, os_desc) refuse rmdir, which is fine. */
-  char names[MAX_ENTRIES][NAME_MAX + 1];
-  int n = list_dir(p, names, keep_dir);
-  for (int i = 0; i < n; i++) {
-    char sub[PATH_MAX];
-    if (pathf(sub, sizeof(sub), "%s/%s", p, names[i]) == 0)
-      rmdir(sub);
-  }
+  unlink_tree(p);
+  rmdir_tree(p);
   if (rmdir(p) < 0 && errno != ENOENT) {
     ua_warn("Cannot remove %s: %s", p, strerror(errno));
     return -1;
@@ -666,6 +701,7 @@ int ua_gadget_commit(struct ua_gadget *g) {
       ua_log("Another gadget or a legacy g_* driver holds the controller.");
     goto fail;
   }
+  ua_uvc_reapply(g);
   pullup(g);
   wait_configured(g);
   ua_crit_leave();
@@ -759,6 +795,7 @@ void ua_gadget_teardown(struct ua_gadget *g) {
   /* Everything of ours goes, NCM included: its network side must not keep
    * serving an interface that is about to vanish */
   ua_tether_kill();
+  ua_uvc_kill();
   if (access(g->path, F_OK) == 0) {
     char buf[64];
     if (pathf(p, sizeof(p), "%s/UDC", g->path) == 0 &&

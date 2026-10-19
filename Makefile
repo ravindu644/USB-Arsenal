@@ -35,6 +35,7 @@ SRCS = $(SRC_DIR)/main.c \
        $(SRC_DIR)/gadgets/storage.c \
        $(SRC_DIR)/gadgets/hid.c \
        $(SRC_DIR)/gadgets/tether.c \
+       $(SRC_DIR)/gadgets/uvc.c \
        $(SRC_DIR)/net/netlink.c \
        $(SRC_DIR)/net/iptables.c \
        $(SRC_DIR)/net/dhcp.c \
