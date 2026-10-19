@@ -51,6 +51,13 @@ static const struct command *find_command(const char *name) {
 }
 
 static void usage(void) {
+  /* Droidspaces' banner (print_usage), same layout */
+  printf(C_BOLD UA_PROJECT_NAME
+         " v" UA_VERSION
+         " - Composite USB gadget builder for Android/Linux" C_RESET "\n");
+  printf("by " C_CYAN UA_AUTHOR C_RESET "\n");
+  printf("\n" C_BLUE UA_REPO C_RESET "\n");
+  printf(C_DIM "Built on: %s %s" C_RESET "\n\n", __DATE__, __TIME__);
   printf("Usage: " UA_NAME " [--udc NAME] [-v] <command> [<action>] "
          "[options]\n\n");
   printf("Turn this device into a composite USB gadget: bootable storage,\n"

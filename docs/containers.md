@@ -29,8 +29,8 @@ Stopping the daemon does not stop the gadget; `usb-arsenal stop` does that.
    ```
    or `bind_mounts=` in `container.config`. Mount the directory, not the socket file: a
    bind-mounted socket file keeps pointing at the old socket after the daemon restarts.
-2. Copy the binary in (`/data/local/USB-Arsenal/bin/usb-arsenal` on the Android side) and
-   run it as usual. `usb-arsenal version` should say `mode: daemon`.
+2. Copy the binary in (`/data/local/USB-Arsenal/bin/usb-arsenal` on the Android side, a
+   link to the module's binary; `cp` copies the file it points at) and run it as usual. `usb-arsenal version` should say `mode: daemon`.
 3. For users other than root, inside the container:
    ```sh
    groupadd -g 3460 usb-arsenal

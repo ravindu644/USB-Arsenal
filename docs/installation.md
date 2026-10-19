@@ -19,8 +19,9 @@ the daemon at boot. On Linux you copy the binary.
    ```
 
 What the module does:
-- **Installs the binary for the device's ABI** as `usb-arsenal` on the shell's PATH, and
-  copies it to `/data/local/USB-Arsenal/bin/`.
+- **Installs the binary for the device's ABI** as `/system/bin/usb-arsenal`, so after the
+  reboot `usb-arsenal` works from any root shell, and links
+  `/data/local/USB-Arsenal/bin/usb-arsenal` to it.
 - **Starts the daemon at boot** (`service.sh`). The daemon owns the USB port, so the same
   commands also work from containers; see [containers.md](containers.md).
 - **Gives the port back on uninstall** and stops the daemon.
