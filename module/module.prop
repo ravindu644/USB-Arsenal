@@ -1,6 +1,6 @@
 id=usb-arsenal
 name=USB Arsenal
-version=v1.0.0
-versionCode=1000
+version=v1.0.1
+versionCode=1010
 author=ravindu644
 description=Composite USB gadget daemon: bootable storage, USB tethering and HID from one cable.
