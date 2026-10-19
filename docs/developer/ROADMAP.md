@@ -89,7 +89,6 @@ Tick a box only when the item is merged and verified as described in its phase.
       in either mode: it needs newer UEFI (works on the MSI)
 - [x] The fail-closed SELinux path on a device without the rule (marked done without a
       device that lacks it; the check reads selinuxfs `access`, see research/03)
-- [ ] Stretch: Ventoy-style on-PC menu
 
 ## Phase 2. `hid`
 - [x] Boot keyboard (8-byte report) and mouse (5 buttons, X, Y, wheel; 4 bytes)
@@ -184,8 +183,6 @@ Tick a box only when the item is merged and verified as described in its phase.
 ## Stretch
 - [x] `check --json` for a future app frontend (Droidspaces' encoder; Droidspaces itself
       renamed `--format` to `--json` to match)
-- [ ] Verify on a Raspberry Pi (`dtoverlay=dwc2`)
-- [ ] Verify on a Pixel (gadget HAL that rebinds `g1` on its own)
 
 ## Verification on hardware
 - [x] Exynos9820 on M62-backport (S10, own gadget, pullup HACK): storage, HID, RNDIS
@@ -448,3 +445,8 @@ Tick a box only when the item is merged and verified as described in its phase.
   globally or for the kernel domain, no longer counts as a denial anywhere (it used to
   refuse `dvd` mode and relabel files needlessly). Whether to serve a mounted partition
   stays the user's call.
+- 2026-10-19: Roadmap trimmed: no Raspberry Pi or Pixel verification (no such hardware
+  here; `dummy_hcd` covers mainline configfs), and no Ventoy-style on-PC menu (an image
+  picker belongs in a future app). The module install was verified on the a166p:
+  `usb-arsenal` is on PATH as `/system/bin/usb-arsenal` after the reboot, and the
+  workspace's `bin/usb-arsenal` link resolves to the module's binary.

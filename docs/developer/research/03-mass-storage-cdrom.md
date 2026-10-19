@@ -176,10 +176,3 @@ relabel the host saw an unreadable disk; afterwards it read the FAT16 label.
 
   Verified on the a166p against a Fedora host: a disk-to-CD-ROM switch and a
   CD-ROM-to-CD-ROM swap both went through the rebind, with the CD-ROM and HID intact.
-
-## Stretch: a Ventoy-style menu
-
-Ventoy boots its own loader from a disk image and chain-loads ISOs from a data
-partition. A USB Arsenal version would serve a small boot image and switch the LUN's
-`file` when the user picks an ISO. That needs a channel back from the host, which the
-gadget does not have, so it would have to run entirely on the host side. Roadmap only.
