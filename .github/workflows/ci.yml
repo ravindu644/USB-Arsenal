@@ -1,40 +1,53 @@
 name: USB Arsenal CI
 
-# Ported from Droidspaces' ci.yml: same toolchains, same release flow, one
-# module zip instead of the APK, tarball and debs.
-
+# One workflow, laid out like Dragon Control Center's. Every push and pull
+# request builds the module zip and uploads it as an artifact. A v* tag, or a
+# manual run with tag_name, also publishes it as a GitHub release. The
+# toolchains and the Telegram step come from Droidspaces' ci.yml.
 on:
   push:
     branches: [ "main", "master" ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
     inputs:
-      create_release:
-        description: 'Create an Official GitHub Release?'
-        required: true
-        type: boolean
-        default: false
       tag_name:
-        description: 'Tag name, e.g. v0.1.0 (Only used if Release is checked)'
+        description: "Publish a release for this tag (existing or new, must match UA_VERSION)"
         required: false
-        default: 'test'
+        type: string
+
+permissions:
+  # Needed to create the release on a tag; a pull request token is read-only regardless
+  contents: write
 
 jobs:
   build:
     name: Build the module (aarch64, armhf, x86_64, x86)
     runs-on: ubuntu-latest
     env:
+      # The tag being released, if any
+      TAG: ${{ inputs.tag_name || (github.ref_type == 'tag' && github.ref_name) || '' }}
       HAS_TELEGRAM: ${{ secrets.API_ID != '' && secrets.API_HASH != '' }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
 
+    # One version, UA_VERSION in usbarsenal.h. A tag must match it, so a
+    # forgotten `make bump` fails here instead of shipping.
+    - name: Settle the version
+      run: |
+        VERSION=$(grep "define UA_VERSION" src/include/usbarsenal.h | awk '{print $3}' | tr -d '"')
+        if [ -n "$TAG" ]; then
+          [ "${TAG#v}" = "$VERSION" ] || { echo "Tag $TAG does not match UA_VERSION $VERSION (run make bump NEW=${TAG#v})"; exit 1; }
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
     - name: Install dependencies
       run: |
-        sudo apt update
-        sudo apt install -y build-essential wget zip zstd
+        sudo apt-get update
+        sudo apt-get install -y build-essential wget zip zstd
 
     # Droidspaces' musl toolchains, already published as release assets; the
     # Makefile finds them in ~/toolchains/<triplet>-cross/bin
@@ -53,24 +66,47 @@ jobs:
     - name: Build the KernelSU/Magisk module
       run: make module
 
+    # A release is named by its version alone; any other build carries its commit
     - name: Stage & Rename Artifacts
       run: |
-        VERSION=$(grep "define UA_VERSION" src/include/usbarsenal.h | awk '{print $3}' | tr -d '"')
-        COMMIT_HASH=$(git log -1 --pretty=%h)
-        ZIP_NAME="usb-arsenal-v${VERSION}-${COMMIT_HASH}.zip"
+        if [ -n "$TAG" ]; then
+          ZIP_NAME="usb-arsenal-v${VERSION}.zip"
+        else
+          ZIP_NAME="usb-arsenal-v${VERSION}-$(git log -1 --pretty=%h).zip"
+        fi
         mkdir -p dist
         mv output/usb-arsenal-${VERSION}.zip dist/${ZIP_NAME}
+        (cd dist && sha256sum ${ZIP_NAME} > SHA256SUMS)
         echo "ZIP_FILE=dist/${ZIP_NAME}" >> $GITHUB_ENV
+
+    - name: Upload Final Artifacts (module zip)
+      uses: actions/upload-artifact@v4
+      with:
+        name: usb-arsenal-artifacts
+        path: dist/
+        if-no-files-found: error
+        retention-days: 14
+
+    - name: Publish GitHub Release
+      if: env.TAG != ''
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.TAG }}
+        name: USB Arsenal ${{ env.TAG }}
+        files: |
+          dist/*.zip
+          dist/SHA256SUMS
+        generate_release_notes: true
+        draft: false
+        prerelease: false
 
     - name: Generate Telegram Message
       if: github.event_name != 'pull_request'
       run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          if [ "${{ github.event.inputs.create_release }}" = "true" ]; then
-            EVENT_TYPE="Official Release"
-          else
-            EVENT_TYPE="Manual Trigger"
-          fi
+        if [ -n "$TAG" ]; then
+          EVENT_TYPE="Release $TAG"
+        elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          EVENT_TYPE="Manual Trigger"
         else
           EVENT_TYPE="Git Push"
         fi
@@ -95,12 +131,6 @@ jobs:
           echo "EOF"
         } >> "$GITHUB_ENV"
 
-    - name: Upload Final Artifacts (module zip)
-      uses: actions/upload-artifact@v4
-      with:
-        name: usb-arsenal-artifacts
-        path: dist/
-
     - name: Send Telegram Notification
       if: |
         github.event_name != 'pull_request' &&
@@ -115,58 +145,3 @@ jobs:
         API_ID: ${{ secrets.API_ID }}
         API_HASH: ${{ secrets.API_HASH }}
         BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-
-  release:
-    name: Create GitHub Release
-    needs: [build]
-    if: |
-      github.event_name == 'workflow_dispatch' &&
-      github.event.inputs.create_release == 'true' &&
-      github.event.inputs.tag_name != '' &&
-      github.event.inputs.tag_name != 'test'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Download Artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: release-assets
-        merge-multiple: true
-
-    - name: Generate Changelog
-      id: changelog
-      run: |
-        PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-        echo "Previous tag: $PREV_TAG"
-
-        if [ -z "$PREV_TAG" ]; then
-          CHANGELOG=$(git log --oneline --pretty=format:"* %s (%h)")
-        else
-          CHANGELOG=$(git log ${PREV_TAG}..HEAD --oneline --pretty=format:"* %s (%h)")
-        fi
-
-        {
-          echo "notes<<EOF"
-          echo "$CHANGELOG"
-          echo "EOF"
-        } >> "$GITHUB_OUTPUT"
-
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ github.event.inputs.tag_name }}
-        name: USB Arsenal ${{ github.event.inputs.tag_name || 'Development Build' }}
-        target_commitish: ${{ github.sha }}
-        body: |
-          ## What's Changed
-          ${{ steps.changelog.outputs.notes }}
-
-          ---
-          **Automated Release by USB Arsenal CI**
-        files: |
-          release-assets/*.zip

@@ -435,3 +435,7 @@ Tick a box only when the item is merged and verified as described in its phase.
   printed the warning about the container's own hand-back record, then served
   `/dev/hidg1` and `/dev/hidg2`; `stop` from the container handed the port back to
   Android's own tethering (`rndis,adb`) with `android0` intact.
+- 2026-10-19: CI releases on a tag push, as Dragon Control Center's does: one job builds
+  on every push and PR, and a `v*` tag (or a manual run with `tag_name`) also publishes
+  the zip and `SHA256SUMS` with generated release notes. A tag that does not match
+  `UA_VERSION` fails the build.
