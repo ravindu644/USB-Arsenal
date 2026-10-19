@@ -29,7 +29,8 @@ including one in a container, relays its command line to it over a filesystem so
   rewrites it and `module/module.prop` (versionCode = major*1000 + minor*100 +
   patch*10); commit that alone as `usb-arsenal: bump vX.Y.Z`.
 - **CI** (`.github/workflows/ci.yml`, laid out like Dragon Control Center's): every push
-  and pull request builds the module zip with Droidspaces' published musl toolchains.
+  and pull request builds the module zip with Droidspaces' published musl toolchains,
+  cached between runs.
   Pushing a `vX.Y.Z` tag (or a manual run with `tag_name`) also publishes a release with
   the zip, `SHA256SUMS` and generated notes. The tag must equal `UA_VERSION`, so bump
   first: `make bump NEW=X.Y.Z`, commit, then `git tag vX.Y.Z && git push --tags`.

@@ -3,7 +3,7 @@ name: USB Arsenal CI
 # One workflow, laid out like Dragon Control Center's. Every push and pull
 # request builds the module zip and uploads it as an artifact. A v* tag, or a
 # manual run with tag_name, also publishes it as a GitHub release. The
-# toolchains and the Telegram step come from Droidspaces' ci.yml.
+# toolchains come from Droidspaces' releases and are cached between runs.
 on:
   push:
     branches: [ "main", "master" ]
@@ -28,7 +28,9 @@ jobs:
     env:
       # The tag being released, if any
       TAG: ${{ inputs.tag_name || (github.ref_type == 'tag' && github.ref_name) || '' }}
-      HAS_TELEGRAM: ${{ secrets.API_ID != '' && secrets.API_HASH != '' }}
+      # Droidspaces' musl toolchains, published as release assets; the Makefile
+      # finds them in ~/toolchains/<triplet>-cross/bin
+      TOOLCHAINS_URL: https://github.com/ravindu644/Droidspaces-OSS/releases/download/compilers-25843896720
     steps:
     - uses: actions/checkout@v5
       with:
@@ -44,22 +46,23 @@ jobs:
         fi
         echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential wget zip zstd
+    # The release URL names a fixed set of toolchains, so it is the whole key
+    - name: Cache Toolchains
+      id: toolchains
+      uses: actions/cache@v4
+      with:
+        path: ~/toolchains
+        key: musl-toolchains-${{ env.TOOLCHAINS_URL }}
 
-    # Droidspaces' musl toolchains, already published as release assets; the
-    # Makefile finds them in ~/toolchains/<triplet>-cross/bin
     - name: Download Toolchains
+      if: steps.toolchains.outputs.cache-hit != 'true'
       run: |
         mkdir -p $HOME/toolchains
         cd $HOME/toolchains
-        BASE_URL="https://github.com/ravindu644/Droidspaces-OSS/releases/download/compilers-25843896720"
         for t in aarch64-linux-musl arm-linux-musleabihf x86_64-linux-musl i686-linux-musl; do
           echo "[*] Downloading $t toolchain..."
-          wget -q $BASE_URL/$t-cross.tar.zst
-          tar -xf $t-cross.tar.zst
+          wget -q $TOOLCHAINS_URL/$t-cross.tar.zst
+          tar -xf $t-cross.tar.zst && rm $t-cross.tar.zst
         done
         echo "[+] Toolchains ready."
 
@@ -99,49 +102,3 @@ jobs:
         generate_release_notes: true
         draft: false
         prerelease: false
-
-    - name: Generate Telegram Message
-      if: github.event_name != 'pull_request'
-      run: |
-        if [ -n "$TAG" ]; then
-          EVENT_TYPE="Release $TAG"
-        elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          EVENT_TYPE="Manual Trigger"
-        else
-          EVENT_TYPE="Git Push"
-        fi
-        COMMIT_MSG=$(git log -1 --pretty=format:%s)
-        COMMIT_SHA=$(git log -1 --pretty=format:%h)
-        COMMIT_AUTHOR=$(git log -1 --pretty=format:%an)
-        {
-          echo "TELEGRAM_MESSAGE<<EOF"
-          echo "**USB Arsenal Build Successful**"
-          echo ""
-          echo "**Repository:** [${{ github.repository }}](https://github.com/${{ github.repository }})"
-          echo "**Branch:** ${{ github.ref_name }}"
-          echo "**Author:** $COMMIT_AUTHOR"
-          echo "**Event:** $EVENT_TYPE"
-          echo "**Commit SHA:** [$COMMIT_SHA](https://github.com/${{ github.repository }}/commit/${{ github.sha }})"
-          echo ""
-          echo "**Commit Message:**"
-          echo ""
-          echo "\`\`\`"
-          echo "$COMMIT_MSG"
-          echo "\`\`\`"
-          echo "EOF"
-        } >> "$GITHUB_ENV"
-
-    - name: Send Telegram Notification
-      if: |
-        github.event_name != 'pull_request' &&
-        env.HAS_TELEGRAM == 'true'
-      uses: xz-dev/TelegramFileUploader@v1
-      with:
-        to-who: ${{ secrets.TELEGRAM_TO }}
-        message: ${{ env.TELEGRAM_MESSAGE }}
-        files: |
-          ${{ env.ZIP_FILE }}
-      env:
-        API_ID: ${{ secrets.API_ID }}
-        API_HASH: ${{ secrets.API_HASH }}
-        BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}

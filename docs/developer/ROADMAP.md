@@ -439,3 +439,6 @@ Tick a box only when the item is merged and verified as described in its phase.
   on every push and PR, and a `v*` tag (or a manual run with `tag_name`) also publishes
   the zip and `SHA256SUMS` with generated release notes. A tag that does not match
   `UA_VERSION` fails the build.
+- 2026-10-19: CI trimmed: no Telegram message, no apt step (the runner already has wget,
+  zip and zstd), and the toolchains are cached under a key naming their release, so they
+  are downloaded once.
