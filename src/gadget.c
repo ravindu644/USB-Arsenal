@@ -235,6 +235,11 @@ int ua_pick_udc(char *out, size_t size) {
  * stops hearing USB state (no USB notification, tethering greyed out) until a
  * reboot. kernel-patches/4.14/0001 fixes the kernel; everywhere else a gadget
  * we made stays, unbound and empty, instead of being removed. */
+/* An empty write unbinds a gadget. "none" only does on Android's configfs,
+ * which added it; mainline (a Pi, a PC under dummy_hcd) reads it as a
+ * controller name and answers EBUSY, since the gadget is still bound. */
+#define UNBIND "\n"
+
 static int keep_gadget(void) {
   return access("/sys/class/android_usb", F_OK) == 0;
 }
@@ -420,7 +425,7 @@ static void android_release(const struct ua_gadget *g) {
   if (pathf(p, sizeof(p), "%s/g1/UDC", g->cfs) == 0 &&
       read_file(p, buf, sizeof(buf)) > 0) {
     ua_debug("g1 still bound to %s, unbinding it", buf);
-    write_file(p, "none\n");
+    write_file(p, UNBIND);
   }
 }
 
@@ -431,7 +436,7 @@ int ua_gadget_begin(struct ua_gadget *g) {
     /* Already ours: unbind so functions can change. Attributes like the HID
      * report descriptor are locked while the function is in use. */
     if (ua_gadget_live(g))
-      write_attr(g->path, "UDC", "none\n");
+      write_attr(g->path, "UDC", UNBIND);
     /* Idempotent, and covers a crash between saving the handoff and
      * building the gadget the first time round */
     if (build_skeleton(g) < 0) {
@@ -747,7 +752,7 @@ void ua_gadget_teardown(struct ua_gadget *g) {
     char buf[64];
     if (pathf(p, sizeof(p), "%s/UDC", g->path) == 0 &&
         read_file(p, buf, sizeof(buf)) > 0) {
-      write_file(p, "none\n");
+      write_file(p, UNBIND);
       was_here = 1;
     }
     if (unlink_all(g->config) > 0)
