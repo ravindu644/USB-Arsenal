@@ -25,12 +25,10 @@ void ua_log_internal(const char *prefix, const char *color, int is_err,
        strncmp(msg, "[NET]", 5) == 0 || strncmp(msg, "[DHCP]", 6) == 0))
     return;
 
-  /* Colour only for a terminal, so logs piped to a file or an app stay clean */
+  /* Always coloured, as in Droidspaces: a relayed command prints through the
+   * daemon's pipe, so an isatty() check here would strip it on the way back */
   FILE *out = is_err ? stderr : stdout;
-  if (isatty(fileno(out)))
-    fprintf(out, "[%s%s" C_RESET "] %s\n", color, prefix, msg);
-  else
-    fprintf(out, "[%s] %s\n", prefix, msg);
+  fprintf(out, "[%s%s" C_RESET "] %s\n", color, prefix, msg);
   fflush(out);
 }
 

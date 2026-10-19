@@ -111,10 +111,9 @@ static void line(int status, int must, const char *name, const char *desc) {
                       : must       ? C_RED
                                    : C_YELLOW;
   const char *sym = status > 0 ? "✓" : status < 0 ? "!" : "✗";
-  int tty = isatty(STDOUT_FILENO);
-  printf("  [%s%s%s] %s\n", tty ? color : "", sym, tty ? C_RESET : "", name);
+  printf("  [%s%s" C_RESET "] %s\n", color, sym, name);
   if (status <= 0 && desc)
-    printf("      %s%s%s\n", tty ? C_DIM : "", desc, tty ? C_RESET : "");
+    printf("      " C_DIM "%s" C_RESET "\n", desc);
 }
 
 void ua_help_check(void) {
@@ -147,10 +146,8 @@ int ua_cmd_check(int argc, char **argv) {
   char cfs[PATH_MAX] = "", udc[64] = "", desc[PATH_MAX + 64];
   struct ua_gadget g;
 
-  int tty = isatty(STDOUT_FILENO);
-  printf("%sUSB Arsenal " UA_VERSION " - checking this system%s\n\n"
-         "[MUST HAVE]\n",
-         tty ? C_BOLD : "", tty ? C_RESET : "");
+  printf(C_BOLD "USB Arsenal " UA_VERSION " - checking this system" C_RESET
+                "\n\n[MUST HAVE]\n");
   line(root, 1, "Root privileges", "Run as root (su)");
   missing += !root;
 
