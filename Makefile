@@ -152,8 +152,8 @@ module:
 	done
 	@cp module/module.prop module/customize.sh module/service.sh module/uninstall.sh module/sepolicy.rule $(OUT_DIR)/module/
 	@sed -i 's/^version=.*/version=v$(VERSION)/; s/^versionCode=.*/versionCode=$(VERSION_CODE)/' $(OUT_DIR)/module/module.prop
-	@cd $(OUT_DIR)/module && rm -f ../$(BINARY_NAME)-$(VERSION).zip && zip -qr9 ../$(BINARY_NAME)-$(VERSION).zip .
-	@echo "[+] Built: $(OUT_DIR)/$(BINARY_NAME)-$(VERSION).zip"
+	@cd $(OUT_DIR)/module && rm -f ../$(BINARY_NAME)-v$(VERSION).zip && zip -qr9 ../$(BINARY_NAME)-v$(VERSION).zip .
+	@echo "[+] Built: $(OUT_DIR)/$(BINARY_NAME)-v$(VERSION).zip"
 
 bump:
 	@echo "$(NEW)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$' || { echo "Usage: make bump NEW=x.y.z"; exit 1; }

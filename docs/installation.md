@@ -7,7 +7,7 @@ the daemon at boot. On Linux you copy the binary.
 
 1. Build the zip, or take it from a release:
    ```sh
-   make module          # output/usb-arsenal-<version>.zip, every architecture inside
+   make module          # output/usb-arsenal-v<version>.zip, every architecture inside
    ```
 2. Flash it in KernelSU and reboot. (The module follows the standard KernelSU/Magisk
    layout, but it has not been flashed on a test device yet; the daemon it starts was

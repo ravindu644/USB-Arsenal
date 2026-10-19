@@ -78,7 +78,7 @@ jobs:
           ZIP_NAME="usb-arsenal-v${VERSION}-$(git log -1 --pretty=%h).zip"
         fi
         mkdir -p dist
-        mv output/usb-arsenal-${VERSION}.zip dist/${ZIP_NAME}
+        mv output/usb-arsenal-v${VERSION}.zip dist/${ZIP_NAME}
         (cd dist && sha256sum ${ZIP_NAME} > SHA256SUMS)
         echo "ZIP_FILE=dist/${ZIP_NAME}" >> $GITHUB_ENV
 

@@ -54,7 +54,7 @@ Android when it is done, so ADB and MTP return.
 **Android**
 
 1. Build the module with `make module`, or take the zip from a release.
-2. Flash `usb-arsenal-<version>.zip` in KernelSU and reboot. The daemon starts at boot.
+2. Flash `usb-arsenal-v<version>.zip` in KernelSU and reboot. The daemon starts at boot.
 3. Run `usb-arsenal check` in a root shell.
 
 **Linux**
