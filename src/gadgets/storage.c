@@ -203,9 +203,13 @@ static int perm_bit(const char *cls, const char *perm) {
  * object's label for the caller's message. */
 static int kernel_may(int fd, const char *cls, int rw, int android, char *label,
                       size_t lsize) {
-  char kctx[256], q[600], ans[64], v[16], p[96];
+  char kctx[256], q[600], ans[96], v[16], p[96];
   label[0] = '\0';
-  if (!selinux_on())
+  /* The policy answers the same in permissive mode, so a denial only counts
+   * when it is enforced: not with SELinux permissive, nor in a permissive
+   * domain (the reply's flags) */
+  if (!selinux_on() ||
+      (read_file("/sys/fs/selinux/enforce", v, sizeof(v)) > 0 && v[0] == '0'))
     return 1;
   ssize_t n = fgetxattr(fd, "security.selinux", label, lsize - 1);
   if (n <= 0)
@@ -221,11 +225,15 @@ static int kernel_may(int fd, const char *cls, int rw, int android, char *label,
     return 1;
   int len = snprintf(q, sizeof(q), "%s %s %d", kctx, label, idx), ok = 1;
   if (write(afd, q, len) == len && (n = read(afd, ans, sizeof(ans) - 1)) > 0) {
+    unsigned long allowed = 0, flags = 0;
     ans[n] = '\0';
-    unsigned long allowed = strtoul(ans, NULL, 16);
+    /* allowed decided auditallow auditdeny seqno flags */
+    sscanf(ans, "%lx %*x %*x %*x %*u %lx", &allowed, &flags);
     ok = (allowed >> (rd - 1)) & 1;
     if (rw && wr > 0)
       ok = ok && ((allowed >> (wr - 1)) & 1);
+    if (flags & 1) /* AVD_FLAGS_PERMISSIVE */
+      ok = 1;
   }
   close(afd);
   return ok;
@@ -352,8 +360,25 @@ static int do_start(int fd, const char *name, enum mode mode, int lun) {
     return UA_EXIT_FAIL;
 
   struct stat st;
-  if (fstat(fd, &st) == 0 && S_ISREG(st.st_mode))
+  int have_st = fstat(fd, &st) == 0;
+  if (have_st && S_ISREG(st.st_mode))
     selinux_fix(fd, name, mode == MODE_RW, g.android_gadget);
+
+  /* A block device served as is: the kernel thread reads it under the node's
+   * label, and no label is readable on every policy, so it cannot be fixed by
+   * relabelling the way a file can. Say why before the host sees a dead disk.
+   * Whether to serve it at all, mounted or not, is the user's call. */
+  char blabel[256];
+  if (have_st && S_ISBLK(st.st_mode) &&
+      !kernel_may(fd, "blk_file", mode == MODE_RW, g.android_gadget, blabel,
+                  sizeof(blabel))) {
+    ua_error("SELinux does not let the kernel %s %s (%s), so the host would "
+             "see only read errors",
+             mode == MODE_RW ? "read and write" : "read", name, blabel);
+    ua_log("To serve it anyway, set SELinux permissive by hand first: "
+           "setenforce 0");
+    return UA_EXIT_FAIL;
+  }
 
   if (mode == MODE_DVD) {
     char dev[32];

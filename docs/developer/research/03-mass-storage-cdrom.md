@@ -145,6 +145,14 @@ kthreadd's `/proc/2/attr/current`, may read (and for `rw`, write) the image's la
   label (relabel with `chcon`, or move the file). Fedora's targeted policy lets
   `kernel_t` read `user_home_t`, `tmp_t`, `user_tmp_t` and `var_lib_t` files and
   `fixed_disk_device_t` / `removable_device_t` block devices, so nothing is touched there.
+- A block device passed as IMAGE gets the same query as class `blk_file` and is
+  refused when denied, since no stock label is readable everywhere. On the a166p
+  `/dev/block/dm-56` (`dm_device`, the f2fs `/data`) was refused that way; with SELinux
+  permissive it was served and the host's f2fs found the live filesystem mid-checkpoint
+  (orphan and quota errors) and would not mount it.
+- A denial only counts when enforced: SELinux permissive (`enforce` 0) or a permissive
+  domain (flag 1 in the `access` reply) passes, since the policy answers the same either
+  way.
 - In a PID namespace `/proc/2` is not kthreadd; on Android the query falls back to
   `u:r:kernel:s0`, elsewhere it is skipped. Verified on the a166p: before the
 relabel the host saw an unreadable disk; afterwards it read the FAT16 label.

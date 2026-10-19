@@ -34,6 +34,15 @@ destroys `android0` by mistake (see developer/architecture.md). ADB still works.
 the phone once; current versions keep their gadget, unbound and empty, and never trigger
 it. `ls /sys/class/android_usb` should show `android0`.
 
+**"SELinux does not let the kernel read /dev/block/…".**
+A block device served as is (a partition, a `dm-*` device) is read by the kernel under
+the device node's label, which most Android policies keep from it, and no label works on
+every phone, so USB Arsenal cannot relabel it the way it does an image file. It stops
+before the host sees a dead disk. To serve it anyway, set SELinux permissive by hand
+(`setenforce 0`) and start it again. Serving a
+partition, mounted or not, is your call: a filesystem the phone has mounted read-write
+changes under the host (it may refuse to mount, or worse, with `--mode rw`).
+
 **`dvd` mode refuses: "SELinux does not let the kernel read loop devices".**
 Install the module (it loads the rule at boot) or load the rule the message prints.
 

@@ -442,3 +442,9 @@ Tick a box only when the item is merged and verified as described in its phase.
 - 2026-10-19: CI trimmed: no Telegram message, no apt step (the runner already has wget,
   zip and zstd), and the toolchains are cached under a key naming their release, so they
   are downloaded once.
+- 2026-10-19: Block devices passed to `storage start` get the SELinux check too, before
+  anything changes: on the a166p `/dev/block/dm-56` (`dm_device`) is refused with its
+  label and a hint to set SELinux permissive by hand, and the port is never taken. Permissive SELinux,
+  globally or for the kernel domain, no longer counts as a denial anywhere (it used to
+  refuse `dvd` mode and relabel files needlessly). Whether to serve a mounted partition
+  stays the user's call.
