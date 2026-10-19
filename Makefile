@@ -8,7 +8,10 @@ OUT_DIR     = output
 
 CC ?= cc
 
+# UA_VERSION in usbarsenal.h is the one place the version lives; `make bump`
+# rewrites it. versionCode follows Droidspaces: major*1000 + minor*100 + patch*10.
 VERSION := $(shell grep "define UA_VERSION" $(SRC_DIR)/include/usbarsenal.h | awk '{print $$3}' | tr -d '"')
+VERSION_CODE := $(shell echo $(VERSION) | awk -F. '{print $$1*1000 + $$2*100 + $$3*10}')
 NPROC   := $(shell nproc 2>/dev/null || echo 4)
 
 V ?= 0
@@ -64,7 +67,7 @@ find-cc = $(shell \
 		echo "/opt/cross/bin/$(1)-gcc"; \
 	fi)
 
-.PHONY: all help clean native x86_64 aarch64 armhf x86 format module
+.PHONY: all help clean native x86_64 aarch64 armhf x86 format module bump
 
 all: help
 
@@ -85,6 +88,7 @@ help:
 	@echo ""
 	@echo "Other:"
 	@echo "  make module    - Build every arch into a KernelSU/Magisk module zip"
+	@echo "  make bump NEW=x.y.z - Set the version (usbarsenal.h and module.prop)"
 	@echo "  make format    - Run clang-format over src/"
 	@echo "  make clean     - Remove build output (run after editing a header)"
 
@@ -147,9 +151,16 @@ module:
 		mv $(OUT_DIR)/$(BINARY_NAME) $(OUT_DIR)/module/bin/$(BINARY_NAME)-$$a || exit 1; \
 	done
 	@cp module/module.prop module/customize.sh module/service.sh module/uninstall.sh module/sepolicy.rule $(OUT_DIR)/module/
-	@sed -i 's/^version=.*/version=v$(VERSION)/' $(OUT_DIR)/module/module.prop
+	@sed -i 's/^version=.*/version=v$(VERSION)/; s/^versionCode=.*/versionCode=$(VERSION_CODE)/' $(OUT_DIR)/module/module.prop
 	@cd $(OUT_DIR)/module && rm -f ../$(BINARY_NAME)-$(VERSION).zip && zip -qr9 ../$(BINARY_NAME)-$(VERSION).zip .
 	@echo "[+] Built: $(OUT_DIR)/$(BINARY_NAME)-$(VERSION).zip"
+
+bump:
+	@echo "$(NEW)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$' || { echo "Usage: make bump NEW=x.y.z"; exit 1; }
+	@sed -i 's/define UA_VERSION ".*"/define UA_VERSION "$(NEW)"/' $(SRC_DIR)/include/usbarsenal.h
+	@code=$$(echo $(NEW) | awk -F. '{print $$1*1000 + $$2*100 + $$3*10}'); \
+		sed -i "s/^version=.*/version=v$(NEW)/; s/^versionCode=.*/versionCode=$$code/" module/module.prop
+	@echo "[+] Version $(VERSION) -> $(NEW). Commit it as: usb-arsenal: bump v$(NEW)"
 
 format:
 	@command -v clang-format >/dev/null 2>&1 || { echo "Error: clang-format not found"; exit 1; }

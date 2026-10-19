@@ -25,6 +25,13 @@ including one in a container, relays its command line to it over a filesystem so
   `$MUSL_CROSS`, `~/toolchains/<triplet>-cross/bin`, `PATH` or `/opt/cross/bin`.
 - `make module`: every architecture in a KernelSU/Magisk zip (`module/`).
 - `make format`: clang-format over `src/`. Bare `make` prints help.
+- **Version:** `UA_VERSION` in `usbarsenal.h` is the only source. `make bump NEW=x.y.z`
+  rewrites it and `module/module.prop` (versionCode = major*1000 + minor*100 +
+  patch*10); commit that alone as `usb-arsenal: bump vX.Y.Z`.
+- **CI** (`.github/workflows/ci.yml`, ported from Droidspaces): every push builds the
+  module zip with Droidspaces' published musl toolchains. A release is a manual run with
+  `create_release` and a `vX.Y.Z` tag; the job tags, writes the changelog from git log
+  and attaches the zip.
 - **No wildcard SRCS**: add each new `.c` to the list in the Makefile.
 - No header-dependency tracking: `make clean` after editing a header.
 - clangd reads `compile_flags.txt`.

@@ -1,0 +1,172 @@
+name: USB Arsenal CI
+
+# Ported from Droidspaces' ci.yml: same toolchains, same release flow, one
+# module zip instead of the APK, tarball and debs.
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create an Official GitHub Release?'
+        required: true
+        type: boolean
+        default: false
+      tag_name:
+        description: 'Tag name, e.g. v0.1.0 (Only used if Release is checked)'
+        required: false
+        default: 'test'
+
+jobs:
+  build:
+    name: Build the module (aarch64, armhf, x86_64, x86)
+    runs-on: ubuntu-latest
+    env:
+      HAS_TELEGRAM: ${{ secrets.API_ID != '' && secrets.API_HASH != '' }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y build-essential wget zip zstd
+
+    # Droidspaces' musl toolchains, already published as release assets; the
+    # Makefile finds them in ~/toolchains/<triplet>-cross/bin
+    - name: Download Toolchains
+      run: |
+        mkdir -p $HOME/toolchains
+        cd $HOME/toolchains
+        BASE_URL="https://github.com/ravindu644/Droidspaces-OSS/releases/download/compilers-25843896720"
+        for t in aarch64-linux-musl arm-linux-musleabihf x86_64-linux-musl i686-linux-musl; do
+          echo "[*] Downloading $t toolchain..."
+          wget -q $BASE_URL/$t-cross.tar.zst
+          tar -xf $t-cross.tar.zst
+        done
+        echo "[+] Toolchains ready."
+
+    - name: Build the KernelSU/Magisk module
+      run: make module
+
+    - name: Stage & Rename Artifacts
+      run: |
+        VERSION=$(grep "define UA_VERSION" src/include/usbarsenal.h | awk '{print $3}' | tr -d '"')
+        COMMIT_HASH=$(git log -1 --pretty=%h)
+        ZIP_NAME="usb-arsenal-v${VERSION}-${COMMIT_HASH}.zip"
+        mkdir -p dist
+        mv output/usb-arsenal-${VERSION}.zip dist/${ZIP_NAME}
+        echo "ZIP_FILE=dist/${ZIP_NAME}" >> $GITHUB_ENV
+
+    - name: Generate Telegram Message
+      if: github.event_name != 'pull_request'
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event.inputs.create_release }}" = "true" ]; then
+            EVENT_TYPE="Official Release"
+          else
+            EVENT_TYPE="Manual Trigger"
+          fi
+        else
+          EVENT_TYPE="Git Push"
+        fi
+        COMMIT_MSG=$(git log -1 --pretty=format:%s)
+        COMMIT_SHA=$(git log -1 --pretty=format:%h)
+        COMMIT_AUTHOR=$(git log -1 --pretty=format:%an)
+        {
+          echo "TELEGRAM_MESSAGE<<EOF"
+          echo "**USB Arsenal Build Successful**"
+          echo ""
+          echo "**Repository:** [${{ github.repository }}](https://github.com/${{ github.repository }})"
+          echo "**Branch:** ${{ github.ref_name }}"
+          echo "**Author:** $COMMIT_AUTHOR"
+          echo "**Event:** $EVENT_TYPE"
+          echo "**Commit SHA:** [$COMMIT_SHA](https://github.com/${{ github.repository }}/commit/${{ github.sha }})"
+          echo ""
+          echo "**Commit Message:**"
+          echo ""
+          echo "\`\`\`"
+          echo "$COMMIT_MSG"
+          echo "\`\`\`"
+          echo "EOF"
+        } >> "$GITHUB_ENV"
+
+    - name: Upload Final Artifacts (module zip)
+      uses: actions/upload-artifact@v4
+      with:
+        name: usb-arsenal-artifacts
+        path: dist/
+
+    - name: Send Telegram Notification
+      if: |
+        github.event_name != 'pull_request' &&
+        env.HAS_TELEGRAM == 'true'
+      uses: xz-dev/TelegramFileUploader@v1
+      with:
+        to-who: ${{ secrets.TELEGRAM_TO }}
+        message: ${{ env.TELEGRAM_MESSAGE }}
+        files: |
+          ${{ env.ZIP_FILE }}
+      env:
+        API_ID: ${{ secrets.API_ID }}
+        API_HASH: ${{ secrets.API_HASH }}
+        BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+
+  release:
+    name: Create GitHub Release
+    needs: [build]
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.create_release == 'true' &&
+      github.event.inputs.tag_name != '' &&
+      github.event.inputs.tag_name != 'test'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Download Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: release-assets
+        merge-multiple: true
+
+    - name: Generate Changelog
+      id: changelog
+      run: |
+        PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        echo "Previous tag: $PREV_TAG"
+
+        if [ -z "$PREV_TAG" ]; then
+          CHANGELOG=$(git log --oneline --pretty=format:"* %s (%h)")
+        else
+          CHANGELOG=$(git log ${PREV_TAG}..HEAD --oneline --pretty=format:"* %s (%h)")
+        fi
+
+        {
+          echo "notes<<EOF"
+          echo "$CHANGELOG"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.event.inputs.tag_name }}
+        name: USB Arsenal ${{ github.event.inputs.tag_name || 'Development Build' }}
+        target_commitish: ${{ github.sha }}
+        body: |
+          ## What's Changed
+          ${{ steps.changelog.outputs.notes }}
+
+          ---
+          **Automated Release by USB Arsenal CI**
+        files: |
+          release-assets/*.zip

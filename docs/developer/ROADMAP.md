@@ -423,3 +423,9 @@ Tick a box only when the item is merged and verified as described in its phase.
   `CONFIG_USB_OLD_CONFIGFS`; it did not build without that option. Every touched object
   compiles in the devbox; nothing but the S10's 4.14 has been booted. Three exported
   patches carried an AI co-author trailer from their M62 commits; removed.
+- 2026-10-19: CI and versioning, ported from Droidspaces. `.github/workflows/ci.yml`
+  builds the module on every push (Droidspaces' musl toolchain release, no riscv64),
+  uploads `usb-arsenal-v<ver>-<hash>.zip`, and on a manual run with `create_release`
+  tags and publishes a release with a git-log changelog; Telegram is optional, as there.
+  `make bump NEW=x.y.z` sets `UA_VERSION` and module.prop; `make module` now writes
+  `versionCode` (major*1000 + minor*100 + patch*10, 100 for 0.1.0). Not run on GitHub yet.
