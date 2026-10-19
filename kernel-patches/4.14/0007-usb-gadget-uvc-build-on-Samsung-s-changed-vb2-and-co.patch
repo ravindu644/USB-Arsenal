@@ -1,0 +1,141 @@
+From f4b2178ee997bd57fb77480151d83ffb5794ce50 Mon Sep 17 00:00:00 2001
+From: ravindu644 <droidcasts@protonmail.com>
+Date: Mon, 19 Oct 2026 22:14:44 +0530
+Subject: [PATCH] usb: gadget: uvc: build on Samsung's changed vb2 and configfs
+ ops
+
+Samsung changed two interfaces f_uvc depends on and updated only the
+users its own configs build, so CONFIG_USB_CONFIGFS_F_UVC fails to
+compile:
+
+- vb2_mem_ops gained a memflags argument to alloc, get_userptr and
+  map_dmabuf, and a size to map_dmabuf and unmap_dmabuf.
+  videobuf2-dma-sg was updated for Samsung's camera stack, but
+  videobuf2-vmalloc, which f_uvc's queue uses, was not:
+
+    videobuf2-vmalloc.c:433:12: error: incompatible function pointer
+    types initializing 'void *(*)(..., gfp_t, int)' with an expression
+    of type 'void *(..., gfp_t)'
+
+  Take the new arguments and ignore them, as vmalloc has no cache
+  maintenance or per-plane sizes to act on.
+
+- configfs_item_operations.drop_link returns int, and the gadget core's
+  own unlink callbacks were changed to match, but f_uvc's three were
+  not:
+
+    uvc_configfs.c:586:15: error: incompatible function pointer types
+    initializing 'int (*)(struct config_item *, struct config_item *)'
+    with an expression of type 'void (struct config_item *, ...)'
+
+  configfs ignores the value, so return 0 from each.
+
+Signed-off-by: ravindu644 <droidcasts@protonmail.com>
+---
+ drivers/media/v4l2-core/videobuf2-vmalloc.c |  9 +++++----
+ drivers/usb/gadget/function/uvc_configfs.c  | 13 ++++++++-----
+ 2 files changed, 13 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/media/v4l2-core/videobuf2-vmalloc.c b/drivers/media/v4l2-core/videobuf2-vmalloc.c
+index 359fb9804..07736b3a9 100644
+--- a/drivers/media/v4l2-core/videobuf2-vmalloc.c
++++ b/drivers/media/v4l2-core/videobuf2-vmalloc.c
+@@ -36,7 +36,7 @@ static void vb2_vmalloc_put(void *buf_priv);
+ 
+ static void *vb2_vmalloc_alloc(struct device *dev, unsigned long attrs,
+ 			       unsigned long size, enum dma_data_direction dma_dir,
+-			       gfp_t gfp_flags)
++			       gfp_t gfp_flags, int memflags)
+ {
+ 	struct vb2_vmalloc_buf *buf;
+ 
+@@ -73,7 +73,8 @@ static void vb2_vmalloc_put(void *buf_priv)
+ 
+ static void *vb2_vmalloc_get_userptr(struct device *dev, unsigned long vaddr,
+ 				     unsigned long size,
+-				     enum dma_data_direction dma_dir)
++				     enum dma_data_direction dma_dir,
++				     int memflags)
+ {
+ 	struct vb2_vmalloc_buf *buf;
+ 	struct frame_vector *vec;
+@@ -382,7 +383,7 @@ static struct dma_buf *vb2_vmalloc_get_dmabuf(void *buf_priv, unsigned long flag
+ /*       callbacks for DMABUF buffers        */
+ /*********************************************/
+ 
+-static int vb2_vmalloc_map_dmabuf(void *mem_priv)
++static int vb2_vmalloc_map_dmabuf(void *mem_priv, size_t size, int memflags)
+ {
+ 	struct vb2_vmalloc_buf *buf = mem_priv;
+ 
+@@ -391,7 +392,7 @@ static int vb2_vmalloc_map_dmabuf(void *mem_priv)
+ 	return buf->vaddr ? 0 : -EFAULT;
+ }
+ 
+-static void vb2_vmalloc_unmap_dmabuf(void *mem_priv)
++static void vb2_vmalloc_unmap_dmabuf(void *mem_priv, size_t size)
+ {
+ 	struct vb2_vmalloc_buf *buf = mem_priv;
+ 
+diff --git a/drivers/usb/gadget/function/uvc_configfs.c b/drivers/usb/gadget/function/uvc_configfs.c
+index 844cb738b..1f3409ee4 100644
+--- a/drivers/usb/gadget/function/uvc_configfs.c
++++ b/drivers/usb/gadget/function/uvc_configfs.c
+@@ -547,7 +547,7 @@ static int uvcg_control_class_allow_link(struct config_item *src,
+ 	return ret;
+ }
+ 
+-static void uvcg_control_class_drop_link(struct config_item *src,
++static int uvcg_control_class_drop_link(struct config_item *src,
+ 					struct config_item *target)
+ {
+ 	struct config_item *control, *header;
+@@ -579,6 +579,7 @@ static void uvcg_control_class_drop_link(struct config_item *src,
+ 	mutex_unlock(&opts->lock);
+ out:
+ 	mutex_unlock(su_mutex);
++	return 0;
+ }
+ 
+ static struct configfs_item_operations uvcg_control_class_item_ops = {
+@@ -770,8 +771,8 @@ static int uvcg_streaming_header_allow_link(struct config_item *src,
+ 	return ret;
+ }
+ 
+-static void uvcg_streaming_header_drop_link(struct config_item *src,
+-					   struct config_item *target)
++static int uvcg_streaming_header_drop_link(struct config_item *src,
++					  struct config_item *target)
+ {
+ 	struct mutex *su_mutex = &src->ci_group->cg_subsys->su_mutex;
+ 	struct config_item *opts_item;
+@@ -803,6 +804,7 @@ static void uvcg_streaming_header_drop_link(struct config_item *src,
+ out:
+ 	mutex_unlock(&opts->lock);
+ 	mutex_unlock(su_mutex);
++	return 0;
+ }
+ 
+ static struct configfs_item_operations uvcg_streaming_header_item_ops = {
+@@ -2041,8 +2043,8 @@ static int uvcg_streaming_class_allow_link(struct config_item *src,
+ 	return ret;
+ }
+ 
+-static void uvcg_streaming_class_drop_link(struct config_item *src,
+-					  struct config_item *target)
++static int uvcg_streaming_class_drop_link(struct config_item *src,
++					 struct config_item *target)
+ {
+ 	struct config_item *streaming, *header;
+ 	struct f_uvc_opts *opts;
+@@ -2078,6 +2080,7 @@ static void uvcg_streaming_class_drop_link(struct config_item *src,
+ 	mutex_unlock(&opts->lock);
+ out:
+ 	mutex_unlock(su_mutex);
++	return 0;
+ }
+ 
+ static struct configfs_item_operations uvcg_streaming_class_item_ops = {
+-- 
+2.56.0
+

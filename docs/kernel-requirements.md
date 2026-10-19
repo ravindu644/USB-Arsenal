@@ -19,6 +19,7 @@ building a kernel, and the patches USB Arsenal ships for Samsung kernels.
 | `CONFIG_USB_CONFIGFS_F_HID` | `hid` (missing from stock Exynos 9820/990 defconfigs) |
 | `CONFIG_USB_CONFIGFS_NCM` | `tether` (present in every kernel surveyed) |
 | `CONFIG_USB_CONFIGFS_RNDIS` | `tether --rndis` (removed from GKI after 5.10) |
+| `CONFIG_USB_CONFIGFS_F_UVC` (selects `CONFIG_VIDEO_DEV`) | `uvc`, with the newer f_uvc of Android 5.10+ kernels (it has `function_name`); the 4.x one is refused, see research/06 |
 | `CONFIG_IP_NF_NAT`, `CONFIG_IP_NF_TARGET_MASQUERADE` | `tether` NAT |
 
 Modules work too: the kernel loads `usb_f_<name>` when the function directory is
@@ -38,12 +39,12 @@ git am /path/to/USB-Arsenal/kernel-patches/<version>/*.patch
 |---|---|---|---|
 | `4.9/` | Galaxy A01: [a015f](https://github.com/Kernels-by-ravindu644/samsung_kernel_a015f), also [a015g](https://github.com/ravindu644/kernel_samsung_a01) (Qualcomm sdm439) | android0 fix, f_ncm, READ TOC 1/2, DVD | compiled |
 | `4.9/t295/` | Galaxy Tab A 8.0 2019 ([t295](https://github.com/Kernels-by-ravindu644/samsung_kernel_t295)) | the same, with the stock READ TOC base | compiled |
-| `4.14/` | Exynos 9820: [LineageOS tree](https://github.com/Kernels-by-ravindu644/samsung_kernel_exynos9820_lineageos), also [M62-backport](https://github.com/ravindu644/M62-backport) | multi-gadget, bring-up, f_ncm, READ TOC 1/2, DVD | booted on the S10 (M62): storage, CD-ROM and DVD-ROM boots, NCM |
+| `4.14/` | Exynos 9820: [LineageOS tree](https://github.com/Kernels-by-ravindu644/samsung_kernel_exynos9820_lineageos), also [M62-backport](https://github.com/ravindu644/M62-backport) | multi-gadget, bring-up, f_ncm, READ TOC 1/2, DVD, UVC build fixes | booted on the S10 (M62): storage, CD-ROM and DVD-ROM boots, NCM; UVC fixes not yet booted |
 | `4.19/` | [Exynos 990](https://github.com/ravindu644/samsung_kernel_exynos990) | the 4.14 set, ported | compiled |
-| `5.10/` | Galaxy A16 4G ([a165f](https://github.com/Kernels-by-ravindu644/samsung_kernel_a165f)) | android0 fix, DVD | compiled |
-| `5.15/` | Galaxy A16 5G ([a166p](https://github.com/Kernels-by-ravindu644/samsung_kernel_a166p)) | android0 fix, DVD | compiled |
+| `5.10/` | Galaxy A16 4G ([a165f](https://github.com/Kernels-by-ravindu644/samsung_kernel_a165f)) | android0 fix, DVD, mtu3 ep0 | compiled; mtu3 applied only |
+| `5.15/` | Galaxy A16 5G ([a166p](https://github.com/Kernels-by-ravindu644/samsung_kernel_a166p)) | android0 fix, DVD, mtu3 ep0 | compiled; mtu3 not yet built |
 | `5.15/sm8550/` | [Snapdragon 8 Gen 2 Samsung tree](https://github.com/samsung-sm8550-tab/android_kernel_samsung_sm8550) | android0 fix, DVD rebased on Samsung's mode pages | compiled |
-| `6.6/` | [Pixel 10 GKI](https://github.com/Kernels-by-ravindu644/google_kernel_GKI-6.6.118-android15.8) (`android_configfs_uevent.c`) | android0 fix, DVD | compiled |
+| `6.6/` | [Pixel 10 GKI](https://github.com/Kernels-by-ravindu644/google_kernel_GKI-6.6.118-android15.8) (`android_configfs_uevent.c`) | android0 fix, DVD, mtu3 ep0 | compiled; mtu3 applied only |
 | `6.12/` | PiKVM's original DVD patch, kept verbatim as the base for ports | DVD | (PiKVM) |
 
 "Compiled" means every touched object built with the tree's own defconfig and the
@@ -60,6 +61,8 @@ What each fix does, and what USB Arsenal does without it:
 | configfs: unregister the gadget's own android device (4.9, 5.10, 5.15, 6.6; part of the multi-gadget fix on 4.14/4.19) | Every `androidN` device has devt 0 and removal looked the device up by devt, so dropping any second gadget destroyed `android0`, and Android heard no USB state until a reboot | keeps its own gadget, unbound and empty, instead of removing it, so the bug is never triggered by USB Arsenal. |
 | f_ncm: fix Samsung's changes for a second instance (4.9, 4.14, 4.19) | Samsung's f_ncm only survives the one NCM instance its HAL creates: its once-per-system extras were created and destroyed per instance (destroying `android0`), the netdev existed only after bind so setting `dev_addr` dereferenced NULL, and on 4.14/4.19 the last datagram of each NTB was queued as an skb that was then freed. Each one panicked the kernel. | avoids NCM on these kernels and tethers over RNDIS, and reads `dev_addr` before setting MACs. |
 | f_mass_storage: CD-ROM emulation for Mac OS-X / Windows (4.9, 4.14, 4.19) | Upstream `89ada0fe669a` and `3b91edd624ab` (5.10+ already have them): READ TOC formats 1 and 2. Windows asks for format 1 (the last session) before it mounts a CD's UDF volume. On the A01 they replace Samsung's own `_SUPPORT_MAC_` raw TOC. | a big ISO in `--mode cdrom` boots WinPE but Windows never mounts the disc. `--mode dvd` is unaffected. |
+| f_uvc: build on Samsung's changed vb2 and configfs ops (4.14) | Samsung changed `vb2_mem_ops` (a `memflags` argument) and configfs' `drop_link` (returns int) but left `videobuf2-vmalloc` and `uvc_configfs.c` behind, since none of its configs build them, so turning on `CONFIG_USB_CONFIGFS_F_UVC` fails to compile | has no `uvc` on these kernels. With the patch it still refuses `uvc` there (old f_uvc), so this only matters for testing the 4.x f_uvc itself. |
+| f_uvc: queue OUT data stages in setup() (5.10, 5.15, 6.6; mainline has the same code) | f_uvc queued the data stage of a host request only when userspace answered, after the SETUP. MediaTek's mtu3 takes the host's data at once and stalled it, so every SET_CUR failed (`Failed to set UVC probe control : -32`) and late answers went out as the next request's data. dwc3 (Pixels) waits, which is why Google's identical f_uvc works there. Now the data stage is queued in `setup()`, as every other function does. | `uvc` enumerates on MediaTek phones but the host cannot start the stream. |
 | f_mass_storage: emulate a DVD-ROM for big CD-ROM images (every folder) | Every kernel (mainline too) truncates a CD-ROM image to 2.36 GB, because the lead-out must fit an MSF address. PiKVM's DVD support: bigger images become a DVD-ROM. On 4.x it needs the READ TOC fixes first and a local `put_be24()`. Verified on the S10: a 4.9 GB Windows PE ISO boots and mounts. | warns, and the host reads a truncated disc; `--mode dvd` does not need it. |
 
 ### How USB Arsenal tells a patched kernel apart

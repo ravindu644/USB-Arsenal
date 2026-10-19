@@ -1,0 +1,109 @@
+From 8d3ac6d1cb4959a8380977bd3801afa3947dff46 Mon Sep 17 00:00:00 2001
+From: ravindu644 <droidcasts@protonmail.com>
+Date: Mon, 19 Oct 2026 23:36:09 +0530
+Subject: [PATCH] usb: gadget: uvc: queue OUT data stages in setup()
+
+f_uvc queues the data stage of a class request only when userspace
+answers it with UVCIOC_SEND_RESPONSE, some time after the SETUP. A UDC
+that takes the host's data at once has no request to put it in. mtu3
+acks the data packet in hardware, finds no request and stalls, so the
+host's SET_CUR on PROBE_CONTROL always fails:
+
+  uvcvideo: Failed to set UVC probe control : -32 (exp. 34).
+
+and no stream can start. Worse, the late response is then queued under
+the host's next request and sent as its data. dwc3 happens to NAK until
+the request comes, which is why this works on Pixels with the same
+f_uvc, and why deferring the SETUP ack in mtu3 does not help: its data
+stage is accepted regardless.
+
+Queue the data stage of a control-OUT request from setup(), as other
+functions do, before the SETUP event goes out. Userspace still gets the
+data as UVC_EVENT_DATA; its response to that SETUP is now swallowed,
+counted so that responses, which userspace sends in event order, stay
+matched to their requests. The count is cleared on disable.
+
+Userspace can no longer stall a SET_CUR whose data has been taken;
+DeviceAsWebcam and the kernel's uvc-gadget sample never do.
+
+Seen on the Galaxy A16 5G (MT6835) with USB Arsenal's uvc gadget.
+
+Signed-off-by: ravindu644 <droidcasts@protonmail.com>
+---
+ drivers/usb/gadget/function/f_uvc.c    | 23 +++++++++++++++++++++++
+ drivers/usb/gadget/function/uvc.h      |  2 ++
+ drivers/usb/gadget/function/uvc_v4l2.c |  4 ++++
+ 3 files changed, 29 insertions(+)
+
+diff --git a/drivers/usb/gadget/function/f_uvc.c b/drivers/usb/gadget/function/f_uvc.c
+index 239c08efa..446c3246b 100644
+--- a/drivers/usb/gadget/function/f_uvc.c
++++ b/drivers/usb/gadget/function/f_uvc.c
+@@ -258,6 +258,28 @@ uvc_function_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
+ 	if (interface == uvc->streaming_intf)
+ 		mctrl->wIndex = cpu_to_le16(UVC_STRING_STREAMING_IDX);
+ 
++	/*
++	 * Queue the data stage of a control-OUT request here, as other
++	 * functions do from setup(), instead of when userspace answers: some
++	 * UDCs (mtu3) take the host's data at once and stall the transfer
++	 * when no request is waiting. The data still reaches userspace as
++	 * UVC_EVENT_DATA, and its response to this SETUP becomes a no-op.
++	 * Counted before the event goes out, so userspace cannot answer
++	 * first. The data completes in a later UDC interrupt, after this.
++	 */
++	if (uvc->event_setup_out && uvc->event_length) {
++		struct usb_composite_dev *cdev = f->config->cdev;
++		int ret;
++
++		uvc->control_req->length = uvc->event_length;
++		uvc->control_req->zero = 0;
++		ret = usb_ep_queue(cdev->gadget->ep0, uvc->control_req,
++				   GFP_ATOMIC);
++		if (ret < 0)
++			return ret;
++		atomic_inc(&uvc->setup_out_queued);
++	}
++
+ 	v4l2_event_queue(&uvc->vdev, &v4l2_event);
+ 
+ 	return 0;
+@@ -389,6 +411,7 @@ uvc_function_disable(struct usb_function *f)
+ 	v4l2_event_queue(&uvc->vdev, &v4l2_event);
+ 
+ 	uvc->state = UVC_STATE_DISCONNECTED;
++	atomic_set(&uvc->setup_out_queued, 0);
+ 
+ 	usb_ep_disable(uvc->video.ep);
+ 	if (uvc->enable_interrupt_ep)
+diff --git a/drivers/usb/gadget/function/uvc.h b/drivers/usb/gadget/function/uvc.h
+index 68262b259..089c63cc6 100644
+--- a/drivers/usb/gadget/function/uvc.h
++++ b/drivers/usb/gadget/function/uvc.h
+@@ -181,6 +181,8 @@ struct uvc_device {
+ 	/* Events */
+ 	unsigned int event_length;
+ 	unsigned int event_setup_out : 1;
++	/* OUT data stages queued in setup(), whose responses are no-ops */
++	atomic_t setup_out_queued;
+ };
+ 
+ static inline struct uvc_device *to_uvc(struct usb_function *f)
+diff --git a/drivers/usb/gadget/function/uvc_v4l2.c b/drivers/usb/gadget/function/uvc_v4l2.c
+index b9529dfa2..eec175515 100644
+--- a/drivers/usb/gadget/function/uvc_v4l2.c
++++ b/drivers/usb/gadget/function/uvc_v4l2.c
+@@ -196,6 +196,10 @@ uvc_send_response(struct uvc_device *uvc, struct uvc_request_data *data)
+ 	struct usb_composite_dev *cdev = uvc->func.config->cdev;
+ 	struct usb_request *req = uvc->control_req;
+ 
++	/* The data stage was queued in uvc_function_setup() already */
++	if (atomic_add_unless(&uvc->setup_out_queued, -1, 0))
++		return 0;
++
+ 	if (data->length < 0)
+ 		return usb_ep_set_halt(cdev->gadget->ep0);
+ 
+-- 
+2.56.0
+
