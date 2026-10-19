@@ -252,6 +252,16 @@ int ua_pick_udc(char *out, size_t size) {
 }
 
 /* The first config of g1. Android names it b.1, but nothing guarantees it. */
+/* Android's configfs gives every gadget an androidN device, all with devt 0,
+ * and android_device_destroy() looks its device up by devt: dropping any
+ * gadget destroys the oldest, android0, which belongs to g1. Android then
+ * stops hearing USB state (no USB notification, tethering greyed out) until a
+ * reboot. kernel-patches/4.14/0001 fixes the kernel; everywhere else a gadget
+ * we made stays, unbound and empty, instead of being removed. */
+static int keep_gadget(void) {
+  return access("/sys/class/android_usb", F_OK) == 0;
+}
+
 static int first_config(const char *gadget, char *out, size_t size) {
   char p[PATH_MAX];
   if (pathf(p, sizeof(p), "%s/configs", gadget) < 0)
@@ -305,9 +315,10 @@ int ua_gadget_open(struct ua_gadget *g) {
     g->piggyback = !strcmp(h.backend, "piggyback");
   else if (access(own, F_OK) == 0)
     g->piggyback = 0;
-  else if (mkdir(own, 0755) == 0)
-    rmdir(own);
-  else if (g->android_gadget && access(ANDROID0 "/functions", W_OK) == 0)
+  else if (mkdir(own, 0755) == 0) {
+    if (!keep_gadget())
+      rmdir(own);
+  } else if (g->android_gadget && access(ANDROID0 "/functions", W_OK) == 0)
     /* Stock Samsung configfs: every gadget registers as android0, so the
      * second mkdir fails (as ENOMEM). Ride along inside g1 instead. */
     g->piggyback = 1;
@@ -738,12 +749,24 @@ fail:
   return -1;
 }
 
-static void unlink_all(const char *dir) {
+static int unlink_all(const char *dir) {
   char names[MAX_ENTRIES][NAME_MAX + 1], p[PATH_MAX];
   int n = list_dir(dir, names, keep_link);
   for (int i = 0; i < n; i++)
     if (pathf(p, sizeof(p), "%s/%s", dir, names[i]) == 0)
       unlink(p);
+  return n;
+}
+
+/* Our own gadget holds something: bound, or functions linked. A kept, empty
+ * gadget (keep_gadget) does not count. */
+int ua_gadget_in_use(const char *cfs) {
+  char p[PATH_MAX], buf[64], names[MAX_ENTRIES][NAME_MAX + 1];
+  if (pathf(p, sizeof(p), "%s/" UA_GADGET "/UDC", cfs) == 0 &&
+      read_file(p, buf, sizeof(buf)) > 0)
+    return 1;
+  return pathf(p, sizeof(p), "%s/" UA_GADGET "/configs/" UA_CONFIG, cfs) == 0 &&
+         list_dir(p, names, keep_link) > 0;
 }
 
 static void remove_ours(struct ua_gadget *g) {
@@ -823,21 +846,25 @@ void ua_gadget_teardown(struct ua_gadget *g) {
     write_attr(ANDROID0, "enable", h.enable[0] ? h.enable : "1");
   } else if (!g->piggyback && access(g->path, F_OK) == 0) {
     char buf[64];
-    was_here = 1;
     if (pathf(p, sizeof(p), "%s/UDC", g->path) == 0 &&
-        read_file(p, buf, sizeof(buf)) > 0)
+        read_file(p, buf, sizeof(buf)) > 0) {
       write_file(p, "none\n");
-    unlink_all(g->config);
+      was_here = 1;
+    }
+    if (unlink_all(g->config) > 0)
+      was_here = 1;
     if (pathf(p, sizeof(p), "%s/os_desc", g->path) == 0)
       unlink_all(p);
     remove_ours(g);
-    if (pathf(p, sizeof(p), "%s/strings/0x409", g->config) == 0)
-      rmdir(p);
-    rmdir(g->config);
-    if (pathf(p, sizeof(p), "%s/strings/0x409", g->path) == 0)
-      rmdir(p);
-    if (rmdir(g->path) < 0 && errno != ENOENT)
-      ua_warn("Cannot remove %s: %s", g->path, strerror(errno));
+    if (!keep_gadget()) {
+      if (pathf(p, sizeof(p), "%s/strings/0x409", g->config) == 0)
+        rmdir(p);
+      rmdir(g->config);
+      if (pathf(p, sizeof(p), "%s/strings/0x409", g->path) == 0)
+        rmdir(p);
+      if (rmdir(g->path) < 0 && errno != ENOENT)
+        ua_warn("Cannot remove %s: %s", g->path, strerror(errno));
+    }
   }
 
   if (!g->piggyback && g->android_gadget) {

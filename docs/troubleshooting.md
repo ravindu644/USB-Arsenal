@@ -28,6 +28,12 @@ Older firmware does not boot a USB disk with 2048-byte sectors and no MBR (a 201
 ignored it in both UEFI and legacy mode). Use `--mode cdrom` on a kernel with the DVD
 patch (see [kernel-requirements.md](kernel-requirements.md)), or a newer PC.
 
+**After USB Arsenal, Android shows no USB notification and USB tethering is greyed out.**
+Versions before 2026-10-20 removed their gadget on `stop`, and Android's configfs then
+destroys `android0` by mistake (see developer/architecture.md). ADB still works. Reboot
+the phone once; current versions keep their gadget, unbound and empty, and never trigger
+it. `ls /sys/class/android_usb` should show `android0`.
+
 **`dvd` mode refuses: "SELinux does not let the kernel read loop devices".**
 Install the module (it loads the rule at boot) or load the rule the message prints.
 

@@ -90,6 +90,25 @@ the controller IRQ while in use, and the next unbind panics (seen on the S10).
 and otherwise writes the balanced pair `disconnect`, then `connect`. Never write
 `connect` alone.
 
+### android0 and gadget removal: a third trap
+
+Android's configfs (`CONFIG_USB_CONFIGFS_UEVENT`) gives every gadget an `androidN` device
+in `/sys/class/android_usb`, all created with devt `MKDEV(0, 0)`. `android_device_destroy()`
+removes the dropped gadget's attribute files, then calls
+`device_destroy(class, gi->dev->devt)`, which looks the device up by devt and finds the
+oldest: `android0`, owned by `g1`. So removing any second gadget destroys Android's device,
+and `UsbDeviceManager`, which listens for `DEVPATH=.../android0`, goes deaf until a reboot.
+ADB keeps working (FunctionFS), which hides it; the USB notification and USB tethering do
+not. Found on the a166p after about 110 gadget drops (each command's create-and-remove
+test of `usb_arsenal`, check's probe gadget, every `stop`) had left `android109` and
+`android110`, both without attributes.
+
+`keep_gadget()` is true whenever `/sys/class/android_usb` exists. Then `ua_gadget_open`
+creates `usb_arsenal` once and keeps it, probes run inside it, and teardown unbinds it and
+removes our functions and links but not the directories. `ua_gadget_in_use()` (bound, or
+links in `c.1`) replaces "the directory exists" for `stop` and the crash-recovery rebind.
+`kernel-patches/4.14/0001` fixes the kernel side with `device_unregister(gi->dev)`.
+
 ### Samsung f_ncm: another trap
 
 `CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE` NCM keeps per-system state, and a second NCM

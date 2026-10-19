@@ -370,3 +370,11 @@ Tick a box only when the item is merged and verified as described in its phase.
   USB device number before and after, and the host kernel logged only a partition
   re-read, no disconnect. Images in the container's rootfs were relabelled from
   `unlabeled` and read fine.
+- 2026-10-20: The a166p's USB tethering was greyed out and Android showed no USB
+  notification. `android0` had been destroyed: `android_device_destroy()` finds its device
+  by devt, all `androidN` share devt 0, so every gadget we removed (about 110 since boot)
+  destroyed the oldest, starting with `g1`'s. Now our gadget is kept, unbound and empty,
+  wherever `/sys/class/android_usb` exists, and probes run inside it. After a reboot:
+  `check`, `hid start`, `storage start` (re-plug) and `stop` left `android0` alive, Android
+  heard CONNECTED and CONFIGURED after the hand-back, and a second `stop` said "Nothing to
+  stop".

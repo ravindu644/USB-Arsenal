@@ -62,6 +62,12 @@ Both are in kernel code that a plain configfs or sysfs write reaches. Details ar
   `/sys/class/android_usb/android0/terminal_version` exists without `ncm_instances`.**
   Samsung's f_ncm then destroys the shared `android0` and the kernel BUGs. Use RNDIS.
   `ua_ncm_unsafe()` is the one place that decides.
+- **Never remove a gadget directory (ours or a probe) while `/sys/class/android_usb`
+  exists.** Every `androidN` device has devt 0 and `android_device_destroy()` finds its
+  device by devt, so any `rmdir` of a gadget destroys `android0`, which is `g1`'s. Android
+  then hears no USB state until a reboot: no USB notification, tethering greyed out.
+  `keep_gadget()` in `src/gadget.c` keeps ours, unbound and empty; `4.14/0001` fixes
+  the kernel. Seen on the a166p (5.15); a165f (5.10) and sm8550 (5.15) have the same code.
 - **Never write `dev_addr`, `host_addr` or `qmult` to a network function without
   reading `dev_addr` first.** Samsung's f_ncm has no netdev before bind, and its stores
   dereference that NULL. The read is safe everywhere, and failing means skip

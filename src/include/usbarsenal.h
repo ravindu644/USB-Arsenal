@@ -129,6 +129,7 @@ int ua_list_udcs(char names[][64], int max);
 int ua_pick_udc(char *out, size_t size);
 int ua_gadget_open(struct ua_gadget *g);
 int ua_gadget_taken(void);
+int ua_gadget_in_use(const char *cfs);
 int ua_gadget_live(const struct ua_gadget *g);
 int ua_gadget_has(const struct ua_gadget *g, const char *func);
 int ua_gadget_begin(struct ua_gadget *g);

@@ -173,10 +173,9 @@ static int cmd_stop(int argc, char **argv) {
   }
   /* Nothing held: done, before anything that could fail (more than one UDC
    * and no --udc, say) turns a no-op into an error */
-  char cfs[PATH_MAX], own[PATH_MAX + 16];
-  if (!ua_gadget_taken() && (ua_find_configfs(cfs, sizeof(cfs)) < 0 ||
-                             (snprintf(own, sizeof(own), "%s/" UA_GADGET, cfs),
-                              access(own, F_OK) != 0))) {
+  char cfs[PATH_MAX];
+  if (!ua_gadget_taken() &&
+      (ua_find_configfs(cfs, sizeof(cfs)) < 0 || !ua_gadget_in_use(cfs))) {
     ua_tether_kill();
     ua_log("Nothing to stop");
     return UA_EXIT_OK;
@@ -184,7 +183,7 @@ static int cmd_stop(int argc, char **argv) {
   struct ua_gadget g;
   if (ua_gadget_open(&g) < 0)
     return UA_EXIT_FAIL;
-  if (!ua_gadget_taken() && (g.piggyback || access(g.path, F_OK) != 0)) {
+  if (!ua_gadget_taken() && (g.piggyback || !ua_gadget_in_use(g.cfs))) {
     ua_tether_kill();
     ua_log("Nothing to stop");
     return UA_EXIT_OK;
