@@ -123,7 +123,8 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Refuses clearly when the interface is in another network namespace (container),
       and a failed start removes the function it added
 - [x] Hardware: host gets a lease and is online (a166p, S10)
-- [ ] Hardware: after `stop`, Android's own USB tethering still works
+- [x] Hardware: after `stop`, Android's own USB tethering still works (a166p, once
+      `android0` is no longer destroyed; see the 2026-10-20 log)
 - [x] Re-apply the address and restart DHCP when a composition change re-registers the
       netdev (M62: verified, host re-leased after a storage re-plug)
 - [x] Container support: superseded by the daemon (Phase 5), which runs in the host
@@ -378,3 +379,7 @@ Tick a box only when the item is merged and verified as described in its phase.
   `check`, `hid start`, `storage start` (re-plug) and `stop` left `android0` alive, Android
   heard CONNECTED and CONFIGURED after the hand-back, and a second `stop` said "Nothing to
   stop".
+- 2026-10-20: Android's own USB tethering after USB Arsenal, on the a166p with the
+  keep-gadget fix: the USB notification was back, Settings enabled USB tethering
+  (`rndis,adb`), Fedora got 10.39.186.64/24 by DHCP, pinged the phone, and resolved names
+  through its DNS. ADB stayed up.
