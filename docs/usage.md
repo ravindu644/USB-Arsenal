@@ -65,7 +65,11 @@ usb-arsenal storage stop
     `ksud sepolicy patch "allow kernel loop_device blk_file { open read getattr ioctl }"`
     (Magisk: `magiskpolicy --live "..."`). Without it, `storage` refuses instead of
     serving a disk the host cannot read.
-  - Legacy BIOS boot of a `dvd` LUN is untested.
+  - It depends on the firmware. A 2021 MSI laptop's UEFI booted it; a 2012 Samsung
+    NP300E did not even list it, in UEFI or legacy mode. A BIOS boots a USB disk from
+    its MBR, which a plain ISO does not have, and older firmware may not take 2048-byte
+    sectors on a disk. For older PCs, use `--mode cdrom` on a kernel with
+    `kernel-patches/4.14/0004` to `0006` (or `6.12/0001`), which booted both laptops.
 - **Through the daemon, the image is opened on your side** and passed to the daemon as an
   open file, so a path inside a container works as typed.
 - **On Android, an image the kernel may not read gets relabelled.** Files in a container

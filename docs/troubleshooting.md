@@ -23,6 +23,11 @@ Arsenal warns about it. Use `--mode dvd` (auto mode picks it for big plain ISOs)
 The ISO was served with `--mode disk`. Its 512-byte sectors put the UDF anchor where
 Windows does not look, so Windows never mounts the volume. Use `--mode dvd`.
 
+**A `dvd` drive does not appear in the PC's boot menu.**
+Older firmware does not boot a USB disk with 2048-byte sectors and no MBR (a 2012 laptop
+ignored it in both UEFI and legacy mode). Use `--mode cdrom` on a kernel with the DVD
+patch (see [kernel-requirements.md](kernel-requirements.md)), or a newer PC.
+
 **`dvd` mode refuses: "SELinux does not let the kernel read loop devices".**
 Install the module (it loads the rule at boot) or load the rule the message prints.
 

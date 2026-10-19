@@ -85,8 +85,10 @@ Tick a box only when the item is merged and verified as described in its phase.
       the module ships the `loop_device` rule as `sepolicy.rule`. Verified on the S10:
       auto picks dvd, status names the ISO, loops cleaned up after a swap and `stop`
 - [x] Hardware: the module's `sepolicy.rule` loaded at boot (S10, no manual patch)
-- [ ] Hardware: `dvd` mode under legacy BIOS; the fail-closed SELinux path on a device
-      without the rule
+- [x] Hardware: legacy BIOS. `cdrom` with `0004` to `0006` boots the 4.9 GB WinPE ISO on
+      a 2012 Samsung NP300E in legacy and in UEFI mode. `dvd` is not even listed there,
+      in either mode: it needs newer UEFI (works on the MSI)
+- [ ] Hardware: the fail-closed SELinux path on a device without the rule
 - [ ] Stretch: Ventoy-style on-PC menu
 
 ## Phase 2. `hid`
@@ -349,3 +351,8 @@ Tick a box only when the item is merged and verified as described in its phase.
   the module, its `sepolicy.rule` was loaded (kernel may read `loop_device`), and
   `usb-arsenal storage start` from `/system/bin`, relayed to the daemon, served the WinPE
   ISO in `dvd` mode; `stop` handed the port back and the loop went with it.
+- 2026-10-20: A 2012 Samsung NP300E. The 4.9 GB WinPE ISO in `--mode cdrom` (S10 with
+  `0004` to `0006`) booted in UEFI mode to Windows Boot Manager and in legacy mode
+  ("USB CD:: Linux File-CD Gadget") to Strelec's BIOS menu. `--mode dvd` did not appear
+  in its boot menu in either mode, so `dvd` is for newer UEFI firmware and the patched
+  `cdrom` is the one for older PCs.
