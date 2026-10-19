@@ -74,7 +74,8 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Hardware: the same ISO boots from `sr0` in `--mode cdrom` (El Torito, UEFI)
 - [x] Hardware: a non-hybrid ISO (Windows) boots from `sr0`; legacy BIOS boot (with
       `0004` to `0006`, see Phase 1 below and the status log)
-- [ ] Hardware: swap while live, host sees a medium change, no re-enumeration
+- [x] Hardware: swap while live, host sees a medium change, no re-enumeration (a166p,
+      after unmounting on the host)
 - [x] Port PiKVM's DVD-ROM emulation to `kernel-patches/4.14/0006`, on top of the
       upstream READ TOC fixes as `0004` and `0005` (see research/03)
 - [x] Hardware: a CD-ROM image over 2.36 GB boots into Windows with `0004` to `0006`
@@ -364,3 +365,8 @@ Tick a box only when the item is merged and verified as described in its phase.
   `/dev/hidg2` drew a square. The container saw the nodes because it mounts the kernel's
   devtmpfs, where the kernel creates them itself. `stop` from the container brought ADB
   back.
+- 2026-10-20: Hot swap. From the a166p's container, `storage start --mode disk` swapped
+  SWAP_A for SWAP_B on a live LUN (Fedora had unmounted it): "LUN 0 now holds", the same
+  USB device number before and after, and the host kernel logged only a partition
+  re-read, no disconnect. Images in the container's rootfs were relabelled from
+  `unlabeled` and read fine.
