@@ -138,9 +138,9 @@ Tick a box only when the item is merged and verified as described in its phase.
       when nothing carries IPv4. Fails closed to IPv4 only without the nat table.
       Hardware (S10): host took a SLAAC address, pinged `2606:4700:4700::1111` through
       the link, and `ifconfig.co` saw the phone's Wi-Fi IPv6; `stop` removed every rule
-- [ ] IPv6 in gateway mode: the Android side keeps IPv6 off on `usb0`, the bridge and
-      the veth (done); the OpenWrt side uses VirtualAP's odhcpd settings, documented in
-      tethering.md, not yet tried on hardware
+- [x] IPv6 in gateway mode: the Android side keeps IPv6 off on `usb0`, the bridge and
+      the veth; OpenWrt's odhcpd (VirtualAP's `vaplan` settings) serves the host. Verified
+      on the a166p with `--gateway-iface vaplan0`
 
 ## Phase 5. Daemon, containers, gateway (see [containers.md](../containers.md))
 - [x] Workspace `/data/local/USB-Arsenal` / `/var/lib/USB-Arsenal`, laid out like
@@ -390,3 +390,10 @@ Tick a box only when the item is merged and verified as described in its phase.
   was `lookup wlan0`, and Fedora's once-a-second ping of 1.1.1.1 through the USB link
   went from failing to answering at 15:59:54, then answered every time until `stop`.
   `stop` handed the port back to Android's own tethering (`rndis,adb`), `android0` intact.
+- 2026-10-20: IPv6 in gateway mode on the a166p. `tether start --gateway OpenWrt
+  --gateway-iface vaplan0` reused VirtualAP's `vaplan` config (ip6assign 64, ra and
+  dhcpv6 server, ra_default) with no OpenWrt changes. Fedora got
+  fd13:d8d1:f9e7:1::/64 by SLAAC and a default route from OpenWrt's RA, pinged OpenWrt
+  and 2606:4700:4700::1111, and ifconfig.co over IPv6 showed the public address of the
+  phone's Wi-Fi (OpenWrt's NAT66, then Droidspaces'). Android side: `usb0`, `ua-usb` and
+  `ua-gw` all had disable_ipv6=1 and no address. `stop` removed both and handed back.
