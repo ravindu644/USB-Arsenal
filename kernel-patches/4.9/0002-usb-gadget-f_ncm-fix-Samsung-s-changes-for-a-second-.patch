@@ -1,0 +1,318 @@
+From f53582bc55ef773bf6d139265148a9a72bbe4215 Mon Sep 17 00:00:00 2001
+From: ravindu644 <droidcasts@protonmail.com>
+Date: Mon, 19 Oct 2026 19:30:27 +0530
+Subject: [PATCH 2/5] usb: gadget: f_ncm: fix Samsung's changes for a second
+ instance
+
+Samsung's f_ncm (CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE and
+CONFIG_USB_CONFIGFS_UEVENT) only survives the one NCM instance its HAL
+creates. A second one next to Android's ncm.0, in a separate configfs
+gadget as USB Arsenal builds, breaks in two ways in this file:
+
+- Samsung's extras exist once per system but were created and destroyed
+  per instance. create_terminal_attribute() device_destroy()ed the shared
+  android0 when it could not add terminal_version; ncm_function_init()
+  overwrote _ncm_dev and re-registered the usb_ncm misc device; a second
+  _ncm_setup_desc leaked the first, its duplicate f_ncm device failed to
+  register and ncm_free_inst() then destroyed through the error pointer;
+  and the first instance to go freed all of it under the other. Count
+  the instances under a mutex: create on the first, never destroy
+  android0, tear down after the last, and unregister the f_ncm device
+  itself, since a lookup by devt (MKDEV(0, 0) for the first function
+  device) can find android0. The count is exposed read-only as
+  android0/ncm_instances, which tells userspace the kernel is fixed.
+
+- The netdev was created in ncm_bind() and freed in ncm_unbind(), so
+  until the first bind opts->net was NULL for the u_ether_configfs
+  stores, and every rebind made a new interface. Give the netdev to the
+  instance as mainline does: allocate it in ncm_alloc_inst(), register
+  it once at the first bind, keep it across unbind, release it in
+  ncm_free_inst().
+
+Port of kernel-patches/4.14/0003 to Samsung's 4.9 (Qualcomm) f_ncm. Its
+third fix, the rx skb, is not needed: ncm_unwrap_ntb() here already
+copies every datagram into a new skb.
+
+Signed-off-by: ravindu644 <droidcasts@protonmail.com>
+---
+ drivers/usb/gadget/function/f_ncm.c | 163 +++++++++++++++++++---------
+ 1 file changed, 114 insertions(+), 49 deletions(-)
+
+diff --git a/drivers/usb/gadget/function/f_ncm.c b/drivers/usb/gadget/function/f_ncm.c
+index 7f2da3fc..301f38b9 100644
+--- a/drivers/usb/gadget/function/f_ncm.c
++++ b/drivers/usb/gadget/function/f_ncm.c
+@@ -546,6 +546,22 @@ u16 terminal_mode_version;
+ u16 terminal_mode_vendor_id;
+ 
+ static struct ncm_dev *_ncm_dev;
++static bool mirrorlink_registered;
++#endif
++
++#if defined(CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE) || defined(CONFIG_USB_CONFIGFS_UEVENT)
++/*
++ * Samsung's extras (terminal_version on android0, the usb_ncm misc device,
++ * _ncm_dev, and _ncm_setup_desc with its f_ncm device) exist once per system,
++ * but were created and destroyed per NCM instance. A second instance, such as
++ * a separate configfs gadget next to Android's ncm.0, then failed to create a
++ * duplicate f_ncm device, destroyed through the error pointer, or freed the
++ * shared state under the first one. Count the instances: create on the first,
++ * tear down after the last. ncm_instances on android0 exposes the count and
++ * tells userspace this kernel takes more than one NCM instance safely.
++ */
++static DEFINE_MUTEX(ncm_shared_lock);
++static int ncm_instances;
+ #endif
+ /*-------------------------------------------------------------------------*/
+ 
+@@ -1464,27 +1480,18 @@ static int ncm_bind(struct usb_configuration *c, struct usb_function *f)
+ 	 * with list_for_each_entry, so we assume no race condition
+ 	 * with regard to ncm_opts->bound access
+ 	 */
+-	if (!ncm_opts->bound) {
+-		mutex_lock(&ncm_opts->lock);
+-#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+-		ncm_opts->net = gether_setup_name_default("ncm");
+-#else
+-		ncm_opts->net = gether_setup_default();
+-#endif
+-		if (IS_ERR(ncm_opts->net)) {
+-			status = PTR_ERR(ncm_opts->net);
+-			mutex_unlock(&ncm_opts->lock);
+-			goto error;
+-		}
+-		gether_set_gadget(ncm_opts->net, cdev->gadget);
+-		status = gether_register_netdev(ncm_opts->net);
+-		mutex_unlock(&ncm_opts->lock);
+-		if (status) {
+-			free_netdev(ncm_opts->net);
+-			goto error;
+-		}
+-		ncm_opts->bound = true;
+-	}
++	/*
++	 * The netdev belongs to the instance, created in ncm_alloc_inst() as
++	 * mainline does, so its configfs attributes (dev_addr, host_addr,
++	 * qmult) are valid before the first bind. Register it once.
++	 */
++	mutex_lock(&ncm_opts->lock);
++	gether_set_gadget(ncm_opts->net, cdev->gadget);
++	status = ncm_opts->bound ? 0 : gether_register_netdev(ncm_opts->net);
++	mutex_unlock(&ncm_opts->lock);
++	if (status)
++		goto error;
++	ncm_opts->bound = true;
+ 
+ 	/* export host's Ethernet address in CDC format */
+ 	status = gether_get_host_addr_cdc(ncm_opts->net, ncm->ethaddr,
+@@ -1605,8 +1612,7 @@ fail:
+ 		usb_ep_free_request(ncm->notify, ncm->notify_req);
+ 	}
+ netdev_cleanup:
+-	gether_cleanup(netdev_priv(ncm_opts->net));
+-
++	/* the netdev stays with the instance; ncm_free_inst() releases it */
+ error:
+ 	ERROR(cdev, "%s: can't bind, err %d\n", f->name, status);
+ 
+@@ -1670,22 +1676,42 @@ static ssize_t terminal_version_store(struct device *dev,
+ static DEVICE_ATTR(terminal_version,  S_IRUGO | S_IWUSR,
+ 		terminal_version_show, terminal_version_store);
+ 
++static ssize_t ncm_instances_show(struct device *dev,
++		struct device_attribute *attr, char *buf)
++{
++	return sprintf(buf, "%d\n", ncm_instances);
++}
++static DEVICE_ATTR_RO(ncm_instances);
++
++/* Called with ncm_shared_lock held, for the first instance */
+ static int create_terminal_attribute(void)
+ {
++	static bool created;
+ 	struct device *android_dev;
+ 	int err = 0;
+-	
++
++	if (created)
++		return 0;
++
+ 	android_dev = create_function_device("terminal_version");
+ 	if (IS_ERR(android_dev))
+ 		return PTR_ERR(android_dev);
+ 
++	/*
++	 * android_dev is the shared android0 device, owned by the gadget. Never
++	 * destroy it here on failure: the next user of it would touch a freed
++	 * device.
++	 */
+ 	err = device_create_file(android_dev, &dev_attr_terminal_version);
+ 	if (err) {
+ 		printk(KERN_DEBUG "usb: %s failed to create attr\n",
+ 				__func__);
+-		device_destroy(android_dev->class, android_dev->devt);
+ 		return err;
+ 	}
++	if (device_create_file(android_dev, &dev_attr_ncm_instances))
++		printk(KERN_DEBUG "usb: %s failed to create ncm_instances\n",
++				__func__);
++	created = true;
+ 	return 0;
+ }
+ 
+@@ -1739,11 +1765,15 @@ static void ncm_work(struct work_struct *data)
+ 	kobject_uevent_env(&mirrorlink_device.this_device->kobj, KOBJ_CHANGE, uevent_envp);
+ }
+ 
++/* Called with ncm_shared_lock held, for the first instance */
+ static int ncm_function_init(void)
+ {
+ 	struct ncm_dev *dev;
+ 	int ret=0;
+ 
++	if (_ncm_dev)
++		return 0;
++
+ 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
+ 	if (!dev)
+ 		return -ENOMEM;
+@@ -1755,12 +1785,17 @@ static int ncm_function_init(void)
+ 	ret = misc_register(&mirrorlink_device);
+ 	if (ret)
+ 		printk("usb: %s - usb_ncm misc driver fail - ret:%d\n", __func__, ret);
++	else
++		mirrorlink_registered = true;
+ 	return 0;
+ }
+ 
++/* Called with ncm_shared_lock held, once the last instance is gone */
+ static void ncm_function_cleanup(void)
+ {
+-	misc_deregister(&mirrorlink_device);
++	if (mirrorlink_registered)
++		misc_deregister(&mirrorlink_device);
++	mirrorlink_registered = false;
+ 	kfree(_ncm_dev);
+ 	_ncm_dev = NULL;
+ }
+@@ -1844,20 +1879,35 @@ static void ncm_free_inst(struct usb_function_instance *f)
+ {
+ 	struct f_ncm_opts *opts;
+ 
+-#ifdef CONFIG_USB_CONFIGFS_UEVENT
+-	/* release _ncm_setup_desc related resource */
+-	device_destroy(_ncm_setup_desc->device->class,
+-		_ncm_setup_desc->device->devt);
+-	cancel_work(&_ncm_setup_desc->work);
+-	kfree(_ncm_setup_desc);
+-#endif
+-
+ 	opts = container_of(f, struct f_ncm_opts, func_inst);
+ 	if (opts->bound)
+ 		gether_cleanup(netdev_priv(opts->net));
++	else
++		free_netdev(opts->net);
+ 	kfree(opts);
++
++#if defined(CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE) || defined(CONFIG_USB_CONFIGFS_UEVENT)
++	mutex_lock(&ncm_shared_lock);
++	if (--ncm_instances == 0) {
++#ifdef CONFIG_USB_CONFIGFS_UEVENT
++		/*
++		 * Not device_destroy(): function devices come from devt
++		 * MKDEV(0, index++) starting at 0, the devt every android%d
++		 * gadget device has, so a lookup by devt can find android0.
++		 */
++		if (_ncm_setup_desc) {
++			if (!IS_ERR_OR_NULL(_ncm_setup_desc->device))
++				device_unregister(_ncm_setup_desc->device);
++			cancel_work(&_ncm_setup_desc->work);
++			kfree(_ncm_setup_desc);
++			_ncm_setup_desc = NULL;
++		}
++#endif
+ #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+-	ncm_function_cleanup();	
++		ncm_function_cleanup();
++#endif
++	}
++	mutex_unlock(&ncm_shared_lock);
+ #endif
+ }
+ 
+@@ -1870,20 +1920,38 @@ static struct usb_function_instance *ncm_alloc_inst(void)
+ 		return ERR_PTR(-ENOMEM);
+ 	mutex_init(&opts->lock);
+ 	opts->func_inst.free_func_inst = ncm_free_inst;
++#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
++	opts->net = gether_setup_name_default("ncm");
++#else
++	opts->net = gether_setup_default();
++#endif
++	if (IS_ERR(opts->net)) {
++		struct net_device *net = opts->net;
++
++		kfree(opts);
++		return ERR_CAST(net);
++	}
+ 
+ 	config_group_init_type_name(&opts->func_inst.group, "", &ncm_func_type);
+ 
++#if defined(CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE) || defined(CONFIG_USB_CONFIGFS_UEVENT)
++	mutex_lock(&ncm_shared_lock);
++	if (ncm_instances++ == 0) {
+ #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+-	create_terminal_attribute();
+-	ncm_function_init();
++		create_terminal_attribute();
++		ncm_function_init();
+ #endif
+-
+ #ifdef CONFIG_USB_CONFIGFS_UEVENT
+-	_ncm_setup_desc = kzalloc(sizeof(*_ncm_setup_desc), GFP_KERNEL);
+-	if (!_ncm_setup_desc)
+-		return ERR_PTR(-ENOMEM);
+-	INIT_WORK(&_ncm_setup_desc->work, ncm_setup_work);
+-	_ncm_setup_desc->device = create_function_device("f_ncm");
++		/* Without it ncm_setup() just skips the vendor request */
++		_ncm_setup_desc = kzalloc(sizeof(*_ncm_setup_desc), GFP_KERNEL);
++		if (_ncm_setup_desc) {
++			INIT_WORK(&_ncm_setup_desc->work, ncm_setup_work);
++			_ncm_setup_desc->device =
++				create_function_device("f_ncm");
++		}
++#endif
++	}
++	mutex_unlock(&ncm_shared_lock);
+ #endif
+ 
+ 	return &opts->func_inst;
+@@ -1905,13 +1973,12 @@ static void ncm_free(struct usb_function *f)
+ static void ncm_unbind(struct usb_configuration *c, struct usb_function *f)
+ {
+ 	struct f_ncm *ncm = func_to_ncm(f);
+-	struct f_ncm_opts *opts = container_of(f->fi, struct f_ncm_opts,
+-					func_inst);
+ 
++	/* The netdev outlives the bind, as in mainline; freeing it here left
++	 * every rebind with a new interface and the instance pointing at a
++	 * freed one. */
+ 	DBG(c->cdev, "ncm unbind\n");
+ 
+-	opts->bound = false;
+-
+ 	hrtimer_cancel(&ncm->task_timer);
+ 	tasklet_kill(&ncm->tx_tasklet);
+ 
+@@ -1925,8 +1992,6 @@ static void ncm_unbind(struct usb_configuration *c, struct usb_function *f)
+ 
+ 	kfree(ncm->notify_req->buf);
+ 	usb_ep_free_request(ncm->notify, ncm->notify_req);
+-
+-	gether_cleanup(netdev_priv(opts->net));
+ }
+ 
+ static struct usb_function *ncm_alloc(struct usb_function_instance *fi)
+-- 
+2.56.0
+

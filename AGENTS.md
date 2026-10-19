@@ -66,12 +66,13 @@ Both are in kernel code that a plain configfs or sysfs write reaches. Details ar
   exists.** Every `androidN` device has devt 0 and `android_device_destroy()` finds its
   device by devt, so any `rmdir` of a gadget destroys `android0`, which is `g1`'s. Android
   then hears no USB state until a reboot: no USB notification, tethering greyed out.
-  `keep_gadget()` in `src/gadget.c` keeps ours, unbound and empty; `4.14/0001` fixes
-  the kernel. Seen on the a166p (5.15); a165f (5.10) and sm8550 (5.15) have the same code.
+  `keep_gadget()` in `src/gadget.c` keeps ours, unbound and empty. `kernel-patches/`
+  fixes the kernel for 4.9 to 6.6 (on 6.6 in `android_configfs_uevent.c`). Seen on the
+  a166p (5.15).
 - **Never write `dev_addr`, `host_addr` or `qmult` to a network function without
   reading `dev_addr` first.** Samsung's f_ncm has no netdev before bind, and its stores
   dereference that NULL. The read is safe everywhere, and failing means skip
-  (`kernel-patches/4.14/0003` fixes the kernel).
+  (the f_ncm patch in `kernel-patches/` for 4.9, 4.14 and 4.19 fixes the kernel).
 
 ## Testing on a device
 

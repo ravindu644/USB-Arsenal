@@ -24,26 +24,43 @@ building a kernel, and the patches USB Arsenal ships for Samsung kernels.
 Modules work too: the kernel loads `usb_f_<name>` when the function directory is
 created.
 
-## Patches for Samsung 4.x kernels
+## Kernel patches
 
-`kernel-patches/4.14/` holds `git format-patch` exports, written against the
-M62-backport kernel (Exynos 9820, 4.14). Apply them in order:
+`kernel-patches/<version>/` holds `git format-patch` exports, one folder per kernel
+version, each made on a real tree. Apply a folder in order:
 
 ```sh
 cd /path/to/kernel
-git am /path/to/USB-Arsenal/kernel-patches/4.14/*.patch
+git am /path/to/USB-Arsenal/kernel-patches/<version>/*.patch
 ```
 
-Other Samsung 4.x trees (Exynos 990 on 4.19; A01 and Tab A on 4.9) carry the same code
-and may need small rebases.
+| Folder | Made on | Holds | Tested |
+|---|---|---|---|
+| `4.9/` | Galaxy A01 (a015f, also a015g; Qualcomm sdm439) | android0 fix, f_ncm, READ TOC 1/2, DVD | compiled |
+| `4.9/t295/` | Galaxy Tab A 8.0 (t295) | the same, with the stock READ TOC base | compiled |
+| `4.14/` | Exynos 9820, LineageOS tree (also M62-backport) | multi-gadget, bring-up, f_ncm, READ TOC 1/2, DVD | booted on the S10 (M62): storage, CD-ROM and DVD-ROM boots, NCM |
+| `4.19/` | Exynos 990 | the 4.14 set, ported | compiled |
+| `5.10/` | Galaxy A16 4G (a165f) | android0 fix, DVD | compiled |
+| `5.15/` | Galaxy A16 5G (a166p) | android0 fix, DVD | compiled |
+| `5.15/sm8550/` | Snapdragon 8 Gen 2 Samsung tree | android0 fix, DVD rebased on Samsung's mode pages | compiled |
+| `6.6/` | Pixel 10 GKI (`android_configfs_uevent.c`) | android0 fix, DVD | compiled |
+| `6.12/` | PiKVM's original DVD patch, kept verbatim as the base for ports | DVD | (PiKVM) |
 
-| Patch | Fixes | Without it, USB Arsenal... |
+"Compiled" means every touched object built with the tree's own defconfig and the
+Samsung or GKI options that select the patched code; nothing else of that kernel was
+built or booted. Each folder keeps the original authors (Roger Quadros, Neal Liu, Maxim
+Devaev) and says in the commit what a port changed.
+
+What each fix does, and what USB Arsenal does without it:
+
+| Fix | Fixes | Without it, USB Arsenal... |
 |---|---|---|
-| `0001` configfs: allow creating more than one gadget | Every gadget registered its uevent device under a hardcoded `android0`, so a second gadget failed with a misleading "Out of memory" | does not run: the `mkdir` of its own gadget fails as ENOMEM (nothing is changed), and it names the patches. |
-| `0002` configfs: support mainline gadget bring-up alongside Android | A symlinked function only reached the config through `android0/functions`, so a hand-built gadget failed to bind with "needs at least one function" | creates its gadget but cannot bind it, fails with EINVAL and names this patch. Both are needed. |
-| `0003` f_ncm: fix Samsung's changes for a second instance and rx | Samsung's f_ncm only survives the one NCM instance its HAL creates. A second instance destroyed the shared `android0` device; the netdev existed only after bind, so setting `dev_addr` dereferenced NULL; and the last datagram of each NTB was queued as an skb that was then freed. Each one panicked the kernel. | avoids NCM on these kernels and tethers over RNDIS, and reads `dev_addr` before setting MACs. |
-| `0004`, `0005` f_mass_storage: make CD-ROM emulation work with Mac OS-X / Windows | Upstream `89ada0fe669a` and `3b91edd624ab` (5.10+ already have them): READ TOC formats 1 and 2. Windows asks for format 1 (the last session) before it mounts a CD's UDF volume | a big ISO in `--mode cdrom` boots WinPE but Windows never mounts the disc. `--mode dvd` is unaffected. |
-| `0006` f_mass_storage: emulate a DVD-ROM for big CD-ROM images | Every kernel (mainline too) truncates a CD-ROM image to 2.36 GB, because the lead-out must fit an MSF address. PiKVM's DVD support, applied as is on `0004` and `0005`: bigger images become a DVD-ROM. Verified on the S10: a 4.9 GB Windows PE ISO boots and mounts. Not Samsung specific; for newer kernels start from `6.12/0001` | warns, and the host reads a truncated disc. |
+| configfs: allow creating more than one gadget (4.14, 4.19) | Every gadget registered its uevent device under a hardcoded `android0`, so a second gadget failed with a misleading "Out of memory" | does not run: the `mkdir` of its own gadget fails as ENOMEM (nothing is changed), and it names the patches. |
+| configfs: support mainline gadget bring-up alongside Android (4.14, 4.19) | With `CONFIG_USB_OLD_CONFIGFS`, a symlinked function only reached the config through `android0/functions`, so a hand-built gadget failed to bind with "needs at least one function" | creates its gadget but cannot bind it, fails with EINVAL and names this patch. |
+| configfs: unregister the gadget's own android device (4.9, 5.10, 5.15, 6.6; part of the multi-gadget fix on 4.14/4.19) | Every `androidN` device has devt 0 and removal looked the device up by devt, so dropping any second gadget destroyed `android0`, and Android heard no USB state until a reboot | keeps its own gadget, unbound and empty, instead of removing it, so the bug is never triggered by USB Arsenal. |
+| f_ncm: fix Samsung's changes for a second instance (4.9, 4.14, 4.19) | Samsung's f_ncm only survives the one NCM instance its HAL creates: its once-per-system extras were created and destroyed per instance (destroying `android0`), the netdev existed only after bind so setting `dev_addr` dereferenced NULL, and on 4.14/4.19 the last datagram of each NTB was queued as an skb that was then freed. Each one panicked the kernel. | avoids NCM on these kernels and tethers over RNDIS, and reads `dev_addr` before setting MACs. |
+| f_mass_storage: CD-ROM emulation for Mac OS-X / Windows (4.9, 4.14, 4.19) | Upstream `89ada0fe669a` and `3b91edd624ab` (5.10+ already have them): READ TOC formats 1 and 2. Windows asks for format 1 (the last session) before it mounts a CD's UDF volume. On the A01 they replace Samsung's own `_SUPPORT_MAC_` raw TOC. | a big ISO in `--mode cdrom` boots WinPE but Windows never mounts the disc. `--mode dvd` is unaffected. |
+| f_mass_storage: emulate a DVD-ROM for big CD-ROM images (every folder) | Every kernel (mainline too) truncates a CD-ROM image to 2.36 GB, because the lead-out must fit an MSF address. PiKVM's DVD support: bigger images become a DVD-ROM. On 4.x it needs the READ TOC fixes first and a local `put_be24()`. Verified on the S10: a 4.9 GB Windows PE ISO boots and mounts. | warns, and the host reads a truncated disc; `--mode dvd` does not need it. |
 
 ### How USB Arsenal tells a patched kernel apart
 
@@ -52,21 +69,11 @@ It looks, and never tries, because trying is what panics an unpatched kernel:
 | `android0/terminal_version` | `android0/ncm_instances` | Meaning | `tether` uses |
 |---|---|---|---|
 | absent | absent | no Samsung NCM extras, or no NCM instance yet | NCM |
-| present | present | patched with `0003` | NCM |
+| present | present | patched with the f_ncm fix | NCM |
 | present | absent | unpatched Samsung kernel | RNDIS |
 
-### Any kernel: DVD-ROM emulation
-
-`kernel-patches/6.12/0001-pikvm-msd-dvd-support.patch` is PiKVM's original patch, kept
-verbatim (Maxim Devaev, pikvm/packages `linux-rpi-pikvm` at `336ceef6`, written for
-6.12) as the base for ports. It lifts the 2.36 GB CD-ROM clamp by presenting bigger
-images as a DVD-ROM, the same change as `4.14/0006`. Checked with `git apply --check`:
-it applies as is to the 6.6 GKI (Pixel 10) and to the Galaxy A16 trees (a166p 5.15,
-a165f 5.10); sm8550 (5.15), Exynos 990 (4.19) and t295 (4.9) need small rebases in
-`f_mass_storage.c`. `--mode dvd` does not need it.
-
-`ncm_instances` is added by `0003`; it also shows how many NCM instances exist. For
-`0001` and `0002`, `check` shows whether a gadget of our own can be created ("Own USB
+`ncm_instances` is added by the f_ncm fix; it also shows how many NCM instances exist. For
+the two configfs fixes, `check` shows whether a gadget of our own can be created ("Own USB
 gadget"); without them the `mkdir` fails as ENOMEM, which changes nothing, and `check`
 names the patches.
 

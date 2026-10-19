@@ -102,7 +102,8 @@ test of `usb_arsenal`, check's probe gadget, every `stop`) had left `android109`
 creates `usb_arsenal` once and keeps it, probes run inside it, and teardown unbinds it and
 removes our functions and links but not the directories. `ua_gadget_in_use()` (bound, or
 links in `c.1`) replaces "the directory exists" for `stop` and the crash-recovery rebind.
-`kernel-patches/4.14/0001` fixes the kernel side with `device_unregister(gi->dev)`.
+The patches in `kernel-patches/` (4.9 to 6.6) fix the kernel side with
+`device_unregister()` on the gadget's own device.
 
 ### Samsung f_ncm: another trap
 

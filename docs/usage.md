@@ -59,7 +59,7 @@ usb-arsenal storage stop
   - If the host has locked the drive, `start` also re-plugs, which releases the lock.
 - **CD-ROM mode stops at about 2.36 GB.** The kernel cuts larger images off and the host
   reads a truncated disc; USB Arsenal warns (unless the kernel carries
-  `kernel-patches/4.14/0006`). `dvd` mode has no limit and is what auto mode picks for a
+  the DVD patch from `kernel-patches/`). `dvd` mode has no limit and is what auto mode picks for a
   big plain ISO:
   - The image goes behind a read-only loop device with 2048-byte blocks. The loop
     detaches by itself on eject, swap or stop.

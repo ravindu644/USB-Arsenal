@@ -233,7 +233,7 @@ int ua_pick_udc(char *out, size_t size) {
  * and android_device_destroy() looks its device up by devt: dropping any
  * gadget destroys the oldest, android0, which belongs to g1. Android then
  * stops hearing USB state (no USB notification, tethering greyed out) until a
- * reboot. kernel-patches/4.14/0001 fixes the kernel; everywhere else a gadget
+ * reboot. kernel-patches/ has the kernel fix for 4.9 to 6.6; meanwhile a gadget
  * we made stays, unbound and empty, instead of being removed. */
 /* An empty write unbinds a gadget. "none" only does on Android's configfs,
  * which added it; mainline (a Pi, a PC under dummy_hcd) reads it as a
@@ -303,7 +303,8 @@ int ua_gadget_open(struct ua_gadget *g) {
           access("/sys/class/android_usb/android0/functions", F_OK) == 0) {
         ua_error("This is stock Samsung configfs, which cannot create a "
                  "second gadget next to Android's");
-        ua_log("It needs kernel-patches/4.14/0001 and 0002. Nothing was "
+        ua_log("It needs the configfs patches in kernel-patches/4.14 or 4.19 "
+               "(docs/kernel-requirements.md). Nothing was "
                "changed.");
       } else {
         ua_error("Cannot create a gadget in %s: %s", g->cfs, strerror(err));
@@ -659,8 +660,8 @@ int ua_gadget_commit(struct ua_gadget *g) {
     int err = errno;
     ua_error("Binding to %s failed: %s", g->udc, strerror(err));
     if (err == EINVAL)
-      ua_log("Samsung configfs without the bring-up fix (kernel-patches/"
-             "4.14/0002) cannot bind a hand-built gadget.");
+      ua_log("Samsung configfs without the bring-up fix (kernel-patches/4.14 "
+             "or 4.19) cannot bind a hand-built gadget.");
     else if (err == EBUSY)
       ua_log("Another gadget or a legacy g_* driver holds the controller.");
     goto fail;

@@ -954,10 +954,10 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
       safe_strncpy(host, tether_cfg->tether_host_mac, sizeof(host));
     /* Samsung's 4.x f_ncm creates its netdev only at bind, and its
      * u_ether_configfs stores dereference that NULL netdev: writing dev_addr
-     * to an unbound instance panics the kernel (kernel-patches/4.14/0003
-     * fixes it). The show side has always checked, so a read that fails
-     * means there is nothing to set the address on yet. Mainline creates the
-     * netdev with the instance, and the read just succeeds. */
+     * to an unbound instance panics the kernel (the f_ncm patch in
+     * kernel-patches/ fixes it). The show side has always checked, so a read
+     * that fails means there is nothing to set the address on yet. Mainline
+     * creates the netdev with the instance, and the read just succeeds. */
     char cur[PATH_MAX + 16], mac[32];
     snprintf(cur, sizeof(cur), "%s/dev_addr", dir);
     if (read_file(cur, mac, sizeof(mac)) > 0) {

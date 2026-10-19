@@ -411,3 +411,15 @@ Tick a box only when the item is merged and verified as described in its phase.
   4.14 alike. With that and a stale image name fixed in the test, all 9 checks pass:
   disk, switch to CD-ROM, same-mode swap, HID next to storage, NCM, status, hid stop,
   and an idempotent stop that leaves nothing behind.
+- 2026-10-19: Kernel patches for every tree from 4.9 to 6.6, each on a `usb-arsenal`
+  branch in the user's tree and exported per version: the android0 destroy fix for 4.9,
+  5.10, 5.15 and 6.6 (Pixel's `android_configfs_uevent.c`, which also cleared
+  `android_opts` for any gadget and unregistered under a spinlock); the f_ncm
+  instance-count fix ported to 4.9, where the per-instance `f_ncm` setup device was a
+  second way to crash; the upstream READ TOC fixes replacing Samsung's `_SUPPORT_MAC_`
+  raw TOC on the A01; PiKVM's DVD patch everywhere, with Samsung's short mode page 0x2A
+  kept as the disk-LUN fallback on sm8550 and 4.9 so a CD-ROM does not report it twice.
+  The 4.14 bring-up patch now guards its `linked_func` uses with
+  `CONFIG_USB_OLD_CONFIGFS`; it did not build without that option. Every touched object
+  compiles in the devbox; nothing but the S10's 4.14 has been booted. Three exported
+  patches carried an AI co-author trailer from their M62 commits; removed.
