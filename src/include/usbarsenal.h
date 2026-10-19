@@ -85,6 +85,8 @@ void ua_log_internal(const char *prefix, const char *color, int is_err,
   ua_log_internal("*", C_DIM, 0, "[DEBUG] " fmt, ##__VA_ARGS__)
 
 void safe_strncpy(char *dst, const char *src, size_t size);
+void ua_json_str(const char *key, const char *val, int *first);
+void ua_json_int(const char *key, long long val, int *first);
 int mkdir_p(const char *path, mode_t mode);
 ssize_t write_all(int fd, const void *buf, size_t count);
 int write_file(const char *path, const char *content);

@@ -40,6 +40,12 @@ Stopping the daemon does not stop the gadget; `usb-arsenal stop` does that.
 Then storage, HID and tethering all work from the container. Tethering in particular
 works because the network side runs on the Android side.
 
+**Without the daemon** (no `Run/` mounted), a root container or chroot that shares
+Android's network namespace still works: the binary drives the gadget itself, and
+`usb-arsenal version` says `mode: direct`. It then keeps its own hand-back record in the
+container's `/var/lib/USB-Arsenal`, and says so when it takes the port, so do not run
+USB Arsenal from Android at the same time. Stop the gadget before stopping the container.
+
 ## Who may use it
 
 Root, and members of the `usb-arsenal` group, **gid 3460**. On Android the number is what

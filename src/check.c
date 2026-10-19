@@ -106,8 +106,16 @@ int ua_check_requirements(struct ua_gadget *g, int need) {
   return missing ? -1 : 0;
 }
 
+/* check --json: one flat object, one int per probe, for an app to read */
+static int json_mode, json_first = 1;
+
 /* status: 1 ok, 0 missing, -1 works with caveats */
-static void line(int status, int must, const char *name, const char *desc) {
+static void line(const char *key, int status, int must, const char *name,
+                 const char *desc) {
+  if (json_mode) {
+    ua_json_int(key, status, &json_first);
+    return;
+  }
   const char *color = status > 0   ? C_GREEN
                       : status < 0 ? C_YELLOW
                       : must       ? C_RED
@@ -119,14 +127,18 @@ static void line(int status, int must, const char *name, const char *desc) {
 }
 
 void ua_help_check(void) {
-  printf("Usage: " UA_NAME " check\n\n"
+  printf("Usage: " UA_NAME " check [--json]\n\n"
          "Probe the running kernel for everything USB Arsenal needs, the way\n"
          "it will actually be used: each gadget function is created and\n"
          "removed again, no config dump is read.\n\n"
          "MUST HAVE lines block every command. A missing FUNCTIONS line only\n"
          "blocks the command that needs it.\n\n"
+         "  --json    One JSON object instead: each probe as 1 (ok), 0\n"
+         "            (missing) or -1 (works with caveats), plus version,\n"
+         "            udc_name and requirements_met. Same exit code.\n\n"
          "Examples:\n"
          "  " UA_NAME " check\n"
+         "  " UA_NAME " check --json\n"
          "  " UA_NAME " --udc fe980000.usb check\n");
 }
 
@@ -139,8 +151,9 @@ int ua_cmd_check(int argc, char **argv) {
     ua_help_check();
     return UA_EXIT_OK;
   }
-  if (argc > 1) {
-    ua_usage_error("check", "check takes no arguments");
+  json_mode = argc == 2 && !strcmp(argv[1], "--json");
+  if (argc > 1 && !json_mode) {
+    ua_usage_error("check", "check takes no arguments but --json");
     return UA_EXIT_USAGE;
   }
 
@@ -148,15 +161,18 @@ int ua_cmd_check(int argc, char **argv) {
   char cfs[PATH_MAX] = "", udc[64] = "", desc[PATH_MAX + 64];
   struct ua_gadget g;
 
-  printf(C_BOLD "USB Arsenal " UA_VERSION " - checking this system" C_RESET
-                "\n\n[MUST HAVE]\n");
-  line(root, 1, "Root privileges", "Run as root (su)");
+  if (json_mode)
+    printf("{");
+  else
+    printf(C_BOLD "USB Arsenal " UA_VERSION " - checking this system" C_RESET
+                  "\n\n[MUST HAVE]\n");
+  line("root", root, 1, "Root privileges", "Run as root (su)");
   missing += !root;
 
   int have_cfs = ua_find_configfs(cfs, sizeof(cfs)) == 0;
   snprintf(desc, sizeof(desc), "configfs USB gadget%s%s%s",
            have_cfs ? " (" : "", cfs, have_cfs ? ")" : "");
-  line(have_cfs, 1, desc,
+  line("configfs", have_cfs, 1, desc,
        "CONFIG_USB_CONFIGFS. Stock 3.18 kernels ship the legacy android "
        "gadget instead and need a custom kernel.");
   missing += !have_cfs;
@@ -175,7 +191,7 @@ int ua_cmd_check(int argc, char **argv) {
   }
   snprintf(desc, sizeof(desc), "USB device controller%s%s%s", nudc ? " (" : "",
            have_udc ? udc : list, nudc ? ")" : "");
-  line(have_udc, 1, desc,
+  line("udc", have_udc, 1, desc,
        nudc > 1 ? "More than one controller; pick one with --udc"
        : nudc   ? "No such controller as the one --udc names"
                 : "No peripheral-mode controller in /sys/class/udc (on a "
@@ -183,41 +199,58 @@ int ua_cmd_check(int argc, char **argv) {
   missing += !have_udc;
 
   int have_backend = have_cfs && have_udc && root && ua_gadget_open(&g) == 0;
-  line(have_backend, 1, "Own USB gadget",
+  line("gadget", have_backend, 1, "Own USB gadget",
        missing ? "Needs the lines above first"
                : "Could not create a gadget; see the errors above");
   missing += !have_backend;
 
-  printf("\n[FUNCTIONS]\n");
+  if (!json_mode)
+    printf("\n[FUNCTIONS]\n");
   if (have_backend) {
-    line(ua_probe_function(&g, "mass_storage", NULL), 0, "mass_storage",
+    line("mass_storage", ua_probe_function(&g, "mass_storage", NULL), 0,
+         "mass_storage",
          "CONFIG_USB_CONFIGFS_MASS_STORAGE; needed by 'storage'");
-    line(ua_probe_function(&g, "mass_storage", "lun.0/cdrom"), 0,
+    line("cdrom", ua_probe_function(&g, "mass_storage", "lun.0/cdrom"), 0,
          "CD-ROM emulation (mass_storage)",
          "Without lun.0/cdrom, non-hybrid ISOs (Windows) cannot boot");
-    line(ua_probe_function(&g, "hid", NULL), 0, "hid",
+    line("hid", ua_probe_function(&g, "hid", NULL), 0, "hid",
          "CONFIG_USB_CONFIGFS_F_HID; needed by 'hid'");
     if (ua_ncm_unsafe())
-      line(-1, 0, "ncm (unsafe on this Samsung kernel; tether uses rndis)",
+      line("ncm", -1, 0,
+           "ncm (unsafe on this Samsung kernel; tether uses rndis)",
            "Another NCM instance would make f_ncm destroy android0 and the "
            "kernel BUG. The kernel fix (docs/kernel-requirements.md) adds "
            "android0/ncm_instances, and NCM is used again once it is "
            "there.");
     else
-      line(ua_probe_function(&g, "ncm", NULL), 0, "ncm",
+      line("ncm", ua_probe_function(&g, "ncm", NULL), 0, "ncm",
            "CONFIG_USB_CONFIGFS_NCM; preferred by 'tether'");
-    line(ua_probe_function(&g, "rndis", NULL), 0, "rndis",
+    line("rndis", ua_probe_function(&g, "rndis", NULL), 0, "rndis",
          "CONFIG_USB_CONFIGFS_RNDIS; 'tether --rndis' fallback for Windows "
          "7 and older hosts");
-    line(ds_ipt4_nat_available(), 0, "NAT for tethering",
+    line("nat", ds_ipt4_nat_available(), 0, "NAT for tethering",
          "The iptables nat table and MASQUERADE target "
          "(CONFIG_IP_NF_NAT, CONFIG_IP_NF_TARGET_MASQUERADE)");
-    line(ds_ipt6_available(), 0, "IPv6 NAT for tethering",
+    line("nat6", ds_ipt6_available(), 0, "IPv6 NAT for tethering",
          "The ip6tables nat table and MASQUERADE target "
          "(CONFIG_IP6_NF_NAT, CONFIG_IP6_NF_TARGET_MASQUERADE); without "
          "them the host gets IPv4 only");
+  } else if (json_mode) {
+    /* Every key always present, so a reader never has to guess */
+    static const char *const fkeys[] = {"mass_storage", "cdrom", "hid", "ncm",
+                                        "rndis",        "nat",   "nat6"};
+    for (size_t i = 0; i < sizeof(fkeys) / sizeof(fkeys[0]); i++)
+      ua_json_int(fkeys[i], 0, &json_first);
   } else {
     printf("  Skipped: needs every MUST HAVE line first.\n");
+  }
+
+  if (json_mode) {
+    ua_json_str("version", UA_VERSION, &json_first);
+    ua_json_str("udc_name", udc, &json_first);
+    ua_json_int("requirements_met", !missing, &json_first);
+    printf("}\n");
+    return missing ? UA_EXIT_FAIL : UA_EXIT_OK;
   }
 
   printf("\n");

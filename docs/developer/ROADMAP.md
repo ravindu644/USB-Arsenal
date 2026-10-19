@@ -182,7 +182,8 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [ ] `f_uvc` plus a userspace frame feeder, after the kernel's `uvc-gadget` sample
 
 ## Stretch
-- [ ] `check --json` for a future app frontend
+- [x] `check --json` for a future app frontend (Droidspaces' encoder; Droidspaces itself
+      renamed `--format` to `--json` to match)
 - [ ] Verify on a Raspberry Pi (`dtoverlay=dwc2`)
 - [ ] Verify on a Pixel (gadget HAL that rebinds `g1` on its own)
 

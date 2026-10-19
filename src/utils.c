@@ -32,6 +32,27 @@ void ua_log_internal(const char *prefix, const char *color, int is_err,
   fflush(out);
 }
 
+/* Droidspaces' JSON encoder (src/status.c): flat objects of strings and ints
+ * are all `check --json` needs */
+void ua_json_str(const char *key, const char *val, int *first) {
+  printf("%s\"%s\":\"", *first ? "" : ",", key);
+  *first = 0;
+  for (const unsigned char *p = (const unsigned char *)val; val && *p; p++) {
+    if (*p == '"' || *p == '\\')
+      printf("\\%c", *p);
+    else if (*p < 0x20)
+      printf("\\u%04x", *p);
+    else
+      putchar(*p);
+  }
+  putchar('"');
+}
+
+void ua_json_int(const char *key, long long val, int *first) {
+  printf("%s\"%s\":%lld", *first ? "" : ",", key, val);
+  *first = 0;
+}
+
 void safe_strncpy(char *dst, const char *src, size_t size) {
   if (!dst || size == 0)
     return;
