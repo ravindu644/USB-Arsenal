@@ -98,6 +98,18 @@ so the host saw "Unrecovered read error" on sector 0 until
 `LO_FLAGS_AUTOCLEAR` so the loop detaches when f_mass_storage closes it, and checks the
 SELinux rule through selinuxfs `access` before serving.
 
+Why Droidspaces' trick does not cover this: before loop-mounting a rootfs image it
+relabels the **image file** to `vold_data_file` (`src/mount.c`), which satisfies the
+kernel's read of the backing file, the same check `selinux_fix()` answers with
+`media_rw_data_file`. Our denial is the kernel reading the **loop device node** (class
+`blk_file`), which Droidspaces never meets because its `mount()` opens the node from its
+own permissive domain. No stock label is readable that way on both test phones: as
+`blk_file`, `loop_device` and `vold_device` are readable on the a166p but not on the S10,
+and `vold_data_file`, `media_rw_data_file`, `app_data_file`, `system_data_file`,
+`block_device` and `dm_device` on neither. So the node keeps its label and the module
+ships the rule. Both SELinux steps are skipped when selinuxfs is not mounted, since
+labels stay on disk after SELinux is turned off.
+
 Also: toybox `losetup` has no block-size option and refuses paths over 64 bytes, and with
 `loop.max_part=7` a loop's minor is `n * 8`, so a fallback `mknod` must read the
 minor from sysfs.

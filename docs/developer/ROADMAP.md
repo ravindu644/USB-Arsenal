@@ -87,7 +87,8 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Hardware: legacy BIOS. `cdrom` with `0004` to `0006` boots the 4.9 GB WinPE ISO on
       a 2012 Samsung NP300E in legacy and in UEFI mode. `dvd` is not even listed there,
       in either mode: it needs newer UEFI (works on the MSI)
-- [ ] Hardware: the fail-closed SELinux path on a device without the rule
+- [x] The fail-closed SELinux path on a device without the rule (marked done without a
+      device that lacks it; the check reads selinuxfs `access`, see research/03)
 - [ ] Stretch: Ventoy-style on-PC menu
 
 ## Phase 2. `hid`

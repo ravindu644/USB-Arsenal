@@ -56,7 +56,7 @@ ok "storage same-mode swap"
 
 "$B" $A hid start || die "hid start"
 [ -L $G/configs/c.1/hid.ua_kbd ] && [ -L $G/configs/c.1/hid.ua_mouse ] || die "hid functions not linked"
-grep -q "$TMP/plain.iso" $G/functions/mass_storage.ua/lun.0/file || die "storage lost its image across the rebind"
+grep -q "$TMP/plain2.iso" $G/functions/mass_storage.ua/lun.0/file || die "storage lost its image across the rebind"
 ok "hid start alongside storage"
 
 "$B" $A tether start --no-net || die "tether start --no-net"

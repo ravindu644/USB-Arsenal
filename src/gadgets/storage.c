@@ -173,8 +173,16 @@ static const char *const kernel_ok[] = {
 };
 #define UA_STORAGE_LABEL "u:object_r:media_rw_data_file:s0"
 
+/* Labels can outlive SELinux (a kernel booted with it off still reads them
+ * from disk), so ask whether it is running, not whether a file has one */
+static int selinux_on(void) {
+  return access("/sys/fs/selinux/enforce", F_OK) == 0;
+}
+
 static void selinux_fix(int fd, const char *path) {
   char label[256];
+  if (!selinux_on())
+    return;
   ssize_t n = fgetxattr(fd, "security.selinux", label, sizeof(label) - 1);
   if (n <= 0)
     return; /* no label, no SELinux to satisfy */
@@ -197,6 +205,8 @@ static void selinux_fix(int fd, const char *path) {
  * this label. 1 when it may or when there is no SELinux to ask. */
 static int kernel_reads_blk(int fd) {
   char label[256], q[320], ans[64], v[16];
+  if (!selinux_on())
+    return 1;
   ssize_t n = fgetxattr(fd, "security.selinux", label, sizeof(label) - 1);
   if (n <= 0)
     return 1;
