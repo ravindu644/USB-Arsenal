@@ -134,9 +134,19 @@ dontaudit'ed, so the only symptom is the host logging "Unrecovered read error" o
 0 of a disk of the right size. DriveDroid never hit this because its images lived on
 `/sdcard`.
 
-On an Android kernel, `storage start` relabels a regular file whose label is not in that
-list to `u:object_r:media_rw_data_file:s0` (setxattr, logged). If that fails, it warns
-and suggests moving the file to `/sdcard` or `/data`. Verified on the a166p: before the
+`storage start` does not trust a label list: wherever SELinux is running (selinuxfs
+mounted), it asks `/sys/fs/selinux/access` whether the kernel's own context, read from
+kthreadd's `/proc/2/attr/current`, may read (and for `rw`, write) the image's label.
+- On Android a denied image is relabelled to `u:object_r:media_rw_data_file:s0`
+  (setxattr, logged); if that fails it warns and suggests `/sdcard` or `/data`. Verified
+  on the a166p: `shell_data_file` and `unlabeled` images were relabelled, a
+  `media_rw_data_file` one was left alone.
+- Other distros have no label every policy grants, so a denial is a warning naming the
+  label (relabel with `chcon`, or move the file). Fedora's targeted policy lets
+  `kernel_t` read `user_home_t`, `tmp_t`, `user_tmp_t` and `var_lib_t` files and
+  `fixed_disk_device_t` / `removable_device_t` block devices, so nothing is touched there.
+- In a PID namespace `/proc/2` is not kthreadd; on Android the query falls back to
+  `u:r:kernel:s0`, elsewhere it is skipped. Verified on the a166p: before the
 relabel the host saw an unreadable disk; afterwards it read the FAT16 label.
 
 ## Ejecting and hot-swapping

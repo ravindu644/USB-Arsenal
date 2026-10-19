@@ -162,15 +162,11 @@ static int lun_load(const char *ldir, const char *path, enum mode mode,
 }
 
 /* f_mass_storage reads the image from a kernel thread, so SELinux checks the
- * kernel domain against the file's label, not us. Android's policy lets it
- * at user storage (/sdcard, /data) but not at tmpfs or an unlabeled
+ * kernel's domain against the image's label, not ours. Android's policy lets
+ * it at user storage (/sdcard, /data) but not at tmpfs or an unlabeled
  * filesystem such as a container's rootfs: the host then gets "unrecovered
  * read error" on every sector, and the only log is a dontaudit nobody sees.
- * These are the labels the policy was checked to allow, read and write. */
-static const char *const kernel_ok[] = {
-    ":media_rw_data_file:", ":vold_data_file:",   ":fuse:",
-    ":app_data_file:",      ":system_data_file:",
-};
+ * So ask the policy itself, on any distro, instead of trusting a label list. */
 #define UA_STORAGE_LABEL "u:object_r:media_rw_data_file:s0"
 
 /* Labels can outlive SELinux (a kernel booted with it off still reads them
@@ -179,56 +175,81 @@ static int selinux_on(void) {
   return access("/sys/fs/selinux/enforce", F_OK) == 0;
 }
 
-static void selinux_fix(int fd, const char *path) {
-  char label[256];
-  if (!selinux_on())
-    return;
-  ssize_t n = fgetxattr(fd, "security.selinux", label, sizeof(label) - 1);
-  if (n <= 0)
-    return; /* no label, no SELinux to satisfy */
-  label[n] = '\0';
-  for (size_t i = 0; i < sizeof(kernel_ok) / sizeof(kernel_ok[0]); i++)
-    if (strstr(label, kernel_ok[i]))
-      return;
-  if (fsetxattr(fd, "security.selinux", UA_STORAGE_LABEL,
-                sizeof(UA_STORAGE_LABEL), 0) == 0)
-    ua_log("Relabelled %s (%s -> %s) so the kernel may read it", path, label,
-           UA_STORAGE_LABEL);
-  else
-    ua_warn("%s is labelled %s, which Android's SELinux policy does not let "
-            "the kernel read; the host will see read errors (%s). Move it to "
-            "/sdcard or /data.",
-            path, label, strerror(errno));
+/* The kernel's own context, from kthreadd (kernel_t on Fedora, kernel on
+ * Android). In a PID namespace /proc/2 is someone else; Android's name is
+ * then the only safe guess, and elsewhere we do not ask. */
+static int kernel_context(char *out, size_t size, int android) {
+  char comm[32] = "";
+  if (read_file("/proc/2/comm", comm, sizeof(comm)) > 0 &&
+      !strncmp(comm, "kthreadd", 8) &&
+      read_file("/proc/2/attr/current", out, size) > 0) {
+    out[strcspn(out, "\n")] = '\0';
+    return 0;
+  }
+  if (!android)
+    return -1;
+  safe_strncpy(out, "u:r:kernel:s0", size);
+  return 0;
 }
 
-/* Asks selinuxfs whether the kernel domain may read a block device with
- * this label. 1 when it may or when there is no SELinux to ask. */
-static int kernel_reads_blk(int fd) {
-  char label[256], q[320], ans[64], v[16];
+static int perm_bit(const char *cls, const char *perm) {
+  char p[96], v[16];
+  snprintf(p, sizeof(p), "/sys/fs/selinux/class/%s/perms/%s", cls, perm);
+  return read_file(p, v, sizeof(v)) > 0 ? atoi(v) : 0;
+}
+
+/* May the kernel read (and with rw, write) what fd is, as class cls ("file",
+ * "blk_file")? 1 when it may or when there is nothing to ask. label gets the
+ * object's label for the caller's message. */
+static int kernel_may(int fd, const char *cls, int rw, int android, char *label,
+                      size_t lsize) {
+  char kctx[256], q[600], ans[64], v[16], p[96];
+  label[0] = '\0';
   if (!selinux_on())
     return 1;
-  ssize_t n = fgetxattr(fd, "security.selinux", label, sizeof(label) - 1);
+  ssize_t n = fgetxattr(fd, "security.selinux", label, lsize - 1);
   if (n <= 0)
     return 1;
   label[n] = '\0';
-  int cls, perm;
-  if (read_file("/sys/fs/selinux/class/blk_file/index", v, sizeof(v)) <= 0 ||
-      (cls = atoi(v)) <= 0 ||
-      read_file("/sys/fs/selinux/class/blk_file/perms/read", v, sizeof(v)) <=
-          0 ||
-      (perm = atoi(v)) <= 0)
+  snprintf(p, sizeof(p), "/sys/fs/selinux/class/%s/index", cls);
+  int idx = read_file(p, v, sizeof(v)) > 0 ? atoi(v) : 0;
+  int rd = perm_bit(cls, "read"), wr = perm_bit(cls, "write");
+  if (idx <= 0 || rd <= 0 || kernel_context(kctx, sizeof(kctx), android) < 0)
     return 1;
   int afd = open("/sys/fs/selinux/access", O_RDWR | O_CLOEXEC);
   if (afd < 0)
     return 1;
-  int len = snprintf(q, sizeof(q), "u:r:kernel:s0 %s %d", label, cls);
-  int ok = 1;
+  int len = snprintf(q, sizeof(q), "%s %s %d", kctx, label, idx), ok = 1;
   if (write(afd, q, len) == len && (n = read(afd, ans, sizeof(ans) - 1)) > 0) {
     ans[n] = '\0';
-    ok = (strtoul(ans, NULL, 16) >> (perm - 1)) & 1;
+    unsigned long allowed = strtoul(ans, NULL, 16);
+    ok = (allowed >> (rd - 1)) & 1;
+    if (rw && wr > 0)
+      ok = ok && ((allowed >> (wr - 1)) & 1);
   }
   close(afd);
   return ok;
+}
+
+static void selinux_fix(int fd, const char *path, int rw, int android) {
+  char label[256];
+  if (kernel_may(fd, "file", rw, android, label, sizeof(label)))
+    return;
+  /* Android has one label every policy lets the kernel at; other distros do
+   * not, so there it is the user's call */
+  if (android && fsetxattr(fd, "security.selinux", UA_STORAGE_LABEL,
+                           sizeof(UA_STORAGE_LABEL), 0) == 0)
+    ua_log("Relabelled %s (%s -> %s) so the kernel may read it", path, label,
+           UA_STORAGE_LABEL);
+  else if (android)
+    ua_warn("%s is labelled %s, which Android's SELinux policy does not let "
+            "the kernel read; the host will see read errors (%s). Move it to "
+            "/sdcard or /data.",
+            path, label, strerror(errno));
+  else
+    ua_warn("SELinux does not let the kernel read %s (labelled %s); the host "
+            "will see read errors. Relabel it (chcon) or move it.",
+            path, label);
 }
 
 /* A loop device node: ueventd (or udev) makes it a moment after the kernel
@@ -331,20 +352,24 @@ static int do_start(int fd, const char *name, enum mode mode, int lun) {
     return UA_EXIT_FAIL;
 
   struct stat st;
-  if (g.android_gadget && fstat(fd, &st) == 0 && S_ISREG(st.st_mode))
-    selinux_fix(fd, name);
+  if (fstat(fd, &st) == 0 && S_ISREG(st.st_mode))
+    selinux_fix(fd, name, mode == MODE_RW, g.android_gadget);
 
   if (mode == MODE_DVD) {
     char dev[32];
     if ((loop_fd = loop_attach(fd, name, dev, sizeof(dev))) < 0)
       return UA_EXIT_FAIL;
     /* Fail closed: an unreadable LUN looks like a dead disk on the host */
-    if (g.android_gadget && !kernel_reads_blk(loop_fd)) {
-      ua_error("SELinux does not let the kernel read loop devices, so the "
-               "host would see only read errors. The USB Arsenal module "
-               "loads the rule at boot; without it, run: ksud sepolicy patch "
-               "\"allow kernel loop_device blk_file { open read getattr "
-               "ioctl }\" (Magisk: magiskpolicy --live)");
+    char label[256];
+    if (!kernel_may(loop_fd, "blk_file", 0, g.android_gadget, label,
+                    sizeof(label))) {
+      ua_error("SELinux does not let the kernel read loop devices (%s), so "
+               "the host would see only read errors",
+               label);
+      if (g.android_gadget)
+        ua_log("The USB Arsenal module loads the rule at boot; without it, "
+               "run: ksud sepolicy patch \"allow kernel loop_device blk_file "
+               "{ open read getattr ioctl }\" (Magisk: magiskpolicy --live)");
       return UA_EXIT_FAIL;
     }
     ua_debug("%s is %s with 2048-byte blocks", name, dev);
