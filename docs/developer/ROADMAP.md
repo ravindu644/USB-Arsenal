@@ -117,8 +117,10 @@ Tick a box only when the item is merged and verified as described in its phase.
       MASQUERADE, FROM rule, IPv6 TO rule and `ip_forward` all back within one
       heartbeat with no ping lost on the host; Wi-Fi off and on followed, IPv4 back ~4 s
       after Wi-Fi reconnected; Droidspaces' own rules untouched
-- [ ] Hardware: the Wi-Fi to mobile data handoff (the S10 has mobile data off; with
-      Wi-Fi off the monitor rightly refused the IPv6-only IMS bearer `rmnet1`)
+- [x] Hardware: a handoff between mobile data and Wi-Fi (a166p, `rmnet0` to `wlan0`: the
+      FROM rule followed within one 2 s sample of wlan0 getting its address, and the
+      host's pings started the next second). Wi-Fi to mobile is the same code path in
+      reverse; the S10 earlier refused its IPv6-only IMS bearer `rmnet1`, as it should
 - [x] `--no-net` for a bare network function
 - [x] Refuses clearly when the interface is in another network namespace (container),
       and a failed start removes the function it added
@@ -383,3 +385,8 @@ Tick a box only when the item is merged and verified as described in its phase.
   keep-gadget fix: the USB notification was back, Settings enabled USB tethering
   (`rndis,adb`), Fedora got 10.39.186.64/24 by DHCP, pinged the phone, and resolved names
   through its DNS. ADB stayed up.
+- 2026-10-20: Uplink handoff on the a166p. `tether` started on mobile data (FROM rule
+  `lookup rmnet0`; no quota, so the host's pings failed). Wi-Fi on: at 15:59:53 the rule
+  was `lookup wlan0`, and Fedora's once-a-second ping of 1.1.1.1 through the USB link
+  went from failing to answering at 15:59:54, then answered every time until `stop`.
+  `stop` handed the port back to Android's own tethering (`rndis,adb`), `android0` intact.
