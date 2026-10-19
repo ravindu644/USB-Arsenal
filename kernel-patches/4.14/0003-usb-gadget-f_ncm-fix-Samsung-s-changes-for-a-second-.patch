@@ -1,4 +1,4 @@
-From 89afce49b4f8ebf738defccdbfafef54b0eec24d Mon Sep 17 00:00:00 2001
+From 24a5e9f0a437c9ef7bf78532341a0d5bb961061b Mon Sep 17 00:00:00 2001
 From: ravindu644 <droidcasts@protonmail.com>
 Date: Mon, 19 Oct 2026 00:53:21 +0530
 Subject: [PATCH 3/6] usb: gadget: f_ncm: fix Samsung's changes for a second
@@ -41,7 +41,6 @@ including a rebind while tethered, with a clean kernel log.
 
 Compiled with the tree's own clang command line, with and without LTO.
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Signed-off-by: ravindu644 <droidcasts@protonmail.com>
 ---
  drivers/usb/gadget/function/f_ncm.c | 142 +++++++++++++++++-----------

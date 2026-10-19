@@ -1,4 +1,4 @@
-From 0c3a947aa7656d0270ec1c25aa5d723e22092060 Mon Sep 17 00:00:00 2001
+From c3e510df48026f4fa56694459034cddd7986cc17 Mon Sep 17 00:00:00 2001
 From: Maxim Devaev <mdevaev@gmail.com>
 Date: Mon, 19 Oct 2026 03:05:59 +0530
 Subject: [PATCH 6/6] usb: gadget: f_mass_storage: emulate a DVD-ROM for big

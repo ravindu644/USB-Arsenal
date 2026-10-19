@@ -1,4 +1,4 @@
-From 46d62d5bfbe307fd51960f643c3bff417c3f6bf3 Mon Sep 17 00:00:00 2001
+From d8f25c5e5e829dcc070211e3dc6c9d3e9c9dff9f Mon Sep 17 00:00:00 2001
 From: Neal Liu <neal_liu@aspeedtech.com>
 Date: Tue, 28 Jun 2022 10:14:36 +0800
 Subject: [PATCH 5/6] usb: gadget: f_mass_storage: Make CD-ROM emulation works

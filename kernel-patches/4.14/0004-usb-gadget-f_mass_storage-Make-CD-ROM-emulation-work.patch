@@ -1,4 +1,4 @@
-From 63877dd7a23f7d3146f47c6957b00a3f1bc89686 Mon Sep 17 00:00:00 2001
+From bb15ae79655ee6ad4e60f6419327d83e8fb51862 Mon Sep 17 00:00:00 2001
 From: Roger Quadros <roger.quadros@nokia.com>
 Date: Mon, 24 Jan 2022 08:01:50 -0800
 Subject: [PATCH 4/6] usb: gadget: f_mass_storage: Make CD-ROM emulation work

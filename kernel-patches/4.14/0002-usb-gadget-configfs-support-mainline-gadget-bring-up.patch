@@ -1,4 +1,4 @@
-From 278f4e29d1c5fc5918308accb0f460fa1a3ea6fe Mon Sep 17 00:00:00 2001
+From d849eb52c80cdbc9de4cf2e48904af9463f7512c Mon Sep 17 00:00:00 2001
 From: ravindu644 <droidcasts@protonmail.com>
 Date: Wed, 7 Oct 2026 02:16:31 +0530
 Subject: [PATCH 2/6] usb: gadget: configfs: support mainline gadget bring-up
@@ -29,7 +29,6 @@ Fix both without disturbing the Android flow:
 Both are additive, run under the held gi->lock, and are compiled only
 for CONFIG_USB_CONFIGFS_UEVENT where gi->linked_func exists.
 
-Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 Signed-off-by: ravindu644 <droidcasts@protonmail.com>
 ---
  drivers/usb/gadget/configfs.c | 28 ++++++++++++++++++++++++++++
