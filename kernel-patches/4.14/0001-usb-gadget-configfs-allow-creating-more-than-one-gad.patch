@@ -1,7 +1,8 @@
-From aa886799535e3b901fe606e03d4d7c20c986774c Mon Sep 17 00:00:00 2001
+From 2db9b55ca115eae3ce9a972acd1ffceb3fd9aaf9 Mon Sep 17 00:00:00 2001
 From: ravindu644 <droidcasts@protonmail.com>
 Date: Tue, 6 Oct 2026 21:52:50 +0530
-Subject: [PATCH] usb: gadget: configfs: allow creating more than one gadget
+Subject: [PATCH 1/6] usb: gadget: configfs: allow creating more than one
+ gadget
 
 Every gadget registered its uevent device under the hardcoded name
 "android0", so creating a second gadget in /config/usb_gadget failed
@@ -14,12 +15,13 @@ gadget's own device, and unregister that device directly on removal
 instead of looking it up by devt, which all gadget devices share.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Signed-off-by: ravindu644 <droidcasts@protonmail.com>
 ---
  drivers/usb/gadget/configfs.c | 56 +++++++++++++++++++----------------
  1 file changed, 30 insertions(+), 26 deletions(-)
 
 diff --git a/drivers/usb/gadget/configfs.c b/drivers/usb/gadget/configfs.c
-index 7021a7b66..758c6b124 100644
+index e99b7d260..6bfa8cecc 100644
 --- a/drivers/usb/gadget/configfs.c
 +++ b/drivers/usb/gadget/configfs.c
 @@ -29,6 +29,7 @@ extern int terminal_ctrl_request(struct usb_composite_dev *cdev,
@@ -30,7 +32,7 @@ index 7021a7b66..758c6b124 100644
  
  struct device *create_function_device(char *name)
  {
-@@ -1725,7 +1726,7 @@ static void android_work(struct work_struct *data)
+@@ -1734,7 +1735,7 @@ static void android_work(struct work_struct *data)
  	spin_unlock_irqrestore(&cdev->lock, flags);
  
  	if (status[0]) {
@@ -39,7 +41,7 @@ index 7021a7b66..758c6b124 100644
  					KOBJ_CHANGE, connected);
  		pr_info("%s: sent uevent %s\n", __func__, connected[0]);
  		uevent_sent = true;
-@@ -1738,7 +1739,7 @@ static void android_work(struct work_struct *data)
+@@ -1747,7 +1748,7 @@ static void android_work(struct work_struct *data)
  	}
  
  	if (status[1]) {
@@ -48,7 +50,7 @@ index 7021a7b66..758c6b124 100644
  					KOBJ_CHANGE, configured);
  		pr_info("%s: sent uevent %s\n", __func__, configured[0]);
  		uevent_sent = true;
-@@ -1748,7 +1749,7 @@ static void android_work(struct work_struct *data)
+@@ -1757,7 +1758,7 @@ static void android_work(struct work_struct *data)
  	}
  
  	if (status[2]) {
@@ -57,7 +59,7 @@ index 7021a7b66..758c6b124 100644
  					KOBJ_CHANGE, disconnected);
  		pr_info("%s: sent uevent %s\n", __func__, disconnected[0]);
  		uevent_sent = true;
-@@ -2169,53 +2170,56 @@ static struct device_attribute *android_usb_attributes[] = {
+@@ -2298,53 +2299,56 @@ static struct device_attribute *android_usb_attributes[] = {
  	NULL
  };
  
@@ -136,7 +138,7 @@ index 7021a7b66..758c6b124 100644
  {
  }
  #endif
-@@ -2288,8 +2292,8 @@ static struct config_group *gadgets_make(
+@@ -2418,8 +2422,8 @@ static struct config_group *gadgets_make(
  
  static void gadgets_drop(struct config_group *group, struct config_item *item)
  {

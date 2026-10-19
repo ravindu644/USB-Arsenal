@@ -1,7 +1,7 @@
-From 8f31dd5eea193fee9601885418e0e715bd383ebf Mon Sep 17 00:00:00 2001
+From 89afce49b4f8ebf738defccdbfafef54b0eec24d Mon Sep 17 00:00:00 2001
 From: ravindu644 <droidcasts@protonmail.com>
 Date: Mon, 19 Oct 2026 00:53:21 +0530
-Subject: [PATCH] usb: gadget: f_ncm: fix Samsung's changes for a second
+Subject: [PATCH 3/6] usb: gadget: f_ncm: fix Samsung's changes for a second
  instance and rx
 
 Samsung's f_ncm (CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE) only survives the
@@ -48,10 +48,10 @@ Signed-off-by: ravindu644 <droidcasts@protonmail.com>
  1 file changed, 88 insertions(+), 54 deletions(-)
 
 diff --git a/drivers/usb/gadget/function/f_ncm.c b/drivers/usb/gadget/function/f_ncm.c
-index 43c2f3796..637fc79eb 100644
+index 316a58f5c..0dcaba421 100644
 --- a/drivers/usb/gadget/function/f_ncm.c
 +++ b/drivers/usb/gadget/function/f_ncm.c
-@@ -550,6 +550,19 @@ u16 terminal_mode_version;
+@@ -551,6 +551,19 @@ u16 terminal_mode_version;
  u16 terminal_mode_vendor_id;
  
  static struct ncm_dev *_ncm_dev;
@@ -71,7 +71,7 @@ index 43c2f3796..637fc79eb 100644
  #endif
  /*-------------------------------------------------------------------------*/
  
-@@ -1306,20 +1319,17 @@ static int ncm_unwrap_ntb(struct gether *port,
+@@ -1310,20 +1323,17 @@ static int ncm_unwrap_ntb(struct gether *port,
  		index2 = get_ncm(&tmp, opts->dgram_item_len);
  		dg_len2 = get_ncm(&tmp, opts->dgram_item_len);
  
@@ -102,7 +102,7 @@ index 43c2f3796..637fc79eb 100644
  		skb_queue_tail(list, skb2);
  
  		ndp_len -= 2 * (opts->dgram_item_len * 2);
-@@ -1444,27 +1454,19 @@ ncm_bind(struct usb_configuration *c, struct usb_function *f)
+@@ -1446,27 +1456,19 @@ ncm_bind(struct usb_configuration *c, struct usb_function *f)
  	 * with list_for_each_entry, so we assume no race condition
  	 * with regard to ncm_opts->bound access
  	 */
@@ -143,7 +143,7 @@ index 43c2f3796..637fc79eb 100644
  	/* need to clear local value */
  	ncm_reset_values(ncm);
  
-@@ -1589,9 +1591,7 @@ ncm_bind(struct usb_configuration *c, struct usb_function *f)
+@@ -1591,9 +1593,7 @@ ncm_bind(struct usb_configuration *c, struct usb_function *f)
  		ncm->port.in_ep->driver_data = NULL;
  
  netdev_cleanup:
@@ -154,7 +154,7 @@ index 43c2f3796..637fc79eb 100644
  	ERROR(cdev, "%s: can't bind, err %d\n", f->name, status);
  
  	return status;
-@@ -1653,22 +1653,42 @@ static ssize_t terminal_version_store(struct device *dev,
+@@ -1655,22 +1655,42 @@ static ssize_t terminal_version_store(struct device *dev,
  static DEVICE_ATTR(terminal_version,  S_IRUGO | S_IWUSR,
  		terminal_version_show, terminal_version_store);
  
@@ -198,7 +198,7 @@ index 43c2f3796..637fc79eb 100644
  	return 0;
  }
  
-@@ -1722,11 +1742,15 @@ static void ncm_work(struct work_struct *data)
+@@ -1724,11 +1744,15 @@ static void ncm_work(struct work_struct *data)
  	kobject_uevent_env(&mirrorlink_device.this_device->kobj, KOBJ_CHANGE, uevent_envp);
  }
  
@@ -214,7 +214,7 @@ index 43c2f3796..637fc79eb 100644
  	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
  	if (!dev)
  		return -ENOMEM;
-@@ -1738,12 +1762,17 @@ static int ncm_function_init(void)
+@@ -1740,12 +1764,17 @@ static int ncm_function_init(void)
  	ret = misc_register(&mirrorlink_device);
  	if (ret)
  		printk("usb: %s - usb_ncm misc driver fail \n", __func__);
@@ -233,7 +233,7 @@ index 43c2f3796..637fc79eb 100644
  	kfree(_ncm_dev);
  	_ncm_dev = NULL;
  }
-@@ -1790,14 +1819,14 @@ static void ncm_free_inst(struct usb_function_instance *f)
+@@ -1792,14 +1821,14 @@ static void ncm_free_inst(struct usb_function_instance *f)
  	opts = container_of(f, struct f_ncm_opts, func_inst);
  	if (opts->bound)
  		gether_cleanup(netdev_priv(opts->net));
@@ -252,7 +252,7 @@ index 43c2f3796..637fc79eb 100644
  #endif
  }
  
-@@ -1810,9 +1839,19 @@ static struct usb_function_instance *ncm_alloc_inst(void)
+@@ -1812,9 +1841,19 @@ static struct usb_function_instance *ncm_alloc_inst(void)
  		return ERR_PTR(-ENOMEM);
  	mutex_init(&opts->lock);
  	opts->func_inst.free_func_inst = ncm_free_inst;
@@ -272,7 +272,7 @@ index 43c2f3796..637fc79eb 100644
  #endif
  	return &opts->func_inst;
  }
-@@ -1833,13 +1872,10 @@ static void ncm_free(struct usb_function *f)
+@@ -1835,13 +1874,10 @@ static void ncm_free(struct usb_function *f)
  static void ncm_unbind(struct usb_configuration *c, struct usb_function *f)
  {
  	struct f_ncm *ncm = func_to_ncm(f);
@@ -290,7 +290,7 @@ index 43c2f3796..637fc79eb 100644
  	DBG(c->cdev, "ncm unbind\n");
  
  	ncm_string_defs[0].id = 0;
-@@ -1847,10 +1883,6 @@ static void ncm_unbind(struct usb_configuration *c, struct usb_function *f)
+@@ -1854,10 +1890,6 @@ static void ncm_unbind(struct usb_configuration *c, struct usb_function *f)
  
  	kfree(ncm->notify_req->buf);
  	usb_ep_free_request(ncm->notify, ncm->notify_req);
@@ -301,7 +301,7 @@ index 43c2f3796..637fc79eb 100644
  }
  
  static struct usb_function *ncm_alloc(struct usb_function_instance *fi)
-@@ -1892,7 +1924,9 @@ static struct usb_function *ncm_alloc(struct usb_function_instance *fi)
+@@ -1899,7 +1931,9 @@ static struct usb_function *ncm_alloc(struct usb_function_instance *fi)
  	ncm->port.unwrap = ncm_unwrap_ntb;
  
  #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE

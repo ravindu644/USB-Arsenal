@@ -1,0 +1,49 @@
+From 4a9ef6a1bfcc69e45c0ec41ce4bc71412f40620f Mon Sep 17 00:00:00 2001
+From: ravindu644 <droidcasts@protonmail.com>
+Date: Mon, 19 Oct 2026 19:19:46 +0530
+Subject: [PATCH 1/2] usb: gadget: android_configfs_uevent: unregister the
+ gadget's own device
+
+Every gadget gets an androidN device in the android_usb class, all
+created with devt MKDEV(0, 0). android_device_destroy() then calls
+device_destroy(class, devt), which looks the device up by devt and
+finds the oldest one: android0, which belongs to Android's own gadget.
+Dropping any second gadget destroys Android's device instead, and
+UsbDeviceManager hears no USB state until a reboot. The same path also
+cleared android_opts even when another gadget was being dropped.
+
+Unregister the gadget's own device, outside opts_lock since that may
+sleep, and clear android_opts only when it is the one going away.
+
+Signed-off-by: ravindu644 <droidcasts@protonmail.com>
+---
+ drivers/usb/gadget/android_configfs_uevent.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/usb/gadget/android_configfs_uevent.c b/drivers/usb/gadget/android_configfs_uevent.c
+index c89341039..668311aae 100644
+--- a/drivers/usb/gadget/android_configfs_uevent.c
++++ b/drivers/usb/gadget/android_configfs_uevent.c
+@@ -222,10 +222,17 @@ void android_device_destroy(struct android_uevent_opts *opts)
+ 	if (opts->device_id >= 0)
+ 		ida_free(&android_ida, opts->device_id);
+ 
+-	android_opts = NULL;
++	if (android_opts == opts)
++		android_opts = NULL;
+ 	ida_destroy(&opts->function_ida);
+-	device_destroy(dev->class, dev->devt);
+ 	spin_unlock_irqrestore(&opts_lock, flags);
++
++	/*
++	 * Not device_destroy(): every gadget's device has devt 0, so a lookup
++	 * by devt finds the oldest one, android0, whichever gadget is dropped.
++	 * Outside the lock, since unregistering a device may sleep.
++	 */
++	device_unregister(dev);
+ }
+ 
+ void __android_set_connected(struct android_uevent_opts *opts,
+-- 
+2.56.0
+

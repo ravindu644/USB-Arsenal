@@ -1,7 +1,7 @@
-From 3090dac364f6e2c4b69caf5389c75edea56c7ed7 Mon Sep 17 00:00:00 2001
+From 278f4e29d1c5fc5918308accb0f460fa1a3ea6fe Mon Sep 17 00:00:00 2001
 From: ravindu644 <droidcasts@protonmail.com>
 Date: Wed, 7 Oct 2026 02:16:31 +0530
-Subject: [PATCH] usb: gadget: configfs: support mainline gadget bring-up
+Subject: [PATCH 2/6] usb: gadget: configfs: support mainline gadget bring-up
  alongside Android
 
 On this Samsung CONFIG_USB_CONFIGFS_UEVENT build, linking a function
@@ -30,21 +30,22 @@ Both are additive, run under the held gi->lock, and are compiled only
 for CONFIG_USB_CONFIGFS_UEVENT where gi->linked_func exists.
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Signed-off-by: ravindu644 <droidcasts@protonmail.com>
 ---
  drivers/usb/gadget/configfs.c | 28 ++++++++++++++++++++++++++++
  1 file changed, 28 insertions(+)
 
 diff --git a/drivers/usb/gadget/configfs.c b/drivers/usb/gadget/configfs.c
-index 758c6b124..d53b46732 100644
+index 6bfa8cecc..c1ef00e67 100644
 --- a/drivers/usb/gadget/configfs.c
 +++ b/drivers/usb/gadget/configfs.c
-@@ -762,6 +762,21 @@ static int config_usb_cfg_unlink(
+@@ -770,6 +770,21 @@ static int config_usb_cfg_unlink(
  			return 0;
  		}
  	}
-+#ifdef CONFIG_USB_CONFIGFS_UEVENT
++#ifdef CONFIG_USB_OLD_CONFIGFS
 +	/*
-+	 * ponytail: traditional path leaves the function in linked_func
++	 * The traditional path leaves the function in linked_func
 +	 * (never selected via android%d/functions); look there too so
 +	 * rm'ing the symlink doesn't leak it.
 +	 */
@@ -60,13 +61,13 @@ index 758c6b124..d53b46732 100644
  	mutex_unlock(&gi->lock);
  	WARN(1, "Unable to locate function to unbind\n");
  	return 0;
-@@ -1581,6 +1596,19 @@ static int configfs_composite_bind(struct usb_gadget *gadget,
+@@ -1590,6 +1605,19 @@ static int configfs_composite_bind(struct usb_gadget *gadget,
  		struct config_usb_cfg *cfg;
  
  		cfg = container_of(c, struct config_usb_cfg, c);
-+#ifdef CONFIG_USB_CONFIGFS_UEVENT
++#ifdef CONFIG_USB_OLD_CONFIGFS
 +		/*
-+		 * ponytail: traditional path - "ln -s func configs/c.N/"
++		 * The traditional path, "ln -s func configs/c.N/",
 +		 * stages the function in gi->linked_func (Samsung UEVENT
 +		 * behaviour), never in cfg->func_list. Android fills
 +		 * func_list via android%d/functions before writing UDC, so
