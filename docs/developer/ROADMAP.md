@@ -429,3 +429,9 @@ Tick a box only when the item is merged and verified as described in its phase.
   tags and publishes a release with a git-log changelog; Telegram is optional, as there.
   `make bump NEW=x.y.z` sets `UA_VERSION` and module.prop; `make module` now writes
   `versionCode` (major*1000 + minor*100 + patch*10, 100 for 0.1.0). Not run on GitHub yet.
+- 2026-10-19: On the a166p (v1.0.0): `check --json` through the daemon printed valid
+  JSON, byte for byte the same as a direct run, with every probe 1 and exit 0. Inside the
+  OpenWrt container, with no daemon socket, `version` said `mode: direct` and `hid start`
+  printed the warning about the container's own hand-back record, then served
+  `/dev/hidg1` and `/dev/hidg2`; `stop` from the container handed the port back to
+  Android's own tethering (`rndis,adb`) with `android0` intact.
