@@ -42,8 +42,8 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Stop signals held during the handoff; SIGHUP/SIGPIPE ignored so a dying adb shell
       cannot interrupt it
 - [x] `check`, `status`, `stop` (idempotent, doubles as crash recovery)
-- [x] `tests/dummy_hcd.sh`: end-to-end on a Linux PC through dummy_hcd. Written, not run
-      yet (needs root on the dev machine)
+- [x] `tests/dummy_hcd.sh`: end-to-end on a Linux PC through dummy_hcd. All 9 checks
+      pass on Fedora (kernel 7.2, mainline configfs)
 - [x] Android detected from the kernel (`g1` + `/sys/class/android_usb`), not `/system`,
       so it works from inside a container; `g1` rebound by hand where `setprop` is absent
 - [x] Gate on hardware: `stop` gives ADB back; `kill -9` mid-bind, then `stop`,
@@ -403,3 +403,10 @@ Tick a box only when the item is merged and verified as described in its phase.
   Stock Samsung is detected by the `mkdir` itself: it fails as ENOMEM in
   `device_create()` for a second `android0`, before anything is set up, so nothing
   changes.
+- 2026-10-19: First run of `tests/dummy_hcd.sh`, on Fedora (7.2, mainline configfs). It
+  found that every re-plug failed there: the gadget was unbound by writing "none" to
+  `UDC`, which only Android's configfs accepts (mainline reads it as a controller name and
+  answers EBUSY). Now an empty write, which unbinds on mainline, Android and Samsung's
+  4.14 alike. With that and a stale image name fixed in the test, all 9 checks pass:
+  disk, switch to CD-ROM, same-mode swap, HID next to storage, NCM, status, hid stop,
+  and an idempotent stop that leaves nothing behind.
