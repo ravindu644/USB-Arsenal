@@ -36,14 +36,14 @@ git am /path/to/USB-Arsenal/kernel-patches/<version>/*.patch
 
 | Folder | Made on | Holds | Tested |
 |---|---|---|---|
-| `4.9/` | Galaxy A01 (a015f, also a015g; Qualcomm sdm439) | android0 fix, f_ncm, READ TOC 1/2, DVD | compiled |
-| `4.9/t295/` | Galaxy Tab A 8.0 (t295) | the same, with the stock READ TOC base | compiled |
-| `4.14/` | Exynos 9820, LineageOS tree (also M62-backport) | multi-gadget, bring-up, f_ncm, READ TOC 1/2, DVD | booted on the S10 (M62): storage, CD-ROM and DVD-ROM boots, NCM |
-| `4.19/` | Exynos 990 | the 4.14 set, ported | compiled |
-| `5.10/` | Galaxy A16 4G (a165f) | android0 fix, DVD | compiled |
-| `5.15/` | Galaxy A16 5G (a166p) | android0 fix, DVD | compiled |
-| `5.15/sm8550/` | Snapdragon 8 Gen 2 Samsung tree | android0 fix, DVD rebased on Samsung's mode pages | compiled |
-| `6.6/` | Pixel 10 GKI (`android_configfs_uevent.c`) | android0 fix, DVD | compiled |
+| `4.9/` | Galaxy A01: [a015f](https://github.com/Kernels-by-ravindu644/samsung_kernel_a015f), also [a015g](https://github.com/ravindu644/kernel_samsung_a01) (Qualcomm sdm439) | android0 fix, f_ncm, READ TOC 1/2, DVD | compiled |
+| `4.9/t295/` | Galaxy Tab A 8.0 2019 ([t295](https://github.com/Kernels-by-ravindu644/samsung_kernel_t295)) | the same, with the stock READ TOC base | compiled |
+| `4.14/` | Exynos 9820: [LineageOS tree](https://github.com/Kernels-by-ravindu644/samsung_kernel_exynos9820_lineageos), also [M62-backport](https://github.com/ravindu644/M62-backport) | multi-gadget, bring-up, f_ncm, READ TOC 1/2, DVD | booted on the S10 (M62): storage, CD-ROM and DVD-ROM boots, NCM |
+| `4.19/` | [Exynos 990](https://github.com/ravindu644/samsung_kernel_exynos990) | the 4.14 set, ported | compiled |
+| `5.10/` | Galaxy A16 4G ([a165f](https://github.com/Kernels-by-ravindu644/samsung_kernel_a165f)) | android0 fix, DVD | compiled |
+| `5.15/` | Galaxy A16 5G ([a166p](https://github.com/Kernels-by-ravindu644/samsung_kernel_a166p)) | android0 fix, DVD | compiled |
+| `5.15/sm8550/` | [Snapdragon 8 Gen 2 Samsung tree](https://github.com/samsung-sm8550-tab/android_kernel_samsung_sm8550) | android0 fix, DVD rebased on Samsung's mode pages | compiled |
+| `6.6/` | [Pixel 10 GKI](https://github.com/Kernels-by-ravindu644/google_kernel_GKI-6.6.118-android15.8) (`android_configfs_uevent.c`) | android0 fix, DVD | compiled |
 | `6.12/` | PiKVM's original DVD patch, kept verbatim as the base for ports | DVD | (PiKVM) |
 
 "Compiled" means every touched object built with the tree's own defconfig and the

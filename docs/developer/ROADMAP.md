@@ -194,7 +194,7 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Samsung 5.15 (a166p, own gadget): every command, containers, gateway mode
 
 ## Status log
-- 2026-10-18: Research done (kernel survey, Droidspaces/Dragon conventions, prior art).
+- 2026-10-18: Research done (kernel survey, Droidspaces conventions, prior art).
   Phases 0 to 3 implemented and building clean with `-Werror` for x86_64, aarch64 and
   armhf. Nothing has run on hardware or under dummy_hcd yet.
 - 2026-10-18: First hardware run, a166p (MT6835, 5.15.178) from inside the Droidspaces
@@ -264,7 +264,7 @@ Tick a box only when the item is merged and verified as described in its phase.
   route its default traffic over the USB link, or a gateway restart stalls the test
   machine itself (a NetworkManager profile with `never-default` did it).
 - 2026-10-18: All functions at once from the Ubuntu container (writable disk, HID
-  keyboard and mouse, NCM tether through the daemon), checked by the user. A cable
+  keyboard and mouse, NCM tether through the daemon), checked on the host. A cable
   unplug and replug brought the whole composite device back on the host by itself:
   the UDC's VBUS handling raises the pullup again on the own-gadget backend.
 - 2026-10-18: Identity profiles. Verified from the container (copy) and from the
@@ -411,8 +411,8 @@ Tick a box only when the item is merged and verified as described in its phase.
   4.14 alike. With that and a stale image name fixed in the test, all 9 checks pass:
   disk, switch to CD-ROM, same-mode swap, HID next to storage, NCM, status, hid stop,
   and an idempotent stop that leaves nothing behind.
-- 2026-10-19: Kernel patches for every tree from 4.9 to 6.6, each on a `usb-arsenal`
-  branch in the user's tree and exported per version: the android0 destroy fix for 4.9,
+- 2026-10-19: Kernel patches for every tree from 4.9 to 6.6 (listed in
+  kernel-requirements.md), each made on its tree and exported per version: the android0 destroy fix for 4.9,
   5.10, 5.15 and 6.6 (Pixel's `android_configfs_uevent.c`, which also cleared
   `android_opts` for any gadget and unregistered under a spinlock); the f_ncm
   instance-count fix ported to 4.9, where the per-instance `f_ncm` setup device was a
@@ -421,7 +421,7 @@ Tick a box only when the item is merged and verified as described in its phase.
   kept as the disk-LUN fallback on sm8550 and 4.9 so a CD-ROM does not report it twice.
   The 4.14 bring-up patch now guards its `linked_func` uses with
   `CONFIG_USB_OLD_CONFIGFS`; it did not build without that option. Every touched object
-  compiles in the devbox; nothing but the S10's 4.14 has been booted. Three exported
+  compiles on its own tree; nothing but the S10's 4.14 has been booted. Three exported
   patches carried an AI co-author trailer from their M62 commits; removed.
 - 2026-10-19: CI and versioning, ported from Droidspaces. `.github/workflows/ci.yml`
   builds the module on every push (Droidspaces' musl toolchain release, no riscv64),
@@ -435,7 +435,7 @@ Tick a box only when the item is merged and verified as described in its phase.
   printed the warning about the container's own hand-back record, then served
   `/dev/hidg1` and `/dev/hidg2`; `stop` from the container handed the port back to
   Android's own tethering (`rndis,adb`) with `android0` intact.
-- 2026-10-19: CI releases on a tag push, as Dragon Control Center's does: one job builds
+- 2026-10-19: CI releases on a tag push: one job builds
   on every push and PR, and a `v*` tag (or a manual run with `tag_name`) also publishes
   the zip and `SHA256SUMS` with generated release notes. A tag that does not match
   `UA_VERSION` fails the build.

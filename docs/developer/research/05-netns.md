@@ -1,6 +1,7 @@
 # 05. Getting the tether interface into the tool's network namespace
 
-Research of 2026-10-18, kernels in `~/Documents/Kernels` (a166p paths are under
+Research of 2026-10-18, on the kernel trees listed in
+[01-kernel-survey.md](01-kernel-survey.md) (the a166p tree keeps its kernel under
 `kernel-5.15/`). The problem: run from a container with its own network namespace
 (Droidspaces NAT or gateway mode), `tether start` cannot see `usb0`.
 

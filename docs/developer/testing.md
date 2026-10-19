@@ -56,4 +56,4 @@ inlined `skb_dequeue()` and the real bug in `ncm_unwrap_ntb()`.
 | Device | Kernel | Backend | Notes |
 |---|---|---|---|
 | Galaxy A16 5G (a166p) | 5.15 | own gadget | also tested from a Droidspaces container, with an OpenWrt gateway |
-| Galaxy S10 (M62-backport) | 4.14 | own gadget | found the `soft_connect` panic and three f_ncm panics; NCM works with patch `0003` |
+| Galaxy S10 ([M62-backport](https://github.com/ravindu644/M62-backport)) | 4.14 | own gadget | found the `soft_connect` panic and three f_ncm panics; NCM works with patch `0003` |

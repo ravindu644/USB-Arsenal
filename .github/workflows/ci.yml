@@ -1,6 +1,6 @@
 name: USB Arsenal CI
 
-# One workflow, laid out like Dragon Control Center's. Every push and pull
+# One workflow. Every push and pull
 # request builds the module zip and uploads it as an artifact. A v* tag, or a
 # manual run with tag_name, also publishes it as a GitHub release. The
 # toolchains come from Droidspaces' releases and are cached between runs.

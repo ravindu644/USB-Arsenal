@@ -45,7 +45,7 @@ addresses in MSF form when the host asks for it, and the minutes go in one byte.
 minutes of 75 frames a second is the last lead-out it can describe, so `fsg_lun_open`
 truncates the whole medium to fit. Data reads use READ(10) with a 32-bit LBA and never
 needed the clamp. The clamp is in every tree we have, from 3.18 to the 6.6 GKI
-(`google_kernel_pixel10pro-2026-01/common/.../storage_common.c:247`), and in mainline.
+(the Pixel 10 6.6 GKI tree, `drivers/usb/gadget/function/storage_common.c:247`), and in mainline.
 
 **Upstream said no.** Dave Young sent a patch deleting the clamp in March 2015
 (lkml 1503.0/06234). Alan Stern NAKed it: the gadget emulates a CD drive, not an image,

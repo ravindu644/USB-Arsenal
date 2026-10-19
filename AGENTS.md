@@ -28,7 +28,7 @@ including one in a container, relays its command line to it over a filesystem so
 - **Version:** `UA_VERSION` in `usbarsenal.h` is the only source. `make bump NEW=x.y.z`
   rewrites it and `module/module.prop` (versionCode = major*1000 + minor*100 +
   patch*10); commit that alone as `usb-arsenal: bump vX.Y.Z`.
-- **CI** (`.github/workflows/ci.yml`, laid out like Dragon Control Center's): every push
+- **CI** (`.github/workflows/ci.yml`): every push
   and pull request builds the module zip with Droidspaces' published musl toolchains,
   cached between runs.
   Pushing a `vX.Y.Z` tag (or a manual run with `tag_name`) also publishes a release with
@@ -142,7 +142,8 @@ Work down this list and stop at the first answer that holds.
 3. **Does the kernel already do it?** This is the big one for USB Arsenal. The gadget
    subsystem, configfs, `f_mass_storage`, `f_hid` and `f_ncm`/`f_rndis` already
    implement the hard parts. Use the kernel's interface; do not reimplement a protocol in
-   userspace. Read the kernel sources (the trees under `../../Kernels/`) before writing a
+   userspace. Read the kernel sources (the trees in
+   [research/01](docs/developer/research/01-kernel-survey.md) are a start) before writing a
    line.
 4. Does an installed dependency or libc cover it? Never add a dependency for a few lines.
 5. Can it be one line? Then it is one line.

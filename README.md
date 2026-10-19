@@ -79,7 +79,7 @@ usb-arsenal stop                                  # everything off, ADB and MTP 
 ## Tested on
 
 - Galaxy A16 5G (MediaTek, kernel 5.15), from Android and from a Droidspaces container.
-- Galaxy S10 on the M62-backport kernel (Exynos 9820, kernel 4.14).
+- Galaxy S10 on the [M62-backport](https://github.com/ravindu644/M62-backport) kernel (Exynos 9820, kernel 4.14).
 
 The host was a Fedora PC: it read the disks and CD-ROMs, typed nothing but saw the HID
 devices, and got online through the tether. An MSI laptop booted Alpine Linux from an

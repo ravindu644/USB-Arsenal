@@ -1,7 +1,22 @@
 # 01. Kernel survey: the gadget subsystem from 3.18 to GKI 6.6
 
-Read-only survey of every tree in `~/Documents/Kernels` (2026-10-18). Paths below are
-relative to each tree. Line numbers are from that date's checkouts.
+Read-only survey of the trees below (2026-10-18). Paths are relative to each tree, and
+line numbers are from that date's checkouts.
+
+The trees, all public:
+
+| Name below | Device | Repository |
+|---|---|---|
+| t385 | Galaxy Tab A 8.0 2017 (3.18) | [Kernels-by-ravindu644/samsung_kernel_t385](https://github.com/Kernels-by-ravindu644/samsung_kernel_t385) |
+| t295 | Galaxy Tab A 8.0 2019 (4.9) | [Kernels-by-ravindu644/samsung_kernel_t295](https://github.com/Kernels-by-ravindu644/samsung_kernel_t295) |
+| a015f, a015g | Galaxy A01 (4.9) | [samsung_kernel_a015f](https://github.com/Kernels-by-ravindu644/samsung_kernel_a015f), [kernel_samsung_a01](https://github.com/ravindu644/kernel_samsung_a01) |
+| exynos9820_lineageos | Galaxy S10 family, LineageOS (4.14) | [Kernels-by-ravindu644/samsung_kernel_exynos9820_lineageos](https://github.com/Kernels-by-ravindu644/samsung_kernel_exynos9820_lineageos) |
+| M62-backport | Galaxy S10 family, custom (4.14) | [ravindu644/M62-backport](https://github.com/ravindu644/M62-backport) |
+| exynos990 | Galaxy S20 family (4.19) | [ravindu644/samsung_kernel_exynos990](https://github.com/ravindu644/samsung_kernel_exynos990) |
+| a165f | Galaxy A16 4G (5.10) | [Kernels-by-ravindu644/samsung_kernel_a165f](https://github.com/Kernels-by-ravindu644/samsung_kernel_a165f) |
+| a166p | Galaxy A16 5G (5.15) | [Kernels-by-ravindu644/samsung_kernel_a166p](https://github.com/Kernels-by-ravindu644/samsung_kernel_a166p) |
+| sm8550 | Snapdragon 8 Gen 2 Samsung tablets (5.15) | [samsung-sm8550-tab/android_kernel_samsung_sm8550](https://github.com/samsung-sm8550-tab/android_kernel_samsung_sm8550) |
+| Pixel 10 | Pixel 10 GKI (6.6) | [Kernels-by-ravindu644/google_kernel_GKI-6.6.118-android15.8](https://github.com/Kernels-by-ravindu644/google_kernel_GKI-6.6.118-android15.8) |
 
 **Short answer.** Every kernel from 4.9 up can build a configfs gadget, but three
 variants exist, and the 3.18 floor ships without configfs gadget support at all.
@@ -10,7 +25,7 @@ variants exist, and the 3.18 floor ships without configfs gadget support at all.
 
 | Tree | Version | configfs.c | uevent device | linked_func staging | Second gadget | Pullup HACK |
 |---|---|---|---|---|---|---|
-| samsung_kernel_t385 | 3.18.120 | Samsung UEVENT, minimal (`state` only) | hardcoded `android0` (configfs.c:1732) | no | no | yes (udc-core.c:411-418) |
+| t385 | 3.18.120 | Samsung UEVENT, minimal (`state` only) | hardcoded `android0` (configfs.c:1732) | no | no | yes (udc-core.c:411-418) |
 | t295, a015f, a015g | 4.9.227 | AOSP UEVENT (Qualcomm) | `android%d` (t295 configfs.c:1948) | no | yes | no (core.c:1370) |
 | exynos9820_lineageos | 4.14.356 | Samsung UEVENT + GSI | hardcoded `android0` (configfs.c:2309) | yes (2094, 2168) | no | no in effect, see note |
 | M62-backport | 4.14.356 | Samsung + the two fixes | `android0`, then `android1..` (configfs.c:2222) | yes, rescued at bind | yes | yes (core.c:1340-1346) |
@@ -18,7 +33,7 @@ variants exist, and the 3.18 floor ships without configfs gadget support at all.
 | a165f | 5.10.226 | AOSP UEVENT | `android%d` (configfs.c:1791) | no | yes | no |
 | a166p | 5.15.178 | AOSP UEVENT | `android%d` (1785) | no | yes | no |
 | sm8550 | 5.15.202 | AOSP UEVENT | `android%d` (1789) | no | yes | no |
-| pixel10pro / p10-pro-krnl | 6.6.118 | mainline + `android_configfs_uevent.c` | IDA-allocated `android%d` (:172-179) | no | yes | no (connect from a workqueue) |
+| Pixel 10 | 6.6.118 | mainline + `android_configfs_uevent.c` | IDA-allocated `android%d` (:172-179) | no | yes | no (connect from a workqueue) |
 
 Note on exynos9820: the connect call is wrapped in `#ifndef CONFIG_USB_OLD_CONFIG`
 (core.c:1355), but Kconfig defines `USB_OLD_CONFIGFS` (Kconfig:137). The typo means the
