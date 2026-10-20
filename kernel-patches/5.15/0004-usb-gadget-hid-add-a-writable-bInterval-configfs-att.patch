@@ -1,0 +1,102 @@
+From 437e02efc57ae72ab02b1ef3ef2edde3a447e733 Mon Sep 17 00:00:00 2001
+From: ravindu644 <droidcasts@protonmail.com>
+Date: Tue, 20 Oct 2026 15:34:26 +0530
+Subject: [PATCH] usb: gadget: hid: add a writable bInterval configfs attribute
+
+f_hid hardcodes the interrupt endpoint's bInterval in its endpoint
+descriptors (1 ms at high speed, the /* FIXME: Add this field in the
+configfs */ the driver has carried for years), so a HID keyboard is
+polled no faster than once per millisecond however fast userspace writes
+reports. At about one report per poll that caps a boot keyboard near
+1000 reports per second.
+
+Add an "interval" configfs attribute, the raw bInterval, defaulting to 0
+which keeps the compiled-in descriptors. A nonzero value overrides the
+fs/hs/ss in and out endpoint descriptors at bind, the same place
+report_length already sets wMaxPacketSize. At high and super speed the
+period is 2^(interval-1) microframes, so interval 1 polls every 125 us
+instead of 1 ms.
+
+Used by USB Arsenal's hid start --interval N to let a HID keyboard
+gadget type faster when the UDC and host allow it.
+
+Signed-off-by: ravindu644 <droidcasts@protonmail.com>
+---
+ drivers/usb/gadget/function/f_hid.c | 20 ++++++++++++++++++++
+ drivers/usb/gadget/function/u_hid.h |  1 +
+ 2 files changed, 21 insertions(+)
+
+diff --git a/drivers/usb/gadget/function/f_hid.c b/drivers/usb/gadget/function/f_hid.c
+index b0efaab86..3d95d4575 100644
+--- a/drivers/usb/gadget/function/f_hid.c
++++ b/drivers/usb/gadget/function/f_hid.c
+@@ -42,6 +42,7 @@ struct f_hidg {
+ 	unsigned char			bInterfaceProtocol;
+ 	unsigned char			protocol;
+ 	unsigned char			idle;
++	unsigned char			interval;
+ 	unsigned short			report_desc_length;
+ 	char				*report_desc;
+ 	unsigned short			report_length;
+@@ -962,6 +963,22 @@ static int hidg_bind(struct usb_configuration *c, struct usb_function *f)
+ 				cpu_to_le16(hidg->report_length);
+ 	hidg_hs_out_ep_desc.wMaxPacketSize = cpu_to_le16(hidg->report_length);
+ 	hidg_fs_out_ep_desc.wMaxPacketSize = cpu_to_le16(hidg->report_length);
++	/*
++	 * A nonzero interval overrides the endpoint poll rate the host is told to
++	 * use. The value is the raw bInterval: at high and super speed the period
++	 * is 2^(interval-1) microframes (125 us each), so 1 polls every 125 us
++	 * instead of the default 4 (1 ms); at full speed it is milliseconds. Like
++	 * the wMaxPacketSize writes above, this mutates the shared endpoint
++	 * descriptors at bind. Zero leaves the compiled-in defaults.
++	 */
++	if (hidg->interval) {
++		hidg_ss_in_ep_desc.bInterval = hidg->interval;
++		hidg_hs_in_ep_desc.bInterval = hidg->interval;
++		hidg_fs_in_ep_desc.bInterval = hidg->interval;
++		hidg_ss_out_ep_desc.bInterval = hidg->interval;
++		hidg_hs_out_ep_desc.bInterval = hidg->interval;
++		hidg_fs_out_ep_desc.bInterval = hidg->interval;
++	}
+ 	/*
+ 	 * We can use hidg_desc struct here but we should not relay
+ 	 * that its content won't change after returning from this function.
+@@ -1099,6 +1116,7 @@ F_HID_OPT(subclass, 8, 255);
+ F_HID_OPT(protocol, 8, 255);
+ F_HID_OPT(no_out_endpoint, 8, 1);
+ F_HID_OPT(report_length, 16, 65535);
++F_HID_OPT(interval, 8, 255);
+ 
+ static ssize_t f_hid_opts_report_desc_show(struct config_item *item, char *page)
+ {
+@@ -1159,6 +1177,7 @@ static struct configfs_attribute *hid_attrs[] = {
+ 	&f_hid_opts_attr_protocol,
+ 	&f_hid_opts_attr_no_out_endpoint,
+ 	&f_hid_opts_attr_report_length,
++	&f_hid_opts_attr_interval,
+ 	&f_hid_opts_attr_report_desc,
+ 	&f_hid_opts_attr_dev,
+ 	NULL,
+@@ -1285,6 +1304,7 @@ static struct usb_function *hidg_alloc(struct usb_function_instance *fi)
+ 
+ 	hidg->bInterfaceSubClass = opts->subclass;
+ 	hidg->bInterfaceProtocol = opts->protocol;
++	hidg->interval = opts->interval;
+ 	hidg->report_length = opts->report_length;
+ 	hidg->report_desc_length = opts->report_desc_length;
+ 	if (opts->report_desc) {
+diff --git a/drivers/usb/gadget/function/u_hid.h b/drivers/usb/gadget/function/u_hid.h
+index 84bb70292..a4114ce52 100644
+--- a/drivers/usb/gadget/function/u_hid.h
++++ b/drivers/usb/gadget/function/u_hid.h
+@@ -21,6 +21,7 @@ struct f_hid_opts {
+ 	unsigned char			subclass;
+ 	unsigned char			protocol;
+ 	unsigned char			no_out_endpoint;
++	unsigned char			interval;
+ 	unsigned short			report_length;
+ 	unsigned short			report_desc_length;
+ 	unsigned char			*report_desc;
+-- 
+2.56.0
+
