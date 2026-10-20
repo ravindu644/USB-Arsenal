@@ -99,8 +99,10 @@ Tick a box only when the item is merged and verified as described in its phase.
       written to `/dev/hidg1`/`hidg2` are collected by the host
 - [x] Hardware: a keypress report types on the host, the mouse moves (a166p to Fedora,
       written from a container through the kernel's devtmpfs)
-- [ ] `--interval N` sets the keyboard's HID poll interval (needs the f_hid patch): the
-      option and a 5.15 kernel patch land, the faster poll is not yet built or measured
+- [x] `--interval N` sets the keyboard's HID poll interval (needs the f_hid patch). Measured
+      on the a166p 5.15 with the patch, typing 816 characters over `--hid`: interval 4 (1 ms,
+      the stock default) 884 chars/s, 3 (500 us) 2377, 2 (250 us) 6640, 1 (125 us) 11207, all
+      at 100% accuracy. 12.7x from 4 to 1, and the MT6835 beats one report per microframe
 
 ## Phase 3. `tether`
 - [x] NCM first, RNDIS fallback (`--rndis`, or automatic when NCM is missing)
@@ -507,3 +509,12 @@ Tick a box only when the item is merged and verified as described in its phase.
   and falls back on a stock kernel. Prompted by typing speed tests with the Quacky
   interpreter: at 1 ms the keyboard tops out near 800 chars/s. Built clean on Fedora; the
   faster poll is not yet built into a kernel or measured on hardware.
+- 2026-10-20: measured. Built the patch into the a166p 5.15, flashed it, and typed 816
+  characters from the Quacky interpreter over `--hid` into a raw-terminal meter at each
+  interval: 4 (1 ms) 884 chars/s, 3 (500 us) 2377, 2 (250 us) 6640, 1 (125 us) 11207, every
+  run at 100% accuracy. 12.7x from the stock 1 ms to 125 us, and the gain is purely the
+  interval (interval 4 matches the old kernel's ~800). The MT6835 runs the interrupt endpoint
+  above the textbook one report per microframe (1.2x to 1.7x), and the knee is around 250 us,
+  below which the phone's write path, not the poll, becomes the limit. At interval 1 a longer
+  passage (~4900 chars) saturated and crashed the host's terminal emulator: the ceiling is now
+  the receiving computer, not the gadget.
