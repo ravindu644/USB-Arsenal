@@ -61,6 +61,11 @@ void ua_help_hid(void) {
       "  -g, --group GROUP  Group owning the nodes, name or GID (default:\n"
       "                     root). Anyone who can write a node can type on\n"
       "                     the host, so widen this deliberately.\n"
+      "  -i, --interval N   Keyboard poll interval, 1 to 255 (needs the f_hid\n"
+      "                     patch). Lower is faster: at high speed the period\n"
+      "                     is 2^(N-1) x 125us, so 4 (the kernel default) is\n"
+      "                     1 ms and 1 is 125us. Set at start; stop to "
+      "change.\n"
       "  -h, --help         Show this help\n\n"
       "Reports:\n"
       "  keyboard  8 bytes: modifiers, 0, then up to 6 HID keycodes\n"
@@ -90,7 +95,8 @@ static int write_bin(const char *dir, const char *attr, const void *buf,
 
 /* f_hid locks its attributes once the function is in a config, so this must
  * run before commit links it */
-static int setup_fn(struct ua_gadget *g, const struct hid_fn *f, int *created) {
+static int setup_fn(struct ua_gadget *g, const struct hid_fn *f, int *created,
+                    unsigned interval) {
   char dir[PATH_MAX];
   ua_gadget_func_dir(g, f->func, dir, sizeof(dir));
   *created = access(dir, F_OK) != 0;
@@ -105,6 +111,27 @@ static int setup_fn(struct ua_gadget *g, const struct hid_fn *f, int *created) {
       write_bin(dir, "report_desc", f->desc, f->desc_len) < 0) {
     ua_error("Cannot configure the %s: %s", f->label, strerror(errno));
     return -1;
+  }
+  /* The interrupt endpoint's bInterval is set by the kernel's f_hid, not the
+   * report descriptor. Stock f_hid hardcodes it (1 ms at high speed); our patch
+   * adds a writable "interval" attribute, so write it when it is there and fall
+   * back with a note when it is not. */
+  if (interval) {
+    char ip[PATH_MAX];
+    snprintf(ip, sizeof(ip), "%s/interval", dir);
+    if (access(ip, F_OK) != 0) {
+      ua_warn(
+          "This kernel has no f_hid 'interval' control; --interval needs the "
+          "USB Arsenal f_hid patch. Using the kernel default.");
+    } else {
+      char v[8];
+      int n = snprintf(v, sizeof(v), "%u", interval);
+      if (write_bin(dir, "interval", v, (size_t)n) < 0) {
+        ua_error("Cannot set the %s poll interval: %s", f->label,
+                 strerror(errno));
+        return -1;
+      }
+    }
   }
   return 0;
 }
@@ -212,7 +239,7 @@ static gid_t parse_group(const char *s, int *ok) {
   return 0;
 }
 
-static int do_start(mode_t perm, gid_t gid) {
+static int do_start(mode_t perm, gid_t gid, unsigned interval) {
   struct ua_gadget g;
   if (ua_gadget_open(&g) < 0 || ua_check_requirements(&g, UA_NEED_HID) < 0)
     return UA_EXIT_FAIL;
@@ -224,8 +251,9 @@ static int do_start(mode_t perm, gid_t gid) {
     int created[2] = {0, 0};
     if (ua_gadget_begin(&g) < 0)
       return UA_EXIT_FAIL;
+    /* The interval is about typing speed, so it rides on the keyboard only. */
     for (size_t i = 0; i < 2; i++)
-      if (setup_fn(&g, &fns[i], &created[i]) < 0) {
+      if (setup_fn(&g, &fns[i], &created[i], i == 0 ? interval : 0) < 0) {
         /* Undo only what this call made */
         for (size_t j = 0; j <= i; j++)
           if (created[j])
@@ -236,6 +264,9 @@ static int do_start(mode_t perm, gid_t gid) {
     if (ua_gadget_commit(&g) < 0)
       return UA_EXIT_FAIL;
   } else {
+    if (interval)
+      ua_warn("HID is already running; stop it first for --interval to take "
+              "effect.");
     save_perm(perm, gid);
   }
   return apply_perm(&g, 1) == 0 ? UA_EXIT_OK : UA_EXIT_FAIL;
@@ -273,6 +304,7 @@ int ua_cmd_hid(int argc, char **argv) {
   static const struct option opts[] = {
       {"perm", required_argument, NULL, 'p'},
       {"group", required_argument, NULL, 'g'},
+      {"interval", required_argument, NULL, 'i'},
       {"help", no_argument, NULL, 'h'},
       {NULL, 0, NULL, 0},
   };
@@ -282,12 +314,13 @@ int ua_cmd_hid(int argc, char **argv) {
   ua_config_active(&cfg);
   mode_t perm = (mode_t)cfg.hid_perm;
   gid_t gid = (gid_t)cfg.hid_group;
+  unsigned interval = 0; /* 0 = leave the kernel's default */
 
   if (argc < 2 || ua_want_help(argc, argv)) {
     ua_help_hid();
     return UA_EXIT_OK;
   }
-  while ((c = getopt_long(argc, argv, ":p:g:h", opts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, ":p:g:i:h", opts, NULL)) != -1) {
     switch (c) {
     case 'p':
       perm = (mode_t)strtoul(optarg, &end, 8);
@@ -296,6 +329,17 @@ int ua_cmd_hid(int argc, char **argv) {
         return UA_EXIT_USAGE;
       }
       break;
+    case 'i': {
+      unsigned long v = strtoul(optarg, &end, 10);
+      if (!*optarg || *end || v < 1 || v > 255) {
+        ua_usage_error(
+            "hid", "--interval takes 1 to 255 (the HID poll interval; at high "
+                   "speed the period is 2^(N-1) x 125us, so 1 is 125us)");
+        return UA_EXIT_USAGE;
+      }
+      interval = (unsigned)v;
+      break;
+    }
     case 'g':
       gid = parse_group(optarg, &ok);
       if (!ok) {
@@ -320,7 +364,7 @@ int ua_cmd_hid(int argc, char **argv) {
     return UA_EXIT_USAGE;
   }
   if (!strcmp(argv[optind], "start"))
-    return do_start(perm, gid);
+    return do_start(perm, gid, interval);
   if (!strcmp(argv[optind], "stop"))
     return do_stop();
   ua_usage_error("hid", "Unknown action '%s'", argv[optind]);

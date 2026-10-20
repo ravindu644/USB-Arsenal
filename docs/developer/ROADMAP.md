@@ -99,6 +99,8 @@ Tick a box only when the item is merged and verified as described in its phase.
       written to `/dev/hidg1`/`hidg2` are collected by the host
 - [x] Hardware: a keypress report types on the host, the mouse moves (a166p to Fedora,
       written from a container through the kernel's devtmpfs)
+- [ ] `--interval N` sets the keyboard's HID poll interval (needs the f_hid patch): the
+      option and a 5.15 kernel patch land, the faster poll is not yet built or measured
 
 ## Phase 3. `tether`
 - [x] NCM first, RNDIS fallback (`--rndis`, or automatic when NCM is missing)
@@ -450,3 +452,11 @@ Tick a box only when the item is merged and verified as described in its phase.
   picker belongs in a future app). The module install was verified on the a166p:
   `usb-arsenal` is on PATH as `/system/bin/usb-arsenal` after the reboot, and the
   workspace's `bin/usb-arsenal` link resolves to the module's binary.
+- 2026-10-20: `hid start --interval N` to make a keyboard poll faster. f_hid hardcodes the
+  interrupt endpoint's bInterval (1 ms at high speed, with its own `/* FIXME: Add this field
+  in the configfs */`), which is the wall a fast HID typer hits. Added the 5.15 kernel patch
+  (`kernel-patches/5.15/0004`) that gives f_hid a writable `interval` attribute, and the
+  `--interval` option that writes it on the keyboard function, feature-detected so it warns
+  and falls back on a stock kernel. Prompted by typing speed tests with the Quacky
+  interpreter: at 1 ms the keyboard tops out near 800 chars/s. Built clean on Fedora; the
+  faster poll is not yet built into a kernel or measured on hardware.
