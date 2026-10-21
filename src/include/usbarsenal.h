@@ -41,7 +41,7 @@
 #include <unistd.h>
 
 #define UA_NAME "usb-arsenal"
-#define UA_VERSION "1.1.0"
+#define UA_VERSION "1.2.0"
 #define UA_PROJECT_NAME "USB Arsenal"
 #define UA_AUTHOR "ravindu644"
 #define UA_REPO "https://github.com/ravindu644/USB-Arsenal"
