@@ -497,3 +497,6 @@ Tick a box only when the item is merged and verified as described in its phase.
   `tx_bytes` and `rx_bytes`, so the app's Tether shows traffic without a root read of its own.
 - 2026-10-22: `tether --dns` is checked like the profile's `tether_dns` (IPv4 addresses,
   comma-separated) before it reaches the DHCP server; it was passed through unchecked.
+- 2026-10-22: `storage eject` re-plugs to release a host's medium lock, as `start` does, where
+  the kernel has no `forced_eject` (before 6.6); it failed with EBUSY. The app's Storage now
+  applies LUN by LUN (eject in place, one start for what changed) instead of stop and start.
