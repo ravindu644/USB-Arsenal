@@ -212,9 +212,17 @@ static void session(int conn, struct request *r) {
     int null = open("/dev/null", O_RDONLY);
     if (null >= 0)
       dup2(null, STDIN_FILENO);
-    /* The client's fds become 3, 4, ...: that is how it named them */
+    /* The client's fds become 3, 4, ...: that is how it named them. They
+     * arrive close-on-exec, at numbers of the kernel's choosing: one may
+     * already sit where another must go, and dup2 onto itself would keep the
+     * flag. So each is first copied above that range (F_DUPFD clears it),
+     * then moved down. */
+    int high[UA_MAX_FDS];
     for (int i = 0; i < r->nfds; i++)
-      if (dup2(r->fds[i], 3 + i) < 0)
+      if ((high[i] = fcntl(r->fds[i], F_DUPFD, 3 + r->nfds)) < 0)
+        _exit(UA_EXIT_FAIL);
+    for (int i = 0; i < r->nfds; i++)
+      if (dup2(high[i], 3 + i) < 0 || close(high[i]) < 0)
         _exit(UA_EXIT_FAIL);
     setenv("UA_NO_PROXY", "1", 1);
     execv(self_path[0] ? self_path : "/proc/self/exe", r->argv);

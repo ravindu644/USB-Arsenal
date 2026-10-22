@@ -1,6 +1,15 @@
 package com.usbarsenal.app.ui
 
 import androidx.compose.foundation.background
+import com.usbarsenal.app.lcd.stepSpec
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.animation.core.rememberTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -29,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -327,6 +337,55 @@ fun LinkRow(label: String, value: String, onClick: (() -> Unit)?, modifier: Modi
                 Marquee(value, LcdType.data, Modifier.weight(1f), end = true)
             }
         }
+    }
+}
+
+/*
+ * .sheet and .scrim: a short task over the screen. The screen behind is dithered, so it reads
+ * as unavailable, and takes no touch; the sheet rises from the bottom in 4 frames (the scrim
+ * on the first) and Back or [onDismiss] plays it in reverse. Its ground reaches under the
+ * navigation bar.
+ */
+@Composable
+fun Sheet(open: Boolean, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    val state = remember { MutableTransitionState(false) }
+    state.targetState = open
+    if (!state.currentState && !state.targetState) return
+    val risen by rememberTransition(state, label = "sheet").animateFloat({ stepSpec(4) }, label = "rise") { if (it) 1f else 0f }
+    BackHandler(enabled = open, onBack = onDismiss)
+    // The scrim's gesture outlives a recomposition; it has to call the newest onDismiss
+    val dismiss by rememberUpdatedState(onDismiss)
+    val ink = LocalLcd.current.ink
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().dither(Dither.D50, ink).pointerInput(Unit) { detectTapGestures { dismiss() } })
+        Column(
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .layout { measurable, constraints ->
+                    val p = measurable.measure(constraints)
+                    layout(p.width, p.height) { p.place(0, ((1 - risen) * p.height).roundToInt()) }
+                }
+                .background(LocalLcd.current.ground)
+                .drawBehind { drawRect(ink, size = Size(size.width, Lcd.pixel.toPx())) }
+                .pointerInput(Unit) { detectTapGestures {} }
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(Lcd.gutter),
+            verticalArrangement = Arrangement.spacedBy(Lcd.section),
+            content = content,
+        )
+    }
+}
+
+// .cells: work long enough to wait on, in whole tenths, so it steps like everything else
+@Composable
+fun Cells(tenths: Int, modifier: Modifier = Modifier) {
+    val ink = LocalLcd.current.ink
+    Row(
+        modifier.fillMaxWidth().height(28.dp).border(Lcd.pixel, ink).padding(Lcd.pixel),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        repeat(10) { Box(Modifier.weight(1f).fillMaxHeight().then(if (it < tenths) Modifier.background(ink) else Modifier)) }
     }
 }
 

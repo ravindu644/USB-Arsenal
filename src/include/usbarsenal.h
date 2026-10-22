@@ -204,7 +204,7 @@ int ua_client_run(int argc, char **argv, const int *fds, int nfds);
 /* gadgets/storage.c */
 
 int ua_cmd_storage(int argc, char **argv);
-int ua_storage_client_fd(int argc, char **argv, int *fd);
+int ua_storage_client_fds(int argc, char **argv, int *fds, int *idx);
 void ua_help_storage(void);
 void ua_status_storage(const struct ua_gadget *g, int json);
 

@@ -223,7 +223,7 @@ monochrome LCD that lives in a drawer next to a soldering iron and a logic analy
 black pixels, bitmap type, chunky pixel icons. It is not a Material app.
 
 Personality, in three words: **terse, honest, mechanical.** It speaks like firmware
-(`NO IMAGE LOADED`, `HOST CAN WRITE TO THIS FILE`), it never shows a control the backend cannot
+(`NO IMAGE LOADED`, `READ-ONLY DISK`), it never shows a control the backend cannot
 honour, and things move in frames, like hardware.
 
 It is original. It takes the 1-bit LCD handheld genre, not Flipper Zero's mascot, layouts,
@@ -384,9 +384,12 @@ Rows of `filename` and size, under `FILES` and the folder path. An image in use 
 shows its LUN as a `.tag` before the size and cannot be picked. The list scrolls; the keys stay.
 
 ### Warning
-An inverted VT323 line, shown only for a consequence: a CD-ROM image over 2.36G
-(`cd-rom stops at 2.36G. the host reads a truncated disc`) and RW mode
-(`host can write to this file`). Never for an explanation.
+An inverted VT323 line, shown only for a consequence the screen does not already show: a CD-ROM
+image over 2.36G (`over 2.36G: the host reads a truncated disc`). Never for an explanation.
+
+Under the storage mode segments, one line always holds the chosen mode's hint (`read-only
+disk`), helper text because the wrong mode is a dead or truncated drive. The warning takes that
+same line, inverted, so a mode change never moves the files below.
 
 ### Tether chain (`.node`, `.wire`)
 Host, Phone (inverted), Upstream, joined by dashed 6px wires with stepping packets and a VT323

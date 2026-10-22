@@ -50,6 +50,7 @@ command was killed half-way, or the phone lost power, `stop` finishes the job.
 
 ```sh
 usb-arsenal storage start [--mode MODE] [--lun N] IMAGE
+usb-arsenal storage start [--lun N] [--mode MODE] IMAGE [--lun N] [--mode MODE] IMAGE ...
 usb-arsenal storage eject [--lun N]
 usb-arsenal storage stop
 ```
@@ -63,6 +64,15 @@ usb-arsenal storage stop
 | `rw` | a writable disk: a pen drive the host can write to |
 
 - **`--lun N` (0-7)** adds another drive. Each LUN is a separate drive on the host.
+- **Several drives in one `start`:** up to eight IMAGEs, each after its own `--lun` and
+  `--mode`, and the host sees all of them in one re-plug instead of one per drive. An IMAGE
+  with no `--lun` takes the LUN after the one before it (the first takes 0):
+
+  ```sh
+  usb-arsenal storage start Win11.iso --mode rw pendrive.img   # LUN 0 and LUN 1
+  ```
+- **One file, two drives:** allowed only while both are read-only. The host caches each drive
+  on its own, so a writable one would corrupt what the other shows; `start` refuses it.
 - **`start` on a live LUN** swaps the image in place, like changing a disc.
   - A change between disk, `dvd` and CD-ROM re-plugs the gadget, because a host only
     reads the device type and sector size when it enumerates or sees a new disc.

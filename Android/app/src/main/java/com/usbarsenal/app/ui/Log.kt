@@ -70,6 +70,8 @@ fun LogScreen(back: () -> Unit) {
             }
         }
     }
+    // Opening the log is reading the fault, so the line that pointed here has done its job
+    LaunchedEffect(Unit) { Gadget.fault = null }
     val lines = if (tab == 0) Gadget.cli else daemon
     Screen {
         Top { BackKey() }

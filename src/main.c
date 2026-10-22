@@ -266,30 +266,28 @@ static int cmd_version(int argc, char **argv) {
 
 /* Hand the whole command line to the daemon, globals included, so it runs
  * exactly as typed but on the host. -2 means no daemon: run it here. For
- * `storage start`, IMAGE is opened on this side and travels as fd 3. */
+ * `storage start`, each IMAGE is opened on this side and travels as its own
+ * fd, the first as 3, the next as 4; identity set's FILE travels as 3. */
 static int relay(int argc, char **argv, int cmd_index) {
   char *av[128];
-  int fd = -1, n = 0;
+  int fds[UA_MAX_FDS], idx[UA_MAX_FDS], nfds = 0, n = 0;
   if (argc > 120)
     return -2;
-  int img = 0;
   if (!strcmp(argv[cmd_index], "storage")) {
-    /* parse() permutes in place; a scratch copy keeps argv intact */
+    /* parse() may permute; a scratch copy keeps argv intact */
     char *scratch[128];
     int sc = argc - cmd_index;
     for (int i = 0; i < sc; i++)
       scratch[i] = argv[cmd_index + i];
     scratch[sc] = NULL;
-    img = ua_storage_client_fd(sc, scratch, &fd);
-    if (img < 0)
+    if ((nfds = ua_storage_client_fds(sc, scratch, fds, idx)) < 0)
       return UA_EXIT_FAIL;
-    if (img > 0) {
-      /* find that same string in the original argv */
-      const char *image = scratch[img];
-      img = 0;
+    /* find each of those same strings in the original argv */
+    for (int k = 0; k < nfds; k++) {
+      const char *image = scratch[idx[k]];
       for (int i = cmd_index + 1; i < argc; i++)
         if (argv[i] == image)
-          img = i;
+          idx[k] = i;
     }
   }
   /* identity: generate only writes the user's own file, so it never goes to
@@ -308,27 +306,44 @@ static int relay(int argc, char **argv, int cmd_index) {
             break;
         } else {
           char real[PATH_MAX];
-          if ((fd = open(argv[i], O_RDONLY | O_CLOEXEC)) < 0 ||
+          if ((fds[0] = open(argv[i], O_RDONLY | O_CLOEXEC)) < 0 ||
               !realpath(argv[i], real)) {
             ua_error("%s: %s", argv[i], strerror(errno));
-            if (fd >= 0)
-              close(fd);
+            if (fds[0] >= 0)
+              close(fds[0]);
             return UA_EXIT_FAIL;
           }
           snprintf(pathopt, sizeof(pathopt), "--path=%s", real);
-          img = i;
+          idx[0] = i;
+          nfds = 1;
           break;
         }
       }
   }
-  for (int i = 1; i < argc; i++)
-    av[n++] = (img && i == img) ? "--fd=3" : argv[i];
+  static char fdopt[UA_MAX_FDS][16];
+  int dashes = 0;
+  for (int i = 1; i < argc; i++) {
+    /* Each IMAGE becomes an --fd option, which a "--" before it would turn
+     * back into an operand; with the names gone, the "--" has no job left */
+    if (nfds && !dashes && i > cmd_index && !strcmp(argv[i], "--") &&
+        !strcmp(argv[cmd_index], "storage")) {
+      dashes = 1;
+      continue;
+    }
+    av[n] = argv[i];
+    for (int k = 0; k < nfds; k++)
+      if (i == idx[k]) {
+        snprintf(fdopt[k], sizeof(fdopt[k]), "--fd=%d", 3 + k);
+        av[n] = fdopt[k];
+      }
+    n++;
+  }
   if (pathopt[0])
     av[n++] = pathopt;
   av[n] = NULL;
-  int r = ua_client_run(n, av, &fd, fd >= 0 ? 1 : 0);
-  if (fd >= 0)
-    close(fd);
+  int r = ua_client_run(n, av, fds, nfds);
+  while (nfds--)
+    close(fds[nfds]);
   return r;
 }
 
