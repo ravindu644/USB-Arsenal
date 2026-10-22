@@ -138,11 +138,13 @@ fun flip(fn: Fn, on: Boolean, onDone: (Boolean) -> Unit = {}) {
     }
 }
 
-// Stop [fn] and start it again with its setup: one replug, and what runs is what was set
+// Stop [fn] and start it again with its setup: one replug, and what runs is what was set.
+// Storage with nothing picked any more is set up to be off, so its rebind is the stop alone
 fun rebind(fn: Fn) {
     Gadget.rebinding = fn
     Gadget.run(fn, fn.name.lowercase(), "stop") { ok ->
-        if (ok) flip(fn, true) { Gadget.rebinding = null } else Gadget.rebinding = null
+        if (ok) Gadget.started.remove(fn)
+        if (ok && startable(fn)) flip(fn, true) { Gadget.rebinding = null } else Gadget.rebinding = null
     }
 }
 
@@ -156,7 +158,8 @@ fun rebindBar(fn: Fn): (@Composable () -> Unit)? {
         pending(fn) -> Port.Pending
         else -> return null
     }
-    val can = busy == null && !Gadget.backend.holds() && startable(fn)
+    // A setup that cannot start holds the bar, except storage with nothing picked: that stops it
+    val can = busy == null && !Gadget.backend.holds() && (startable(fn) || fn == Fn.STORAGE)
     return { BottomBar(port, onStopAll = {}, onRebind = if (can) ({ rebind(fn) }) else null) }
 }
 
