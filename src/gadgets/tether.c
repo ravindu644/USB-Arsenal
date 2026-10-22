@@ -231,6 +231,8 @@ static int read_ifname(const struct ua_gadget *g, const char *func, char *out) {
   return 0;
 }
 
+/* What the running daemon is doing, as key=value lines: status prints them as
+ * text or JSON. A key with no value is left out. */
 static void write_info(const struct tether *t) {
   char p[PATH_MAX];
   struct in_addr a = {t->ip_be};
@@ -238,15 +240,33 @@ static void write_info(const struct tether *t) {
   FILE *f = fopen(p, "we");
   if (!f)
     return;
-  if (t->gateway)
-    fprintf(f, "%s bridged to %s as %s%s", t->iface,
-            t->gw_name ? t->gw_name : "the container", t->gw_iface,
-            t->gw_ino ? "" : " (waiting for it to run)");
-  else
-    fprintf(f, "%s %s/%u%s, sharing %s", t->iface, inet_ntoa(a), t->prefix,
-            t->nat6 ? " + " NAT6_CIDR : "",
-            t->uplink[0] ? t->uplink : "(no uplink yet)");
+  fprintf(f, "iface=%s\n", t->iface);
+  if (t->gateway) {
+    fprintf(f, "gateway=%s\ngateway_iface=%s\ngateway_waiting=%d\n",
+            t->gw_name ? t->gw_name : "", t->gw_iface, !t->gw_ino);
+  } else {
+    fprintf(f, "address=%s/%u\n", inet_ntoa(a), t->prefix);
+    if (t->nat6)
+      fprintf(f, "ipv6=" NAT6_CIDR "\n");
+    if (t->uplink[0])
+      fprintf(f, "upstream=%s\n", t->uplink);
+  }
   fclose(f);
+}
+
+/* One value from tether.info, "" when the key is not there */
+static void info_get(const char *info, const char *key, char *out,
+                     size_t size) {
+  size_t len = strlen(key);
+  out[0] = '\0';
+  for (const char *l = info; *l;) {
+    const char *end = strchrnul(l, '\n');
+    if ((size_t)(end - l) > len && !strncmp(l, key, len) && l[len] == '=') {
+      snprintf(out, size, "%.*s", (int)(end - l - len - 1), l + len + 1);
+      return;
+    }
+    l = *end ? end + 1 : end;
+  }
 }
 
 static void no_ipv6(const char *ifname) {
@@ -1049,18 +1069,55 @@ static int do_stop(void) {
   return UA_EXIT_OK;
 }
 
-void ua_status_tether(const struct ua_gadget *g) {
+/* JSON: one object, or null with no tether function in the gadget */
+void ua_status_tether(const struct ua_gadget *g, int json) {
   const char *func = live_func(g);
-  char iface[IFNAMSIZ] = "", p[PATH_MAX], info[256] = "";
-  if (!func)
+  char p[PATH_MAX], info[512] = "", iface[IFNAMSIZ] = "", addr[64], v6[64],
+                    up[IFNAMSIZ], gw[256], gw_if[IFNAMSIZ], wait[4];
+  if (!func) {
+    if (json)
+      printf("null");
     return;
-  read_ifname(g, func, iface);
+  }
+  const char *name = !strcmp(func, NCM) ? "ncm" : "rndis";
   info_path(p, sizeof(p));
-  if (daemon_pid() > 0 && read_file(p, info, sizeof(info)) > 0)
-    printf("Tether:     %s: %s\n", !strcmp(func, NCM) ? "ncm" : "rndis", info);
-  else
-    printf("Tether:     %s on %s (no network side running)\n",
-           !strcmp(func, NCM) ? "ncm" : "rndis", iface[0] ? iface : "?");
+  int running = daemon_pid() > 0 && read_file(p, info, sizeof(info)) > 0;
+  info_get(info, "iface", iface, sizeof(iface));
+  if (!iface[0])
+    read_ifname(g, func, iface);
+  info_get(info, "address", addr, sizeof(addr));
+  info_get(info, "ipv6", v6, sizeof(v6));
+  info_get(info, "upstream", up, sizeof(up));
+  info_get(info, "gateway", gw, sizeof(gw));
+  info_get(info, "gateway_iface", gw_if, sizeof(gw_if));
+  info_get(info, "gateway_waiting", wait, sizeof(wait));
+  int gateway = gw_if[0] != '\0';
+
+  if (json) {
+    int first = 1;
+    printf("{");
+    ua_json_str("function", name, &first);
+    ua_json_str("iface", iface, &first);
+    ua_json_int("running", running, &first);
+    ua_json_str("address", addr, &first);
+    ua_json_str("ipv6", v6, &first);
+    ua_json_str("upstream", up, &first);
+    ua_json_int("gateway", gateway, &first);
+    ua_json_str("gateway_container", gw, &first);
+    ua_json_str("gateway_iface", gw_if, &first);
+    ua_json_int("gateway_waiting", wait[0] == '1', &first);
+    printf("}");
+  } else if (!running) {
+    printf("Tether:     %s on %s (no network side running)\n", name,
+           iface[0] ? iface : "?");
+  } else if (gateway) {
+    printf("Tether:     %s: %s bridged to %s as %s%s\n", name, iface,
+           gw[0] ? gw : "the container", gw_if,
+           wait[0] == '1' ? " (waiting for it to run)" : "");
+  } else {
+    printf("Tether:     %s: %s %s%s%s, sharing %s\n", name, iface, addr,
+           v6[0] ? " + " : "", v6, up[0] ? up : "(no uplink yet)");
+  }
 }
 
 int ua_cmd_tether(int argc, char **argv) {

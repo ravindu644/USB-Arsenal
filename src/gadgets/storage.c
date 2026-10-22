@@ -508,8 +508,11 @@ static int do_stop(void) {
   return UA_EXIT_OK;
 }
 
-void ua_status_storage(const struct ua_gadget *g) {
+/* JSON: the elements of an array, one object per LUN; an ejected LUN has an
+ * empty file, mode and access */
+void ua_status_storage(const struct ua_gadget *g, int json) {
   char fdir[PATH_MAX];
+  int sep = 0;
   if (!ua_gadget_has(g, FUNC) ||
       ua_gadget_func_dir(g, FUNC, fdir, sizeof(fdir)) < 0)
     return;
@@ -529,6 +532,25 @@ void ua_status_storage(const struct ua_gadget *g) {
       snprintf(p, sizeof(p), "/sys/block/%s/loop/backing_file",
                strrchr(file, '/') + 1);
       read_file(p, backing, sizeof(backing));
+    }
+    const char *mode = !file[0]     ? ""
+                       : cdrom      ? "cdrom"
+                       : backing[0] ? "dvd"
+                       : ro         ? "disk"
+                                    : "rw";
+    if (json) {
+      int first = 1;
+      printf("%s{", sep++ ? "," : "");
+      ua_json_int("lun", lun, &first);
+      ua_json_str("file", backing[0] ? backing : file, &first);
+      ua_json_str("mode", mode, &first);
+      ua_json_str("access",
+                  !file[0]             ? ""
+                  : strcmp(mode, "rw") ? "ro"
+                                       : "rw",
+                  &first);
+      printf("}");
+      continue;
     }
     printf("Storage:    LUN %d: %s%s\n", lun,
            backing[0] ? backing

@@ -206,20 +206,20 @@ int ua_client_run(int argc, char **argv, const int *fds, int nfds);
 int ua_cmd_storage(int argc, char **argv);
 int ua_storage_client_fd(int argc, char **argv, int *fd);
 void ua_help_storage(void);
-void ua_status_storage(const struct ua_gadget *g);
+void ua_status_storage(const struct ua_gadget *g, int json);
 
 /* gadgets/hid.c */
 
 int ua_cmd_hid(int argc, char **argv);
 void ua_help_hid(void);
-void ua_status_hid(const struct ua_gadget *g);
+void ua_status_hid(const struct ua_gadget *g, int json);
 void ua_hid_reapply(const struct ua_gadget *g);
 
 /* gadgets/tether.c */
 
 int ua_cmd_tether(int argc, char **argv);
 void ua_help_tether(void);
-void ua_status_tether(const struct ua_gadget *g);
+void ua_status_tether(const struct ua_gadget *g, int json);
 void ua_tether_kill(void);
 
 #endif /* USBARSENAL_H */

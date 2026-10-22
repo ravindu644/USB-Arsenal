@@ -117,11 +117,15 @@ int ua_want_help(int argc, char **argv) {
 }
 
 static void help_status(void) {
-  printf("Usage: " UA_NAME " status\n\n"
+  printf("Usage: " UA_NAME " status [--json]\n\n"
          "Show the backend, the controller and its state, and every live\n"
          "function: storage images, HID nodes, the tether interface.\n\n"
-         "Example:\n"
-         "  " UA_NAME " status\n");
+         "  --json    One JSON object instead: version, udc, udc_state,\n"
+         "            bound, and the storage, hid and tether parts. Every\n"
+         "            key is always present.\n\n"
+         "Examples:\n"
+         "  " UA_NAME " status\n"
+         "  " UA_NAME " status --json\n");
 }
 
 static void help_stop(void) {
@@ -140,8 +144,9 @@ static int cmd_status(int argc, char **argv) {
     help_status();
     return UA_EXIT_OK;
   }
-  if (argc > 1) {
-    ua_usage_error("status", "status takes no arguments");
+  int json = argc == 2 && !strcmp(argv[1], "--json");
+  if (argc > 1 && !json) {
+    ua_usage_error("status", "status takes no arguments but --json");
     return UA_EXIT_USAGE;
   }
   struct ua_gadget g;
@@ -151,15 +156,38 @@ static int cmd_status(int argc, char **argv) {
   char p[PATH_MAX], state[64] = "unknown";
   snprintf(p, sizeof(p), "/sys/class/udc/%s/state", g.udc);
   read_file(p, state, sizeof(state));
+  int live = ua_gadget_live(&g);
+  if (json) {
+    /* Every key always present, so a reader never has to guess */
+    int first = 1;
+    printf("{");
+    ua_json_str("version", UA_VERSION, &first);
+    ua_json_str("udc", g.udc, &first);
+    ua_json_str("udc_state", state, &first);
+    ua_json_int("bound", live, &first);
+    printf(",\"storage\":[");
+    if (live)
+      ua_status_storage(&g, 1);
+    printf("],\"hid\":[");
+    if (live)
+      ua_status_hid(&g, 1);
+    printf("],\"tether\":");
+    if (live)
+      ua_status_tether(&g, 1);
+    else
+      printf("null");
+    printf("}\n");
+    return UA_EXIT_OK;
+  }
   printf("Controller: %s (%s)\n", g.udc, state);
-  if (!ua_gadget_live(&g)) {
+  if (!live) {
     printf("Gadget:     not active\n");
     return UA_EXIT_OK;
   }
   printf("Gadget:     %s\n", g.path);
-  ua_status_storage(&g);
-  ua_status_hid(&g);
-  ua_status_tether(&g);
+  ua_status_storage(&g, 0);
+  ua_status_hid(&g, 0);
+  ua_status_tether(&g, 0);
   return UA_EXIT_OK;
 }
 

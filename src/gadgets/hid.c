@@ -290,13 +290,25 @@ static int do_stop(void) {
   return UA_EXIT_OK;
 }
 
-void ua_status_hid(const struct ua_gadget *g) {
+/* JSON: the elements of an array, one object per live node */
+void ua_status_hid(const struct ua_gadget *g, int json) {
+  int sep = 0;
   for (size_t i = 0; i < 2; i++) {
     char node[PATH_MAX];
-    if (ua_gadget_has(g, fns[i].func))
+    if (!ua_gadget_has(g, fns[i].func))
+      continue;
+    if (find_node(g, fns[i].func, node, sizeof(node)) < 0)
+      node[0] = '\0';
+    if (json) {
+      int first = 1;
+      printf("%s{", sep++ ? "," : "");
+      ua_json_str("function", fns[i].label, &first);
+      ua_json_str("node", node, &first);
+      printf("}");
+    } else {
       printf("HID:        %-8s %s\n", fns[i].label,
-             find_node(g, fns[i].func, node, sizeof(node)) == 0 ? node
-                                                                : "(no node)");
+             node[0] ? node : "(no node)");
+    }
   }
 }
 

@@ -42,6 +42,8 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Stop signals held during the handoff; SIGHUP/SIGPIPE ignored so a dying adb shell
       cannot interrupt it
 - [x] `check`, `status`, `stop` (idempotent, doubles as crash recovery)
+- [x] `check --json` and `status --json` for the Android app; `Net/tether.info` holds
+      `key=value` lines both outputs read
 - [x] `tests/dummy_hcd.sh`: end-to-end on a Linux PC through dummy_hcd. All 9 checks
       pass on Fedora (kernel 7.2, mainline configfs)
 - [x] Android detected from the kernel (`g1` + `/sys/class/android_usb`), not `/system`,
@@ -471,3 +473,9 @@ Tick a box only when the item is merged and verified as described in its phase.
   below which the phone's write path, not the poll, becomes the limit. At interval 1 a longer
   passage (~4900 chars) saturated and crashed the host's terminal emulator: the ceiling is now
   the receiving computer, not the gadget.
+- 2026-10-22: `status --json` for the Android app: version, UDC and its state, bound, each
+  LUN (file, mode, access), each HID node, and the tether link (function, iface, address,
+  IPv6, upstream, gateway). The tether daemon now writes `Net/tether.info` as `key=value`
+  lines, which the text and JSON outputs both render. Verified on the a166p with HID, an RW
+  image on LUN 0 and an NCM tether live at once, and again after `stop` (`bound:0`); `dmesg`
+  clean after every step, and the text `status` reads as before.

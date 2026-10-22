@@ -33,6 +33,16 @@ usb-arsenal stop      # everything off, the port back to its owner
 `nat`, `nat6`) is `1` (ok), `0` (missing) or `-1` (works with caveats), plus `version`,
 `udc_name` and `requirements_met`. The exit code is the same as the text report's.
 
+`status --json` prints the live gadget as one JSON object, every key always present:
+
+| Key | Value |
+|---|---|
+| `version`, `udc`, `udc_state` | the binary's version, the controller, its state (`configured`, `not attached`, ...) |
+| `bound` | `1` while our gadget holds the controller, `0` when it is with its owner |
+| `storage` | one object per LUN: `lun`, `file`, `mode` (`cdrom`, `dvd`, `disk`, `rw`), `access` (`ro`, `rw`); an ejected LUN has empty strings |
+| `hid` | one object per node: `function` (`keyboard`, `mouse`), `node` (`/dev/hidgN`, empty until it appears) |
+| `tether` | `null`, or `function` (`ncm`, `rndis`), `iface`, `running` (the network side is up), `address`, `ipv6`, `upstream`, `gateway` (`1` in gateway mode), `gateway_container`, `gateway_iface`, `gateway_waiting` (the container is not running yet) |
+
 `stop` is safe at any time, any number of times. It is also the recovery path: if a
 command was killed half-way, or the phone lost power, `stop` finishes the job.
 
