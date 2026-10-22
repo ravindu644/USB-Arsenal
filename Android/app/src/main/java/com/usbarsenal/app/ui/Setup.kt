@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.usbarsenal.app.BuildConfig
+import com.usbarsenal.app.backend.Backend
 import com.usbarsenal.app.backend.BackendState
 import com.usbarsenal.app.backend.Capabilities
 import com.usbarsenal.app.backend.Probe
@@ -64,7 +65,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 // Every screen; App keeps them as a back stack
-private enum class Step { WELCOME, ROOT, CHECK, INSTALL, HOME, LOG }
+private enum class Step { WELCOME, ROOT, CHECK, INSTALL, HOME, LOG, SETTINGS, FONTS }
 
 // TYPING: Install was pressed and the command is typing; the installer starts when it has
 private enum class Phase { BEFORE, TYPING, RUNNING, DONE, FAILED }
@@ -135,6 +136,18 @@ fun App() {
         show(listOf(Step.HOME), false)
     }
     val setup = stack.first() != Step.HOME
+    // What a backend that needs something leads to: Root without root (asking su again, not the
+    // answer setup kept), else Install, as an update over an installed one
+    val fix = { b: Backend ->
+        if (b.state == BackendState.NO_ROOT) {
+            Setup.root = null
+            push(Step.ROOT)
+        } else {
+            update = b.installed
+            Setup.fresh()
+            push(Step.INSTALL)
+        }
+    }
     Redraw(stack.last(), back, Modifier.fillMaxSize()) {
         when (it) {
             Step.WELCOME -> Welcome { push(Step.ROOT) }
@@ -145,20 +158,17 @@ fun App() {
             Step.HOME -> HomeScreen(
                 open = null,
                 openLog = { push(Step.LOG) },
-                openSettings = null,
-                fix = { b ->
-                    if (b.state == BackendState.NO_ROOT) {
-                        // Root was refused since: ask su again, not the answer setup kept
-                        Setup.root = null
-                        push(Step.ROOT)
-                    } else {
-                        update = b.installed.takeIf { b.state == BackendState.UPDATE_AVAILABLE }
-                        Setup.fresh()
-                        push(Step.INSTALL)
-                    }
-                },
+                openSettings = { push(Step.SETTINGS) },
+                fix = fix,
             )
             Step.LOG -> LogScreen(back = ::pop)
+            Step.SETTINGS -> SettingsScreen(
+                back = ::pop,
+                openIdentity = null,
+                openFonts = { push(Step.FONTS) },
+                fix = fix,
+            )
+            Step.FONTS -> FontsScreen(back = ::pop)
         }
     }
 }

@@ -169,3 +169,24 @@ suspend fun stageBinary(context: Context, dir: File = File(context.cacheDir, "ch
         }
     }
 }
+
+// Droidspaces' DaemonModeRepository: the boot module starts the daemon only while this reads 1
+private const val DAEMON_MODE = "$WORKSPACE/.daemon_mode"
+
+// Null when root cannot be asked; no file, or an empty one, is off
+suspend fun daemonMode(): Boolean? = Root.read("cat $DAEMON_MODE 2>/dev/null; true").takeIf { it.ok }?.let { it.out.firstOrNull()?.trim() == "1" }
+
+suspend fun setDaemonMode(on: Boolean) = Root.change("echo ${if (on) 1 else 0} > $DAEMON_MODE")
+
+// Droidspaces' SymlinkInstaller: usb-arsenal on PATH is the module's system/bin link to the workspace binary
+suspend fun pathLinked(): Boolean? = Root.read("test -L $MODULE_LINK && echo 1 || echo 0").takeIf { it.ok }?.out?.firstOrNull()?.let { it == "1" }
+
+// Only into an installed module, to the binary there; off takes system/ away whole, as the installer does
+suspend fun setPathLinked(on: Boolean) = Root.change(
+    if (on) {
+        "test -f $MODULE/module.prop -a -x $UA || { echo '[-] Install the backend first' >&2; exit 1; }; " +
+            "mkdir -p $MODULE/system/bin && ln -sfn $UA $MODULE_LINK"
+    } else {
+        "rm -rf $MODULE/system"
+    },
+)

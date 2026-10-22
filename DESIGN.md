@@ -696,7 +696,11 @@ so one stuck command can never freeze the screen.
 
 App-side features, done by the app itself: the `/sdcard/USB-Arsenal` file list, Create (a sparse
 image, as `truncate -s` does, or a full one with progress), HID input written to `/dev/hidgN`,
-and the Motion and Haptics switches in Settings.
+and the Motion and Haptics switches in Settings. Settings' Daemon mode writes `1` or `0` to
+`/data/local/USB-Arsenal/.daemon_mode`, which the boot module's `service.sh` reads, and System
+path makes or removes `/data/adb/modules/usb-arsenal/system/bin/usb-arsenal`, a link to the
+workspace binary (Droidspaces' `DaemonModeRepository` and `SymlinkInstaller`); both act at the
+next boot.
 
 Not shown because the backend cannot: UVC (not built), host controller or port names, lease
 countdowns, link uptime, a configfs write trace, a pending-changes queue.

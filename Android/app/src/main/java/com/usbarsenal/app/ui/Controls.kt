@@ -306,6 +306,30 @@ fun Alert(label: String, fix: String, onClick: () -> Unit, modifier: Modifier = 
         Text(fix, LcdType.data)
     }
 
+/*
+ * a.kv: a key-value row that opens something (Identity, Source, Fonts). It reaches 10dp past
+ * the gutter and inverts while focused or held, as rows do. Its value slides when it does not fit.
+ */
+@Composable
+fun LinkRow(label: String, value: String, onClick: (() -> Unit)?, modifier: Modifier = Modifier) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    val pressed by interaction.collectIsPressedAsState()
+    val haptics = LocalHaptics.current
+    Box(
+        modifier.bleed(10.dp).lcdClickable(interaction, outline = false, role = Role.Button, enabled = onClick != null) {
+            haptics.keyPress()
+            onClick?.invoke()
+        },
+    ) {
+        Inverted(focused || pressed) {
+            Kv(label, Modifier.background(LocalLcd.current.ground).padding(horizontal = 10.dp)) {
+                Marquee(value, LcdType.data, Modifier.weight(1f), end = true)
+            }
+        }
+    }
+}
+
 // Who holds the port, as the bottom bar shows it
 sealed interface Port {
     data class Bound(val udc: String) : Port
@@ -412,5 +436,6 @@ fun Modifier.shake(shake: Shake): Modifier = composed {
 @Composable
 fun Fault(message: String, onLog: (() -> Unit)?, modifier: Modifier = Modifier) = InvertedKey(onLog, modifier, Alignment.Top) {
     Text(message, LcdType.data, Modifier.weight(1f), maxLines = 3)
-    Inverted { Text("Log", LcdType.labelStrong, Modifier.background(LocalLcd.current.ground).padding(horizontal = 6.dp)) }
+    // The tag says where it leads; a fault with nothing to open does not promise it
+    if (onLog != null) Inverted { Text("Log", LcdType.labelStrong, Modifier.background(LocalLcd.current.ground).padding(horizontal = 6.dp)) }
 }

@@ -422,10 +422,11 @@ private val GLYPH = Regex("^\\[.] ")
  * after it; any other line (a prompt, stderr) uses the whole width. Only the lines on screen
  * are composed, so a long log costs what a short one does.
  */
+// [live] false is a document on the panel (a licence): no backlit line, no cursor
 @Composable
-fun Terminal(lines: List<String>, modifier: Modifier = Modifier) = Inverted {
+fun Terminal(lines: List<String>, modifier: Modifier = Modifier, live: Boolean = true) = Inverted {
     val list = rememberLazyListState()
-    LaunchedEffect(lines.size, lines.lastOrNull()) { if (lines.isNotEmpty()) list.scrollToItem(lines.lastIndex) }
+    LaunchedEffect(lines.size, lines.lastOrNull()) { if (live && lines.isNotEmpty()) list.scrollToItem(lines.lastIndex) }
     LazyColumn(
         modifier.fillMaxWidth().background(LocalLcd.current.ground).padding(10.dp),
         state = list,
@@ -433,13 +434,14 @@ fun Terminal(lines: List<String>, modifier: Modifier = Modifier) = Inverted {
     ) {
         itemsIndexed(lines) { i, line ->
             val glyph = GLYPH.find(line)?.value
-            Inverted(i == lines.lastIndex) {
+            val newest = live && i == lines.lastIndex
+            Inverted(newest) {
                 Row(
                     Modifier.fillMaxWidth().background(LocalLcd.current.ground).padding(horizontal = 4.dp, vertical = 3.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     if (glyph != null) Text(glyph.trim(), LcdType.data, Modifier.width(28.dp))
-                    Text(line.removePrefix(glyph.orEmpty()), LcdType.data, cursor = i == lines.lastIndex)
+                    Text(line.removePrefix(glyph.orEmpty()), LcdType.data, cursor = newest)
                 }
             }
         }

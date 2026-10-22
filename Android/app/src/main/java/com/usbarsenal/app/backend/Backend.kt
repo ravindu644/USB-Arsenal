@@ -31,12 +31,19 @@ suspend fun readCheck(binary: String = UA, onLane: Boolean = false): Result<Capa
     return (if (onLane) Root.change(cmd) else Root.read(cmd)).json(::parseCheck)
 }
 
-// identity show's key column: "  tether_function  ncm"; a derived value reads "(derived)"
-suspend fun readProfile(): Map<String, String> = Root.read("$READ identity show").out
-    .filter { it.startsWith("  ") }
-    .mapNotNull { line -> line.trim().split(Regex("\\s+"), limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
-    .filter { it.second != "(derived)" }
-    .toMap()
+/*
+ * identity show: "Profile: <path or built-in defaults>[ (copy)]", then a key column,
+ * "  tether_function  ncm", where a derived value reads "(derived)". The profile comes back
+ * as the "profile" key.
+ */
+suspend fun readProfile(): Map<String, String> {
+    val out = Root.read("$READ identity show").out
+    val keys = out.filter { it.startsWith("  ") }
+        .mapNotNull { line -> line.trim().split(Regex("\\s+"), limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
+        .filter { it.second != "(derived)" }
+    val profile = out.firstOrNull { it.startsWith("Profile: ") }?.removePrefix("Profile: ")?.removeSuffix(" (copy)")
+    return (keys + listOfNotNull(profile?.let { "profile" to it })).toMap()
+}
 
 suspend fun readStatus(): Result<GadgetStatus> = Root.read("$READ status --json").json(::parseStatus)
 
