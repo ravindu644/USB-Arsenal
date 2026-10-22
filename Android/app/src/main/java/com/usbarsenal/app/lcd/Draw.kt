@@ -1,0 +1,84 @@
+package com.usbarsenal.app.lcd
+
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import kotlin.math.max
+import kotlin.math.roundToInt
+
+/*
+ * A repeating pattern of square cells, each a whole number of device pixels so the pattern
+ * stays sharp. Cells listed twice are painted twice, which is how two CSS layers stack.
+ *
+ * ponytail: each element builds its own tiny tile on resize; share one per colour and level if a
+ * long dithered list ever shows up in a trace
+ */
+private fun Density.pattern(cell: Dp, cells: Int, color: Color, lit: List<Pair<Int, Int>>): ShaderBrush {
+    val px = max(1, cell.toPx().roundToInt())
+    val bitmap = ImageBitmap(px * cells, px * cells)
+    val canvas = Canvas(bitmap)
+    val paint = Paint().apply { this.color = color }
+    for ((x, y) in lit) {
+        canvas.drawRect(x * px.toFloat(), y * px.toFloat(), (x + 1) * px.toFloat(), (y + 1) * px.toFloat(), paint)
+    }
+    return ShaderBrush(ImageShader(bitmap, TileMode.Repeated, TileMode.Repeated))
+}
+
+// The LCD pixel grid: a line every second dp both ways, over everything, the one translucent colour
+fun Modifier.scanlines() = drawWithCache {
+    val grid = pattern(1.dp, 2, Lcd.Scanline, listOf(0 to 0, 1 to 0, 0 to 0, 0 to 1))
+    onDrawWithContent {
+        drawContent()
+        drawRect(grid)
+    }
+}
+
+// Shade is dither, never grey. Quadrants as lcd.css draws them: 25% lights the top right, 50% is a checkerboard
+enum class Dither(internal val lit: List<Pair<Int, Int>>) {
+    D25(listOf(1 to 0)),
+    D50(listOf(1 to 0, 0 to 1)),
+}
+
+fun Modifier.dither(level: Dither, ink: Color) = drawWithCache {
+    val brush = pattern(2.dp, 2, ink, level.lit)
+    onDrawBehind { drawRect(brush) }
+}
+
+// An empty slot: the ground colour dithered over whatever is drawn, so an ink sprite turns into its ghost
+fun Modifier.ghost(ground: Color) = drawWithCache {
+    val brush = pattern(2.dp, 2, ground, Dither.D50.lit)
+    onDrawWithContent {
+        drawContent()
+        drawRect(brush)
+    }
+}
+
+// ponytail: 6dp dashes and gaps, close to Chrome's dashed outline; tune against the renders in H3
+fun Modifier.focusOutline(ink: Color) = drawWithCache {
+    val width = Lcd.pixel.toPx()
+    // 3dp clear of the element, measured to the inner edge of the stroke
+    val inset = 3.dp.toPx() + width / 2
+    val stroke = Stroke(width, pathEffect = PathEffect.dashPathEffect(floatArrayOf(3 * width, 3 * width)))
+    onDrawWithContent {
+        drawContent()
+        drawRect(
+            ink,
+            topLeft = Offset(-inset, -inset),
+            size = Size(size.width + 2 * inset, size.height + 2 * inset),
+            style = stroke,
+        )
+    }
+}

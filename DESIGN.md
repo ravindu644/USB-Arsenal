@@ -420,7 +420,9 @@ Rules:
   scale 0, which Compose applies through `MotionDurationScale`) or the in-app motion switch is
   off, every loop shows its resting frame: Pin plugged in, text at its start, cursor visible,
   LED lit. Infinite loops must check this themselves, because a zero duration scale only
-  finishes finite animations. Screen changes become a cut.
+  finishes finite animations. Screen changes become a cut. The app reads
+  `Settings.Global.ANIMATOR_DURATION_SCALE` and watches it with a `ContentObserver`, which
+  works on every API level (`ValueAnimator.registerDurationScaleChangeListener` is API 33).
 - The marquee is the only motion applied to text.
 - One playful moment at a time. The bind animation plays when the gadget first binds, not on
   every replug.
@@ -437,9 +439,10 @@ Principles:
   bind is a sequence.
 - **Same interaction, same effect,** everywhere in the app.
 - **Fire on the frame the visual changes,** never before the state changes.
-- **Respect the user.** No haptics when the system touch feedback setting is off
-  (`Settings.System.HAPTIC_FEEDBACK_ENABLED` is 0), when the in-app switch is off, or while the
-  app is in the background.
+- **Respect the user.** No haptics when the system touch feedback setting is off, when the
+  in-app switch is off, or while the app is in the background. Below API 33 the app reads
+  `Settings.System.HAPTIC_FEEDBACK_ENABLED`; from 33 that constant is deprecated and the system
+  applies the setting to `performHapticFeedback` and `USAGE_TOUCH` vibrations itself.
 
 Event map. Simple effects go through Compose's `LocalHapticFeedback` (`HapticFeedbackType`);
 the rich ones go through the tiers below.
@@ -460,8 +463,8 @@ Device tiers for the rich effects, chosen once at start-up and cached:
 
 | Tier | When | How |
 | --- | --- | --- |
-| T1, flagship | `VibrationEffect.Builder` exists (Android 16 and later; the docs give two API levels, so check at runtime) | Presets `PRESET_TICK` and `PRESET_CLICK` with a basic envelope for the thud. The framework falls back by itself |
-| T2 | API 30 and later and `Vibrator.areAllPrimitivesSupported(...)` is true for every primitive used | `VibrationEffect.Composition`: `PRIMITIVE_TICK` at scales 0.4, 0.6, 0.8, then `PRIMITIVE_THUD` (or `PRIMITIVE_CLICK` at 1.0). One unsupported primitive silences the whole composition, so check first |
+| T1, flagship | API 36 and later, `Vibrator.areEnvelopeEffectsSupported()` and `PRIMITIVE_TICK` supported | The climb ticks as in T2. The thud is a `VibrationEffect.BasicEnvelopeBuilder` (API 36): low sharpness, up in 20ms, down in 60ms. An envelope starts and ends at zero intensity, with control points at least 20ms apart |
+| T2 | API 30 and later and `Vibrator.areAllPrimitivesSupported(...)` is true for every primitive used | `VibrationEffect.Composition`: `PRIMITIVE_TICK` (API 30) at scales 0.4, 0.6, 0.8, then `PRIMITIVE_THUD` (API 31; `PRIMITIVE_CLICK` at 1.0 where it is missing). One unsupported primitive silences the whole composition, so check first |
 | T3 | API 29 and later | Predefined effects: `EFFECT_TICK` for the climb, `EFFECT_HEAVY_CLICK` for the thud |
 | T4 | Anything else | `View.performHapticFeedback` with `CONFIRM` (API 30) or `CONTEXT_CLICK` |
 
@@ -469,7 +472,10 @@ Device tiers for the rich effects, chosen once at start-up and cached:
   it, keep to presets, primitives at full scale, or predefined effects.
 - `HapticFeedbackType` values newer than the device fall back inside Compose. Verify each
   constant's API level against the `HapticFeedbackConstants` reference before relying on it
-  (Confirm and Reject are API 30; Toggle and Segment are newer).
+  (Confirm, Reject and GestureEnd are API 30; ToggleOn, ToggleOff, SegmentTick and
+  SegmentFrequentTick are API 34).
+- Vibrations play with `VibrationAttributes.USAGE_TOUCH` on API 33 and later, and need the
+  `VIBRATE` permission. `performHapticFeedback` does not.
 
 ## Input and focus
 
