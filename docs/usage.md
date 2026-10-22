@@ -77,6 +77,9 @@ usb-arsenal storage stop
   - A change between disk, `dvd` and CD-ROM re-plugs the gadget, because a host only
     reads the device type and sector size when it enumerates or sees a new disc.
   - If the host has locked the drive, `start` also re-plugs, which releases the lock.
+- **`eject`** empties one LUN in place; the host sees the medium go, and the drive stays.
+  Before kernel 6.6 a host's lock makes that fail, so `eject` re-plugs to release it, as
+  `start` does.
 - **CD-ROM mode stops at about 2.36 GB.** The kernel cuts larger images off and the host
   reads a truncated disc; USB Arsenal warns (unless the kernel carries
   the DVD patch from `kernel-patches/`). `dvd` mode has no limit and is what auto mode picks for a

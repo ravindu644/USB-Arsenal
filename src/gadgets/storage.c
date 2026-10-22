@@ -130,6 +130,15 @@ static int lun_eject(const char *ldir) {
   return lun_write(ldir, "file", "\n");
 }
 
+/* Eject, retrying while EBUSY for up to [tries] tenths of a second: a host's
+ * medium lock lets go once the kernel has processed a disconnect */
+static int lun_eject_wait(const char *ldir, int tries) {
+  int r;
+  while ((r = lun_eject(ldir)) < 0 && errno == EBUSY && --tries > 0)
+    usleep(100000);
+  return r;
+}
+
 /* Write order matters: cdrom and ro return EBUSY while a file is open, so
  * the medium goes out first and the new one goes in last. */
 /* Returns -EBUSY, quietly, when the host holds a medium lock: the caller
@@ -139,14 +148,9 @@ static int lun_load(const char *ldir, const char *path, enum mode mode,
                     int wait) {
   char cur[PATH_MAX] = "", file[PATH_MAX + 2];
   snprintf(file, sizeof(file), "%s/file", ldir);
-  if (read_file(file, cur, sizeof(cur)) > 0) {
-    int tries = wait ? 30 : 1;
-    while (lun_eject(ldir) < 0)
-      if (errno != EBUSY || --tries == 0)
-        return errno == EBUSY ? -EBUSY : -1;
-      else
-        usleep(100000);
-  }
+  if (read_file(file, cur, sizeof(cur)) > 0 &&
+      lun_eject_wait(ldir, wait ? 30 : 1) < 0)
+    return errno == EBUSY ? -EBUSY : -1;
   lun_write(ldir, "removable", "1");
   if (inquiry[0])
     lun_write(ldir, "inquiry_string", inquiry);
@@ -563,12 +567,33 @@ static int do_eject(int lun) {
     return UA_EXIT_FAIL;
   }
   ua_gadget_func_dir(&g, FUNC, fdir, sizeof(fdir));
-  if (lun_dir(fdir, lun, ldir, sizeof(ldir)) < 0 || lun_eject(ldir) < 0) {
-    ua_error("Eject failed: %s%s", strerror(errno),
-             errno == EBUSY ? " (the host has locked the drive)" : "");
+  if (lun_dir(fdir, lun, ldir, sizeof(ldir)) < 0) {
+    ua_error("Eject failed: %s", strerror(errno));
     return UA_EXIT_FAIL;
   }
-  ua_log("LUN %d ejected", lun);
+  if (lun_eject(ldir) == 0) {
+    ua_log("LUN %d ejected", lun);
+    return UA_EXIT_OK;
+  }
+  /* Before 6.6 there is no forced_eject, and a host's medium lock makes the
+   * eject EBUSY. The disconnect of a rebind releases it, as start does for a
+   * swap; the eject is retried while the kernel processes it. */
+  if (errno != EBUSY || !ua_gadget_live(&g)) {
+    ua_error("Eject failed: %s", strerror(errno));
+    return UA_EXIT_FAIL;
+  }
+  ua_debug("host holds the medium lock, rebinding to release it");
+  if (ua_gadget_begin(&g) < 0)
+    return UA_EXIT_FAIL;
+  int r = lun_eject_wait(ldir, 30), err = errno;
+  if (ua_gadget_commit(&g) < 0)
+    return UA_EXIT_FAIL;
+  if (r < 0) {
+    ua_error("Eject failed: %s%s", strerror(err),
+             err == EBUSY ? " (the host still holds the drive locked)" : "");
+    return UA_EXIT_FAIL;
+  }
+  ua_log("LUN %d ejected (the host had it locked, so it was replugged)", lun);
   return UA_EXIT_OK;
 }
 
