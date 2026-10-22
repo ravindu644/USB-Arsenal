@@ -500,3 +500,10 @@ Tick a box only when the item is merged and verified as described in its phase.
 - 2026-10-22: `storage eject` re-plugs to release a host's medium lock, as `start` does, where
   the kernel has no `forced_eject` (before 6.6); it failed with EBUSY. The app's Storage now
   applies LUN by LUN (eject in place, one start for what changed) instead of stop and start.
+- 2026-10-23: the app's HID screen (cards into Keys + mouse and Quacky, the interval as
+  setup), Keys + mouse (a trackpad, L M R and a full key set written as reports through a root
+  `dd` per node, the gamepad stick as the pointer) and a Quacky placeholder. Verified on the
+  a166p: the PC lists the gadget keyboard and mouse, the writers run, and an interval change
+  applies as `hid start --interval 5`.
+- 2026-10-23: `status --json` gives each HID function's `interval`, or `-1` on a stock f_hid
+  with no control for it, so the app shows the period the host really gets.

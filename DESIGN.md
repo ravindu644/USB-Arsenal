@@ -449,8 +449,31 @@ update to update the backend`), waits at an idle `#`, and Install types
 shell would have said (`su: inaccessible or not found`, su's own stderr, or the timeout).
 
 ### Trackpad
-A `.d25` panel with a pixel pointer, a 44px wheel strip on its right, and an L/M/R segmented
-bar under it. Live report bytes sit below it in VT323.
+A `.d25` panel with a pixel pointer where the finger is, a 44px wheel strip on its right, and an
+L/M/R bar under it. A drag moves the host pointer, a tap clicks, and a button is down for as
+long as it is held. No report bytes are shown. On Keys + mouse its height is the Keys tab's
+height above the `TYPE` box, so its bottom edge sits where that box begins.
+
+### Card (`.card`)
+A big way into a screen, in the drive panel's look: an inverted 40px face with the name and
+`>`, over a body with a 4x sprite and one VT323 line. The whole card is one key. Focused or
+held it inverts (the face goes light, the body dark), and a tap keeps it inverted for 2 frames
+before the screen changes, so a quick tap is still seen to land. HID's cards: `Keyboard and
+mouse` (the nodes while HID runs) and `Quacky` (`WIP`).
+
+### HID, Keys + mouse, Quacky
+- **HID:** the two cards, then `Interval`: the period on the left, `-`, the exponent and `+`
+  on the right, 1 to 16. It is HID's setup; changed while HID runs, it waits for the `Not
+  applied` sheet.
+- **Keys + mouse:** `Mouse` and `Keys` tabs.
+  - Mouse is the trackpad and `L M R`.
+  - Keys is `F1` to `F12`, the `ESC TAB BKSP DEL / SHIFT CTRL ALT SUPER / INS HOME END PRTSC /
+    ENTER PGUP PGDN` table, the arrows as an inverted T, and `TYPE`: a label over a tall box
+    whose text goes to the host as typed (deleted text as Backspace).
+  - Modifier keys latch, shown inverted, for the next key or character.
+  - With HID off the page is drawn under a D50 dither that takes no touch or focus, and an
+    inverted box with Pin, `Enable HID on Home to use this page`, steps in over it.
+- **Quacky:** not built yet. The duck beside Pin and `Under construction`; never shaded.
 
 ### Device panel (`.panel`, `.face`, `.led`, `.body`)
 The drive's frame: a 2px box with an inverted 40px face (a LED and a short
@@ -635,7 +658,7 @@ Rules:
   other screen, requested from a `LaunchedEffect`, never from the composable body.
 - **Focus comes back** to where it was after Back (`focusRestorer` on each list).
 - **Every focus move** plays `SegmentTick`.
-- **The HID screen hands the gamepad to the host:** the left stick moves the host pointer,
+- **Keys + mouse hands the gamepad to the host:** the left stick moves the host pointer,
   `BUTTON_A` is a left click, `BUTTON_X` a right click, and `BUTTON_B` still means Back.
 - Built with `focusable`, `focusGroup`, `focusProperties` and `onKeyEvent` /
   `onPreviewKeyEvent`.
@@ -673,7 +696,8 @@ USB-A shell are its eyes; its cable is its tail. Its 16×18 bitmap:
 The blink frame replaces rows 2 and 3 (counting from 0) with `...#........#...` and `...#.##..##.#...`.
 
 Function icons are 16px sprites: `storage` (disc), `tether` (RJ45 jack), `hid` (keyboard).
-Others: `usb` (trident), `eject`, `spark`, `pointer`. All of them are in the Pixel kit screen.
+Others: `usb` (trident), `eject`, `spark`, `pointer`, `duck` (Quacky's), and the four arrow
+keys. All of them are in the Pixel kit screen.
 
 App icon: Pin in ink on an `lcd` square, scaled to about 63% of the icon so a launcher mask
 never clips it (288×324 on 512, 96×108 on 192, 32×36 on 48). The themed icon inverts.
@@ -715,7 +739,9 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | Gateway, container, its iface | `--gateway CONTAINER`, `--gateway-iface IFACE`; the containers are `droidspaces show --json`'s `running`, and the gateway shows only with `/data/local/Droidspaces/bin/droidspaces` installed |
 | Tether address, DNS, upstream, DHCP and NAT | `--address CIDR`, `--dns IP[,IP]`, `--upstream IFACE`, `--no-net` |
 | Not applied sheet, Apply | Storage: `storage eject --lun N` for a LUN no longer picked, then one `storage start` with the changed picks (`storage stop` with none); Tether and HID: `stop`, then `start` with the setup |
-| HID interval | `hid start --interval N`, period 2^(N-1)×125µs, set at start |
+| HID interval | `hid start --interval N`, period 2^(N-1)×125µs, set at start (without the f_hid patch the backend warns and keeps 1 ms) |
+| Keys + mouse, the gamepad | app-side: 8-byte keyboard and 4-byte mouse reports, each one write to `/dev/hidgN` through a root `dd` per node |
+| Quacky | nothing yet: a WIP page |
 | Identity fields, Save, Reset | profile keys, `identity set FILE`, `identity unset` |
 | Log tabs | command output (CLI) and `Logs/usb-arsenald.log` (Daemon) |
 | Function names in the bind screen | `mass_storage.ua`, `ncm.ua`, `hid.ua_kbd`, `hid.ua_mouse` |

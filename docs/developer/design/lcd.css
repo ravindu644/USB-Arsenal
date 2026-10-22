@@ -138,6 +138,15 @@ body{margin:0}
 /* Bottom sheet. The screen behind is shaded with dither, never a grey */
 .scrim{position:absolute;inset:0;z-index:5;background-image:repeating-conic-gradient(var(--ink) 0 25%,transparent 0 50%);background-size:4px 4px}
 /* A choice: a.kv opens a sheet of these rows, the chosen one .on; with none, one .ghost line */
+/* A card: the drive panel's face and body, one key into a screen; lit while held */
+.card{all:unset;box-sizing:border-box;display:flex;flex-direction:column;border:2px solid var(--ink);cursor:pointer}
+.card .face{justify-content:space-between;padding:0 12px;font-weight:700}
+.card .body{min-height:84px}
+.card:active,.card:focus-visible{background:var(--ink);color:var(--lcd)}
+.card:active .face,.card:focus-visible .face{background:var(--lcd);color:var(--ink)}
+/* The trackpad: a .d25 panel with a 44px wheel strip on its right */
+.pad{position:relative;box-sizing:border-box;border:2px solid var(--ink);overflow:hidden}
+.pad .wheel{position:absolute;top:0;right:0;bottom:0;width:44px;border-left:2px solid var(--ink);display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:6px 0;box-sizing:border-box;background:var(--lcd)}
 .choice{display:flex;align-items:center;min-height:48px;padding:6px 10px;margin:0 -10px}
 .choice.on{background:var(--ink);color:var(--lcd)}
 .sheet{position:absolute;left:0;right:0;bottom:0;z-index:6;display:flex;flex-direction:column;gap:16px;padding:20px 20px 68px;background:var(--lcd);border-top:2px solid var(--ink);box-sizing:border-box}

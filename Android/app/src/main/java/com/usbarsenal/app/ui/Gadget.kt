@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.usbarsenal.app.backend.Backend
@@ -74,19 +75,28 @@ object Gadget {
     // The installer's verdict on the backend, as Home last read it; null until it has
     var backend by mutableStateOf<Backend?>(null)
 
-    // The setup Storage and Tether were last started with from here: a screen's setup that now
+    // The setup each function was last started with from here: a screen's setup that now
     // differs from it is what leaving the screen offers to apply, and Discard goes back to it.
     // Setups, not command lines, so a profile change edits nothing. Kept for the process: a
     // function the app did not start (the CLI, an earlier process) has none, and its changes
-    // wait for Home's switch. HID has no setup yet. [applying] marks an apply at work
+    // wait for Home's switch. [applying] marks an apply at work
     var startedPicks by mutableStateOf<List<Pick>?>(null)
     var startedPlan by mutableStateOf<TetherPlan?>(null)
+    var startedInterval by mutableStateOf<Int?>(null)
     var applying by mutableStateOf<Fn?>(null)
+
+    // What [fn] runs now is [setups]' part for it
+    fun recordStart(fn: Fn, setups: Setups) = when (fn) {
+        Fn.STORAGE -> startedPicks = setups.picks
+        Fn.TETHER -> startedPlan = setups.plan
+        Fn.HID -> startedInterval = setups.interval
+    }
 
     // We no longer know what runs: after a stop, or an apply that failed part of the way
     fun forgetStart(fn: Fn? = null) {
-        if (fn != Fn.TETHER) startedPicks = null
-        if (fn != Fn.STORAGE) startedPlan = null
+        if (fn == null || fn == Fn.STORAGE) startedPicks = null
+        if (fn == null || fn == Fn.TETHER) startedPlan = null
+        if (fn == null || fn == Fn.HID) startedInterval = null
     }
     var fault by mutableStateOf<Fault?>(null)
     val cli = mutableStateListOf<String>()
@@ -97,6 +107,8 @@ object Gadget {
     // A status that cannot be read is not shown: claiming a gadget is still bound would be worse
     suspend fun refresh() {
         status = readStatus().getOrNull()
+        // A running keyboard says whether this kernel lets the interval be set at all
+        status?.hid?.firstOrNull { it.function == "keyboard" }?.let { HidSetup.fixed = it.interval < 0 }
     }
 
     // Once a process: what the kernel can do (Check's answer, when setup ran), and the profile
@@ -141,25 +153,28 @@ object Gadget {
 fun setupArgs(fn: Fn): List<String> = when (fn) {
     Fn.STORAGE -> startArgs(Picks.all)
     Fn.TETHER -> tetherArgs(TetherSetup.plan, tetherFunction(TetherSetup.plan, Gadget.profile, Gadget.caps))
-    Fn.HID -> listOf("hid", "start")
+    Fn.HID -> listOf("hid", "start") + if (!HidSetup.fixed && HidSetup.interval != DEFAULT_INTERVAL) listOf("--interval", "${HidSetup.interval}") else emptyList()
 }
+
+// Every screen's setup as it stands, taken when a start is sent: an edit made while it runs
+// then shows as a change
+data class Setups(val picks: List<Pick>, val plan: TetherPlan, val interval: Int)
+
+fun setupsNow() = Setups(Picks.all.sortedBy { it.lun }, TetherSetup.plan, HidSetup.interval)
 
 // Whether what runs is not what the screen now sets up: an edit made back again is no change
 fun pending(fn: Fn) = Gadget.status.isOn(fn) && when (fn) {
     Fn.STORAGE -> Gadget.startedPicks?.let { it != Picks.all.sortedBy { p -> p.lun } }
     Fn.TETHER -> Gadget.startedPlan?.let { it != TetherSetup.plan }
-    Fn.HID -> null
+    Fn.HID -> Gadget.startedInterval?.let { !HidSetup.fixed && it != HidSetup.interval }
 } == true
 
-// Start a function with what its screen set up, or stop it. What started is recorded as the
-// setup it came from, taken now: an edit made while the start runs then shows as a change
+// Start a function with what its screen set up, or stop it
 fun flip(fn: Fn, on: Boolean, onDone: (Boolean) -> Unit = {}) {
     val args = if (on) setupArgs(fn) else listOf(fn.name.lowercase(), "stop")
-    val picks = Picks.all.sortedBy { it.lun }
-    val plan = TetherSetup.plan
+    val setups = setupsNow()
     Gadget.run(fn, *args.toTypedArray()) { ok ->
-        if (ok && on && fn == Fn.STORAGE) Gadget.startedPicks = picks
-        if (ok && on && fn == Fn.TETHER) Gadget.startedPlan = plan
+        if (ok && on) Gadget.recordStart(fn, setups)
         if (ok && !on) Gadget.forgetStart(fn)
         onDone(ok)
     }
@@ -167,8 +182,11 @@ fun flip(fn: Fn, on: Boolean, onDone: (Boolean) -> Unit = {}) {
 
 // Back to the setup the function was started with: what runs, so nothing waits any more
 fun discard(context: Context, fn: Fn) {
-    if (fn == Fn.STORAGE) Gadget.startedPicks?.let { Picks.replace(context, it) }
-    if (fn == Fn.TETHER) Gadget.startedPlan?.let { TetherSetup.set(context, it) }
+    when (fn) {
+        Fn.STORAGE -> Gadget.startedPicks?.let { Picks.replace(context, it) }
+        Fn.TETHER -> Gadget.startedPlan?.let { TetherSetup.set(context, it) }
+        Fn.HID -> Gadget.startedInterval?.let { HidSetup.set(context, it) }
+    }
 }
 
 /*
@@ -201,15 +219,13 @@ fun apply(fn: Fn) {
     }
     // The setup as it is now is what runs once every step works; one taken later would hide an
     // edit made meanwhile
-    val picks = Picks.all.sortedBy { it.lun }
-    val plan = TetherSetup.plan
+    val setups = setupsNow()
     val on = startable(fn)
     Gadget.applying = fn
     fun step(i: Int) {
         if (i == steps.size) {
             Gadget.forgetStart(fn)
-            if (on && fn == Fn.STORAGE) Gadget.startedPicks = picks
-            if (on && fn == Fn.TETHER) Gadget.startedPlan = plan
+            if (on) Gadget.recordStart(fn, setups)
             Gadget.applying = null
             return
         }
@@ -498,6 +514,32 @@ fun validDns(s: String) = s.split(',').filter { it.isNotEmpty() }.let { p -> p.i
 
 // An interface name the kernel takes: 1 to 15 characters, no slash or space
 fun validIface(s: String) = s.trim().length in 1..15 && s.trim().none { it == '/' || it.isWhitespace() }
+
+const val DEFAULT_INTERVAL = 4
+
+// HID's setup: the keyboard's poll interval exponent, 1 to 16 (4 is the kernel's 1 ms)
+object HidSetup {
+    var interval by mutableIntStateOf(DEFAULT_INTERVAL)
+        private set
+
+    // This kernel keeps the stock 1 ms whatever is asked (no f_hid interval control), as the
+    // running keyboard showed; the interval is then not a setting at all
+    var fixed by mutableStateOf(false)
+    private var loaded = false
+
+    fun load(context: Context) {
+        if (loaded) return
+        loaded = true
+        interval = prefs(context).getInt("interval", DEFAULT_INTERVAL).coerceIn(1, 16)
+    }
+
+    fun set(context: Context, next: Int) {
+        interval = next.coerceIn(1, 16)
+        prefs(context).edit { putInt("interval", interval) }
+    }
+
+    private fun prefs(context: Context) = context.getSharedPreferences("hid", Context.MODE_PRIVATE)
+}
 
 // `storage start` for every pick in one command: one replug however many LUNs
 fun startArgs(picks: List<Pick>): List<String> =

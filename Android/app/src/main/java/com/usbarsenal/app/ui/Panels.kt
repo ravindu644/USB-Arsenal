@@ -235,6 +235,7 @@ fun Input(
     keyboard: KeyboardOptions = KeyboardOptions.Default,
     // false locks it, ghosted: what it sets cannot change now
     enabled: Boolean = true,
+    singleLine: Boolean = true,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
@@ -250,12 +251,12 @@ fun Input(
             .then(if (enabled) Modifier else Modifier.ghost(LocalLcd.current.ground)),
         enabled = enabled,
         textStyle = LcdType.data.copy(color = ink),
-        singleLine = true,
+        singleLine = singleLine,
         keyboardOptions = keyboard,
         interactionSource = interaction,
         cursorBrush = SolidColor(ink),
         decorationBox = { field ->
-            Box(Modifier.padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart) {
+            Box(Modifier.padding(horizontal = 10.dp, vertical = if (singleLine) 0.dp else 8.dp), contentAlignment = if (singleLine) Alignment.CenterStart else Alignment.TopStart) {
                 if (value.isEmpty()) Text(placeholder, LcdType.data)
                 field()
             }
