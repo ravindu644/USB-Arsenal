@@ -34,26 +34,22 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.union
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.foundation.focusGroup
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -491,8 +487,8 @@ fun Sheet(
         Box(Modifier.fillMaxSize().dither(Dither.D50, ink).pointerInput(Unit) { detectTapGestures { dismiss() } })
         /*
          * The sheet is drawn beside Screen, not in it, so Screen's keyboard padding never reaches
-         * it: it pads for the keyboard itself (with the navigation bar, as one union, so neither
-         * counts twice), and a tall sheet stops under the status bar. Its body shrinks and
+         * it: it pads for the keyboard itself (safeDrawing, the bars, cutout and keyboard as one,
+         * so nothing counts twice), and a tall sheet stops under the status bar. Its body shrinks and
          * scrolls in what is left, which brings the focused field into view above the keys
          */
         Column(
@@ -507,7 +503,8 @@ fun Sheet(
                 .background(LocalLcd.current.ground)
                 .drawBehind { drawRect(ink, size = Size(size.width, Lcd.pixel.toPx())) }
                 .pointerInput(Unit) { detectTapGestures {} }
-                .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
+                // safeDrawing holds the keyboard too; the sides keep clear of a landscape cutout and bar
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
                 .padding(Lcd.gutter)
                 .focusRequester(group)
                 .focusProperties { onExit = { if (open) cancelFocusChange() } }
@@ -515,11 +512,11 @@ fun Sheet(
             verticalArrangement = Arrangement.spacedBy(Lcd.section),
         ) {
             Column(
-                Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                Modifier.weight(1f, fill = false).lcdScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(Lcd.section),
                 content = content,
             )
-            footer?.let { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Lcd.tight), content = it) }
+            footer?.let { KeyRow(it) }
         }
     }
 }

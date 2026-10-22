@@ -3,21 +3,18 @@ package com.usbarsenal.app.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import com.usbarsenal.app.backend.Root
 import com.usbarsenal.app.backend.WORKSPACE
-import com.usbarsenal.app.lcd.Lcd
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
@@ -73,17 +70,21 @@ fun LogScreen(back: () -> Unit) {
     // Opening the log is reading the fault, so the line that pointed here has done its job
     LaunchedEffect(Unit) { Gadget.fault = null }
     val lines = if (tab == 0) Gadget.cli else daemon
-    Screen {
+    Screen(
+        footer = {
+            KeyRow {
+                Key("Clear", Modifier.weight(1f)) { lines.clear() }
+                Key("Copy logs", Modifier.weight(1f), primary = true) {
+                    context.getSystemService(ClipboardManager::class.java)
+                        .setPrimaryClip(ClipData.newPlainText("usb-arsenal log", lines.joinToString("\n")))
+                }
+            }
+        },
+    ) {
         Top { BackKey() }
         Title("Log")
         Segs(listOf("CLI", "Daemon"), tab, { tab = it })
-        Terminal(lines, Modifier.weight(1f))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Lcd.tight)) {
-            Key("Clear", Modifier.weight(1f)) { lines.clear() }
-            Key("Copy logs", Modifier.weight(1f), primary = true) {
-                context.getSystemService(ClipboardManager::class.java)
-                    .setPrimaryClip(ClipData.newPlainText("usb-arsenal log", lines.joinToString("\n")))
-            }
-        }
+        // A short window scrolls the screen to it, and it keeps a dozen lines
+        Terminal(lines, Modifier.fill(min = 240.dp))
     }
 }

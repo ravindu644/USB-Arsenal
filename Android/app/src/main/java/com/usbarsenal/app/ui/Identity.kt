@@ -13,18 +13,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -145,23 +143,26 @@ fun IdentityScreen(back: () -> Unit, openLog: () -> Unit) {
     }
 
     Box(Modifier.fillMaxSize()) {
-        Screen {
+        Screen(
+            footer = {
+                KeyRow {
+                    // Built-in is no file: there is nothing to edit
+                    Key("Edit", Modifier.weight(1f), enabled = shown != null && chosen != null) { sheet = chosen }
+                    Key("Create", Modifier.weight(1f), primary = true) { sheet = "" }
+                }
+            },
+        ) {
             Top { BackKey() }
             Title("Identity")
             fault?.let { Fault(it.message, onLog = openLog) }
             ProfilePanel(shown, live = bound)
             Rule()
-            Column(Modifier.weight(1f).bleed(10.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(Modifier.bleed(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 FilesHeader(PROFILES, label = "Profiles")
                 FileRow(BUILT_IN.name, "${BUILT_IN.vid}:${BUILT_IN.pid}", null, selected = chosen == null, onPick = { pick(null) })
                 profiles.orEmpty().forEach { p ->
                     FileRow(p.name, "${p.vid}:${p.pid}", null, selected = p.path == chosen, onPick = { pick(p.path) })
                 }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Lcd.tight)) {
-                // Built-in is no file: there is nothing to edit
-                Key("Edit", Modifier.weight(1f), enabled = shown != null && chosen != null) { sheet = chosen }
-                Key("Create", Modifier.weight(1f), primary = true) { sheet = "" }
             }
         }
         NotAppliedSheet(

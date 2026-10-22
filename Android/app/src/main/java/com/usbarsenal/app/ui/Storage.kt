@@ -15,18 +15,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
@@ -144,7 +142,14 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
     }
 
     Box(Modifier.fillMaxSize()) {
-        Screen {
+        Screen(
+            footer = {
+                KeyRow {
+                    Key("Pick image", Modifier.weight(1f)) { picker.launch(arrayOf("*/*")) }
+                    Key("Create", Modifier.weight(1f), primary = true) { creating = true }
+                }
+            },
+        ) {
             Top { BackKey() }
             Title("Storage")
             fault?.let { Fault(it.message, onLog = openLog, modifier = Modifier.shake(shake)) }
@@ -164,8 +169,7 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                         Pin(8.dp)
                     }
                 }
-                Text("No image loaded", LcdType.labelStrong, Modifier.align(Alignment.CenterHorizontally))
-                Box(Modifier.weight(1f))
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text("No image loaded", LcdType.labelStrong) }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Mode", LcdType.labelStrong)
@@ -185,7 +189,7 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                 }
                 // The drive and its mode above, the folder to load from below
                 Rule()
-                Column(Modifier.weight(1f).bleed(10.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(Modifier.bleed(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     FilesHeader(IMAGES)
                     files.orEmpty().forEach { f ->
                         // A file another LUN holds is tagged with it and cannot be picked
@@ -193,10 +197,6 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                         FileRow(f.name, sizeText(f.bytes), other?.let { "lun$it" }, selected = f.path == path, onPick = { serve(f.path, mode) })
                     }
                 }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Lcd.tight)) {
-                Key("Pick image", Modifier.weight(1f)) { picker.launch(arrayOf("*/*")) }
-                Key("Create", Modifier.weight(1f), primary = true) { creating = true }
             }
         }
         UnappliedSheet(Fn.STORAGE, back)

@@ -39,13 +39,41 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.launch
+import com.usbarsenal.app.lcd.focusTick
+import com.usbarsenal.app.lcd.focusOutline
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.focusable
+import kotlin.math.roundToInt
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.layout.ParentDataModifier
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.composed
+import androidx.compose.runtime.Immutable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.LayoutScopeMarker
+import androidx.compose.foundation.ScrollState
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.usbarsenal.app.lcd.SpriteIcon
@@ -90,12 +118,20 @@ import kotlinx.coroutines.delay
 // The parts of lcd.css the screens share, each named after its class there
 
 /*
- * .lcd.phone: the gutters, 22dp from the top, and the system bars kept clear. A [bottomBar]
- * sits outside the gutters, flush to the screen edges, and keeps clear of the navigation bar
- * itself so its ground reaches under it.
+ * .lcd.phone: the gutters, 22dp from the top, and the system bars kept clear. The body scrolls
+ * when the window is too short for it (landscape, split screen, a large font), with the
+ * scrollbar in the right gutter; the [footer], the screen's keys, stays pinned under it. A
+ * [bottomBar] sits outside the gutters, flush to the screen edges, and keeps clear of the
+ * navigation bar itself so its ground reaches under it. [scroll] off is for a screen that sizes
+ * itself to the window (Keys + mouse's pad).
  */
 @Composable
-fun Screen(bottomBar: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) = Column(
+fun Screen(
+    bottomBar: (@Composable () -> Unit)? = null,
+    footer: (@Composable ColumnScope.() -> Unit)? = null,
+    scroll: Boolean = true,
+    content: @Composable ScreenScope.() -> Unit,
+) = Column(
     // The keyboard pushes the bar and the content up; the bar's own navigation-bar padding then gives way
     Modifier
         .fillMaxSize()
@@ -108,15 +144,101 @@ fun Screen(bottomBar: (@Composable () -> Unit)? = null, content: @Composable Col
             .weight(1f)
             .fillMaxWidth()
             .then(if (bottomBar == null) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)) else Modifier)
-            .padding(start = Lcd.gutter, end = Lcd.gutter, top = Lcd.topInset, bottom = if (bottomBar == null) Lcd.gutter else Lcd.section)
+            .padding(bottom = if (bottomBar == null) Lcd.gutter else Lcd.section)
             // Behind an open sheet nothing takes focus: a key pressed there would act unseen
             .focusProperties { onEnter = { if (SheetsOpen.count > 0) cancelFocusChange() } }
             .focusGroup(),
         verticalArrangement = Arrangement.spacedBy(Lcd.section),
-        content = content,
-    )
+    ) {
+        ScreenBody(Modifier.weight(1f).fillMaxWidth(), scroll, content)
+        footer?.let { Column(Modifier.padding(horizontal = Lcd.gutter), verticalArrangement = Arrangement.spacedBy(Lcd.section), content = it) }
+    }
     bottomBar?.invoke()
 }
+
+// What a screen's body offers its parts
+@LayoutScopeMarker
+@Immutable
+object ScreenScope {
+    // The height the window leaves over the other parts, shared like a Column's weight, and never
+    // under [min], so a list or a terminal stays usable when the window is short
+    fun Modifier.fill(min: Dp = 0.dp, weight: Float = 1f) = then(Fill(min, weight))
+}
+
+private data class Fill(val min: Dp, val weight: Float) : ParentDataModifier {
+    override fun Density.modifyParentData(parentData: Any?) = this@Fill
+}
+
+/*
+ * A Column that knows the window: the parts at their own height, Lcd.section apart, and each
+ * [ScreenScope.fill] part given what the window has left. When it all fits, the body is the
+ * window's height, as a weighted Column would be; when not, it is as tall as its parts and scrolls.
+ * The window's height comes in as the minimum: Screen's weight fixes the body's height, and
+ * verticalScroll lifts only the maximum. Without [scroll], each part gets what the parts above
+ * it left, as in a Column, so a part that sizes itself to its room (Keys + mouse) still can.
+ */
+@Composable
+private fun ScreenBody(modifier: Modifier, scroll: Boolean, content: @Composable ScreenScope.() -> Unit) = Layout(
+    content = { ScreenScope.content() },
+    modifier = modifier
+        .then(if (scroll) Modifier.lcdScroll(rememberScrollState(), inset = 0.dp) else Modifier)
+        .padding(start = Lcd.gutter, end = Lcd.gutter, top = Lcd.topInset),
+) { parts, c ->
+        val room = c.minHeight
+        val gap = Lcd.section.roundToPx()
+        val fills = parts.map { it.parentData as? Fill }
+        val placed = arrayOfNulls<Placeable>(parts.size)
+        var used = gap * (parts.size - 1).coerceAtLeast(0)
+        parts.forEachIndexed { i, part ->
+            if (fills[i] != null) return@forEachIndexed
+            val cap = if (c.hasBoundedHeight) (c.maxHeight - used).coerceAtLeast(0) else Constraints.Infinity
+            placed[i] = part.measure(Constraints(maxWidth = c.maxWidth, maxHeight = cap)).also { used += it.height }
+        }
+        val weights = fills.sumOf { it?.weight?.toDouble() ?: 0.0 }
+        val left = (room - used).coerceAtLeast(0)
+        parts.forEachIndexed { i, part ->
+            val f = fills[i] ?: return@forEachIndexed
+            val h = maxOf(f.min.roundToPx(), (left * f.weight / weights).toInt())
+            placed[i] = part.measure(Constraints(maxWidth = c.maxWidth, minHeight = h, maxHeight = h))
+        }
+        val tall = placed.sumOf { it!!.height } + gap * (parts.size - 1).coerceAtLeast(0)
+        layout(c.maxWidth, maxOf(tall, room).coerceIn(c.minHeight, c.maxHeight)) {
+            var y = 0
+            placed.forEach {
+                it!!.place(0, y)
+                y += it.height + gap
+            }
+        }
+}
+
+/*
+ * verticalScroll with the LCD's scrollbar: a 4dp ink thumb, as long as the share of the content
+ * in view, there only while there is more to scroll. It sits 8dp in from the screen's edge, in
+ * the gutter outside a row's bleed; [inset] is how far the view's right edge is from the screen's.
+ */
+fun Modifier.lcdScroll(state: ScrollState, inset: Dp = Lcd.gutter) = composed {
+    val ink = LocalLcd.current.ink
+    drawWithContent {
+        drawContent()
+        val max = state.maxValue
+        if (max in 1 until Int.MAX_VALUE) {
+            thumb(ink, size.width + inset.toPx() - 12.dp.toPx(), size.height, size.height + max, state.value.toFloat() / max)
+        }
+    }.verticalScroll(state)
+}
+
+// The thumb, its left edge at [left], for [view] of [total] pixels, [at] from 0 (top) to 1 (end), on the pixel grid
+private fun DrawScope.thumb(ink: Color, left: Float, view: Float, total: Float, at: Float) {
+    val px = Lcd.pixel.toPx()
+    val len = maxOf(24.dp.toPx(), view * view / total)
+    fun snap(v: Float) = (v / px).roundToInt() * px
+    drawRect(ink, Offset(left, snap((view - len) * at)), Size(4.dp.toPx(), snap(len)))
+}
+
+// A row of keys sharing the width, as every screen's and sheet's keys sit
+@Composable
+fun KeyRow(content: @Composable RowScope.() -> Unit) =
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Lcd.tight), content = content)
 
 /*
  * Silkscreen is a menu face and always uppercase; VT323 keeps its case. Only the first [typed]
@@ -444,11 +566,51 @@ private val GLYPH = Regex("^\\[.] ")
  */
 // [live] false is a document on the panel (a licence): no backlit line, no cursor
 @Composable
-fun Terminal(lines: List<String>, modifier: Modifier = Modifier, live: Boolean = true) = Inverted {
+fun Terminal(lines: List<String>, modifier: Modifier = Modifier, live: Boolean = true) {
+    val cursor = LocalLcd.current.ink
+    val scope = rememberCoroutineScope()
     val list = rememberLazyListState()
+    val step = with(LocalDensity.current) { 80.dp.toPx() }
+    var focused by remember { mutableStateOf(false) }
+    val glide = stepSpec<Float>(2)
+    // Keys can reach it, which scrolls a short screen to it, and then step through its lines;
+    // at either end the key moves focus on as usual
+    val keys = Modifier
+        .onFocusChanged { focused = it.isFocused }
+        .onPreviewKeyEvent { e ->
+            val down = e.key == Key.DirectionDown
+            if (e.type != KeyEventType.KeyDown || !(down || e.key == Key.DirectionUp)) return@onPreviewKeyEvent false
+            if (if (down) !list.canScrollForward else !list.canScrollBackward) return@onPreviewKeyEvent false
+            scope.launch { list.animateScrollBy(if (down) step else -step, glide) }
+            true
+        }
+        .focusTick()
+        .focusable()
+    Inverted { TerminalList(lines, list, live, cursor, focused, modifier.then(keys)) }
+}
+
+@Composable
+private fun TerminalList(lines: List<String>, list: LazyListState, live: Boolean, cursor: Color, focused: Boolean, modifier: Modifier) {
     LaunchedEffect(lines.size, lines.lastOrNull()) { if (live && lines.isNotEmpty()) list.scrollToItem(lines.lastIndex) }
+    val ink = LocalLcd.current.ink
     LazyColumn(
-        modifier.fillMaxWidth().background(LocalLcd.current.ground).padding(10.dp),
+        modifier
+            .then(if (focused) Modifier.focusOutline(cursor) else Modifier)
+            .fillMaxWidth()
+            .background(LocalLcd.current.ground)
+            // The scrollbar, by lines: what share of them is in view, and how far down the first is
+            .drawWithContent {
+                drawContent()
+                val info = list.layoutInfo
+                val total = info.totalItemsCount
+                val seen = info.visibleItemsInfo.size
+                if (seen in 1 until total) {
+                    val first = list.firstVisibleItemIndex.toFloat()
+                    // In the terminal's 10dp padding, 3dp from its edge
+                    thumb(ink, size.width - 7.dp.toPx(), size.height, size.height * total / seen, first / (total - seen).coerceAtLeast(1))
+                }
+            }
+            .padding(10.dp),
         state = list,
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {

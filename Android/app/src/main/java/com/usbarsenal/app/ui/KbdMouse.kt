@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import java.io.IOException
 import kotlinx.coroutines.channels.BufferOverflow
@@ -33,7 +32,6 @@ import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -209,7 +207,7 @@ fun KbdMouseScreen(back: () -> Unit) {
             true
         },
     ) {
-        Screen {
+        Screen(scroll = false) {
             Top { BackKey() }
             Title("Keys + mouse")
             Segs(listOf("Mouse", "Keys"), tab, { tab = it })
@@ -391,7 +389,7 @@ private fun KeysTab(mods: Int, onMod: (Int) -> Unit, onKey: (Int) -> Unit, onTyp
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // The box takes what the keys leave, and keeps a few lines when the keyboard is up
         val box = (maxHeight - KEYS_ABOVE_BOX).coerceAtLeast(120.dp)
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Lcd.section)) {
+        Column(Modifier.lcdScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Lcd.section)) {
             KeyGrid(listOf(FKEYS.take(6), FKEYS.drop(6)), mods, onMod, onKey)
             KeyGrid(TABLE, mods, onMod, onKey)
             KeyGrid(listOf(listOf("", "UP", ""), listOf("LEFT", "DOWN", "RIGHT")), mods, onMod, onKey)
