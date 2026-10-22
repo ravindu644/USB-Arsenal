@@ -281,6 +281,16 @@ Rules:
 - **Tablet:** a 1280×800 frame. A 420px list pane on the left, the detail on the right, the
   bottom bar across both. Panes and columns are divided by 2px ink rules.
 
+Responsive rules for the app:
+- **Window size classes decide the layout, not the device.** Compact width (under 600dp) is
+  the single-pane phone layout. Medium and expanded widths (600dp and up), including a phone
+  in landscape and a foldable opened, show the list-detail panes.
+- **Insets come from the system.** `WindowInsets.navigationBars` replaces the fixed 48px when
+  the real bar is shorter (gesture navigation) or on the side (landscape). Keys never sit
+  under a system bar.
+- **Text is in `sp`.** Layouts must survive font scale 1.3: rows grow taller, long lines
+  fall back to the marquee, nothing clips or overlaps.
+
 ## Elevation & Depth
 
 The screen is flat. There are no layered surfaces, no shadows and no blur.
@@ -370,7 +380,28 @@ Home top bar (32×36, blinking), the bottom bar, the empty storage screen (128×
 
 ## Motion
 
-Motion is frame-based. Things step, blink and cut. Nothing eases, floats or fades.
+Motion is frame-based. Things step, blink and cut, like an LCD redrawing. Nothing eases,
+floats or fades.
+
+**The frame clock.** Interaction motion is counted in frames of 40ms, and every duration is a
+whole number of frames. Every animation uses step easing, `Easing { t -> floor(t * n) / n }`
+with `n` the number of frames, so values jump between whole positions. Ambient loops keep the
+step timings in the second table.
+
+Interaction motion:
+
+| Motion | Frames | Rule |
+| --- | --- | --- |
+| Screen change | 4 (160ms) | The LCD redraw: the new screen paints in four horizontal bands, top to bottom. Back paints bottom to top |
+| Key press | 1 | Down 4px into its shadow on press, back on release |
+| DIP switch | 1 | The knob snaps to the other side. No slide |
+| Focus cursor | 0 | Inversion moves to the focused element on the next frame |
+| Rows typing on | 1 per row | On first entry to a list, rows appear one per frame, six at most, then the rest at once |
+| Error shake | 3 | 2px left, 2px right, home. Paired with the `Reject` haptic |
+| Number change | 1 | Digits flip to the new value. No counting up |
+| Bottom bar state | 2 | Bound, replugging and port with Android cut over in two bands |
+
+Ambient loops:
 
 | Motion | Timing | Where |
 | --- | --- | --- |
@@ -382,10 +413,94 @@ Motion is frame-based. Things step, blink and cut. Nothing eases, floats or fade
 | Activity LED | 1.2s blink pattern | The drive face while serving |
 | Bind | 5s loop | Pin climbs into the host port, sparks, one inverted flash frame, `GADGET BOUND` |
 
-- Only `steps()` timing. Transform and visibility only.
-- `prefers-reduced-motion: reduce` drops every animation and shows the resting frame: Pin
-  plugged in, text at its start, cursor visible.
+Rules:
+- Only stepped timing. Animate position, visibility and inversion; never opacity ramps,
+  scale or rotation.
+- **Reduced motion.** When the system "Remove animations" setting is on (Animator duration
+  scale 0, which Compose applies through `MotionDurationScale`) or the in-app motion switch is
+  off, every loop shows its resting frame: Pin plugged in, text at its start, cursor visible,
+  LED lit. Infinite loops must check this themselves, because a zero duration scale only
+  finishes finite animations. Screen changes become a cut.
 - The marquee is the only motion applied to text.
+- One playful moment at a time. The bind animation plays when the gadget first binds, not on
+  every replug.
+
+## Haptics
+
+Haptics make the switches and keys feel like hardware. They follow Android's haptics
+principles: clear and crisp, never buzzy, in sync with the frame they belong to.
+
+Principles:
+- **No haptics beats buzzy haptics.** Never use `VibrationEffect.createOneShot`,
+  `Vibrator.vibrate(long)` or a hand-made waveform for UI feedback.
+- **Frequent events are subtle, important events are strong.** A focus move is a tick; a
+  bind is a sequence.
+- **Same interaction, same effect,** everywhere in the app.
+- **Fire on the frame the visual changes,** never before the state changes.
+- **Respect the user.** No haptics when the system touch feedback setting is off
+  (`Settings.System.HAPTIC_FEEDBACK_ENABLED` is 0), when the in-app switch is off, or while the
+  app is in the background.
+
+Event map. Simple effects go through Compose's `LocalHapticFeedback` (`HapticFeedbackType`);
+the rich ones go through the tiers below.
+
+| Event | Effect |
+| --- | --- |
+| Key press | `VirtualKey` |
+| DIP switch on / off | `ToggleOn` / `ToggleOff` |
+| Segment change, LUN switch, D-pad or keyboard focus move | `SegmentTick` |
+| Trackpad drag | `SegmentFrequentTick`, at most one per 8px of travel |
+| Gadget bound (the bind animation) | Rich: three rising ticks as Pin climbs, a thud on the frame it plugs in |
+| Stop all, eject | `GestureEnd` |
+| Command refused or failed | `Reject`, with the error shake |
+| Save, image created | `Confirm` |
+| Warning shown | None. A warning is read, not felt |
+
+Device tiers for the rich effects, chosen once at start-up and cached:
+
+| Tier | When | How |
+| --- | --- | --- |
+| T1, flagship | `VibrationEffect.Builder` exists (Android 16 and later; the docs give two API levels, so check at runtime) | Presets `PRESET_TICK` and `PRESET_CLICK` with a basic envelope for the thud. The framework falls back by itself |
+| T2 | API 30 and later and `Vibrator.areAllPrimitivesSupported(...)` is true for every primitive used | `VibrationEffect.Composition`: `PRIMITIVE_TICK` at scales 0.4, 0.6, 0.8, then `PRIMITIVE_THUD` (or `PRIMITIVE_CLICK` at 1.0). One unsupported primitive silences the whole composition, so check first |
+| T3 | API 29 and later | Predefined effects: `EFFECT_TICK` for the climb, `EFFECT_HEAVY_CLICK` for the thud |
+| T4 | Anything else | `View.performHapticFeedback` with `CONFIRM` (API 30) or `CONTEXT_CLICK` |
+
+- Amplitude scales only mean something when `Vibrator.hasAmplitudeControl()` is true; without
+  it, keep to presets, primitives at full scale, or predefined effects.
+- `HapticFeedbackType` values newer than the device fall back inside Compose. Verify each
+  constant's API level against the `HapticFeedbackConstants` reference before relying on it
+  (Confirm and Reject are API 30; Toggle and Segment are newer).
+
+## Input and focus
+
+Every screen is fully usable with touch, a hardware keyboard, a D-pad, and a gamepad or
+joystick. A pocket tool gets used with whatever is plugged in.
+
+The focus cursor is the LCD cursor:
+- **Rows, segments and file rows invert** when focused, exactly like the selected state.
+- **Keys, DIP switches and inputs** get a 2px dashed ink outline, 3px outside the element,
+  because they have no inverted resting state.
+- Focus is drawn by our components. Never rely on a default indication.
+
+Key map:
+
+| Input | Action |
+| --- | --- |
+| Arrows, D-pad, left stick | Move focus in that direction |
+| Enter, D-pad center, `BUTTON_A` | Activate (press the key, flip the switch, open the row) |
+| Back, Escape, `BUTTON_B` | Back |
+| Tab, Shift+Tab | Next and previous element in reading order |
+| `BUTTON_L1`, `BUTTON_R1` | Step the focused segmented control or the LUN strip |
+
+Rules:
+- **Initial focus** goes to the first row on Home and the primary key or first row on every
+  other screen, requested from a `LaunchedEffect`, never from the composable body.
+- **Focus comes back** to where it was after Back (`focusRestorer` on each list).
+- **Every focus move** plays `SegmentTick`.
+- **The HID screen hands the gamepad to the host:** the left stick moves the host pointer,
+  `BUTTON_A` is a left click, `BUTTON_X` a right click, and `BUTTON_B` still means Back.
+- Built with `focusable`, `focusGroup`, `focusProperties` and `onKeyEvent` /
+  `onPreviewKeyEvent`.
 
 ## Pixel art and Pin
 
@@ -463,6 +578,11 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | Identity fields, Save, Reset | profile keys, `identity set FILE`, `identity unset` |
 | Log tabs | command output (CLI) and `Logs/usb-arsenald.log` (Daemon) |
 | Function names in the bind screen | `mass_storage.ua`, `ncm.ua`, `hid.ua_kbd`, `hid.ua_mouse` |
+| Requirements and capability screen | `check --json` |
+| Home status, live rows | `status --json` (to be added to the C side before the app needs it) |
+
+Every command runs through root in its own short-lived shell with a timeout (see AGENTS.md),
+so one stuck command can never freeze the screen.
 
 App-side features, done by the app itself: the `/sdcard/USB-Arsenal` file list, Create (a sparse
 image, as `truncate -s` does), and HID input written to `/dev/hidgN`.
@@ -479,7 +599,9 @@ Do keep every corner square and every border 2px.
 Do keep anything tappable at least 44px tall.
 Do put a heading on every screen and nothing beside `< BACK`.
 Do leave the bottom 48px empty for the navigation bar.
-Do step every animation and honour `prefers-reduced-motion`.
+Do step every animation and honour reduced motion.
+Do make every screen work with a keyboard, a D-pad and a gamepad.
+Do play the haptic from the event map, on the frame the visual changes.
 Do draw sprites at whole-number scales on the 16px grid.
 Do map every control to a backend command before drawing it.
 
@@ -491,6 +613,8 @@ Don't explain a control under the control.
 Don't draw a fake status bar or navigation bar.
 Don't use emoji or icon fonts. Sprites only.
 Don't ease, fade or float anything.
+Don't use `createOneShot` or a hand-made waveform for touch feedback.
+Don't play a rich haptic without checking the device tier first.
 Don't show a feature the backend does not have.
 Don't use an em dash. Use a comma, a full stop, or rewrite the sentence.
 

@@ -205,7 +205,36 @@ name.
   echoes the box below it, no `by arsenal`, no subtitle explaining a control, nothing in the
   top bar beside `< BACK`. Helper text only prevents a mistake; warnings only state a
   consequence.
+- **Research before using a platform API.** Read the Android developer docs for any
+  animation, haptics, focus or input API before writing it, and record its API level and
+  fallback in DESIGN.md. Never guess a constant's API level.
+- **Motion and haptics come from DESIGN.md's tables.** Stepped easing on the 40ms frame
+  clock, the event map for haptics, the device tiers for rich effects. Never use
+  `createOneShot` or a hand-made waveform for touch feedback. With reduced motion, every loop
+  shows its resting frame.
+- **Every screen works without touch.** Before a screen is done, walk it with
+  `adb shell input keyevent` (`KEYCODE_DPAD_*`, `KEYCODE_ENTER`, `KEYCODE_BUTTON_A`,
+  `KEYCODE_BUTTON_B`, `KEYCODE_TAB`) and confirm every control is reachable and the focus
+  cursor is visible.
 - **Done means:** `npx @google/design.md lint DESIGN.md` reports no errors, every screen
   renders at 390x844 with nothing clipped and the bottom 48px empty, and a grep for the em
   dash finds nothing. A change to the language goes into DESIGN.md and `lcd.css` in the
   same commit.
+
+## Android app
+
+- **Where and what:** `Android/`, a Kotlin and Jetpack Compose app, package
+  `com.usbarsenal.app`, minSdk 26. Compose foundation only: no Material component is
+  visible, every widget is ours and follows DESIGN.md. The version comes from `UA_VERSION`.
+- **Never run root commands through one shared shell.** One stuck command would freeze every
+  other one behind it. Each operation runs in its own short-lived root shell with a timeout,
+  and the shell is killed (not just abandoned) on timeout or cancel. Commands that change the
+  gadget go through one ordered lane, so two never race; a timeout kills that command's shell
+  and frees the lane, so the lane cannot stall. Reads (`status --json`, `check --json`, log
+  tails) use their own shells and never wait on the lane.
+- **The installer is ported from Droidspaces** (`BinaryInstaller`, `ModuleInstaller`,
+  `DeviceArch`, the backend checker), restyled to DESIGN.md. The boot module is `module/`.
+- **Test over wireless ADB.** Binding the gadget takes the USB port from Android, so USB ADB
+  drops the moment a test works.
+- **Test haptics on more than one phone:** one with rich haptics, one midrange, and once with
+  touch feedback switched off.
