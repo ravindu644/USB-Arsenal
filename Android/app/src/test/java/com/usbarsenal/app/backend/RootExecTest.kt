@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
@@ -77,6 +78,21 @@ class RootExecTest {
         assertEquals("hello", withTimeout(2_000) { s.lines.first() })
         assertTrue(running(marker))
         s.close()
+        assertTrue("the stream outlived close()", !running(marker))
+    }
+
+    // A quiet stream (a log nobody writes to) must still die when its collector is cancelled
+    @Test
+    fun cancellingAQuietStreamKillsIt() = runBlocking<Unit> {
+        val marker = "ua-quiet-${System.nanoTime()}"
+        val s = root.stream("sh -c 'sleep 30 # $marker'")!!
+        val start = System.nanoTime()
+        val reader = launch(Dispatchers.Default) { s.lines.collect {} }
+        delay(200)
+        reader.cancel()
+        withTimeout(2_000) { reader.join() }
+        s.close()
+        assertTrue("cancel waited on the quiet pipe: ${since(start)}ms", since(start) < 1_500)
         assertTrue("the stream outlived close()", !running(marker))
     }
 

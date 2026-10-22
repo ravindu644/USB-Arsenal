@@ -479,3 +479,8 @@ Tick a box only when the item is merged and verified as described in its phase.
   lines, which the text and JSON outputs both render. Verified on the a166p with HID, an RW
   image on LUN 0 and an NCM tether live at once, and again after `stop` (`bound:0`); `dmesg`
   clean after every step, and the text `status` reads as before.
+- 2026-10-22: the daemon no longer logs `status` or `identity show` (it still runs them): a
+  client re-reading status every few seconds filled `usb-arsenald.log` with
+  `Running: status --json` and buried the commands that changed something. The Android app
+  also reads both directly (`UA_NO_PROXY=1`). Verified on the a166p: relayed `status`,
+  `identity show` and `-v status` leave the log as it was, `hid stop` is still logged.

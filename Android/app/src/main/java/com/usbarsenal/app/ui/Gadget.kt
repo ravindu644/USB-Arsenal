@@ -28,6 +28,13 @@ data class Busy(val fn: Fn?, val typed: String, val stopping: Boolean)
 // The functions Home lists, in its order
 enum class Fn(val label: String) { STORAGE("Storage"), TETHER("Tether"), HID("HID") }
 
+// What a log on screen keeps; the files keep the rest
+const val LOG_KEEP = 2_000
+
+fun MutableList<String>.keepLast(n: Int = LOG_KEEP) {
+    if (size > n) subList(0, size - n).clear()
+}
+
 // The C side colours its [+] lines even through a pipe
 private val ANSI = Regex("\\u001B\\[[0-9;]*[A-Za-z]")
 
@@ -77,8 +84,7 @@ object Gadget {
             val r = Root.change("$UA " + args.joinToString(" ", transform = ::shellQuote))
             cli += "$ usb-arsenal $typed"
             (r.out + r.err).forEach { cli += plain(it) }
-            // ponytail: the session's log keeps its last 2000 lines; Log's Daemon tab has the file
-            if (cli.size > 2_000) cli.removeRange(0, cli.size - 2_000)
+            cli.keepLast()
             if (!r.ok) {
                 val why = when {
                     r.timedOut -> "[-] Timed out (${CHANGE_TIMEOUT_MS / 1000}s)"

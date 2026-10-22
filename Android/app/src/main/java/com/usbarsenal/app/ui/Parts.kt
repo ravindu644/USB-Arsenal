@@ -32,11 +32,12 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -416,28 +417,30 @@ private val GLYPH = Regex("^\\[.] ")
 
 /*
  * .term: live output on a whole inverted panel, its newest line backlit with the cursor. It
- * fills from the top down like a terminal and scrolls only once it is full, held at the newest
- * line. A line that starts with a glyph such as "[+]" puts it in the 28dp column, so wrapped
- * text lines up after it; any other line (a prompt, stderr) uses the whole width.
+ * fills from the top down like a terminal and, once full, keeps the newest line in view. A line
+ * that starts with a glyph such as "[+]" puts it in the 28dp column, so wrapped text lines up
+ * after it; any other line (a prompt, stderr) uses the whole width. Only the lines on screen
+ * are composed, so a long log costs what a short one does.
  */
 @Composable
 fun Terminal(lines: List<String>, modifier: Modifier = Modifier) = Inverted {
-    Column(modifier.fillMaxWidth().background(LocalLcd.current.ground).padding(10.dp)) {
-        // Shorter than the panel it sits at the top; longer, reverse scrolling keeps its end in view
-        Column(Modifier.verticalScroll(rememberScrollState(), reverseScrolling = true), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            lines.forEachIndexed { i, line ->
-                val newest = i == lines.lastIndex
-                val glyph = GLYPH.find(line)?.value
-                val body = @Composable {
-                    Row(
-                        Modifier.fillMaxWidth().background(LocalLcd.current.ground).padding(horizontal = 4.dp, vertical = 3.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        if (glyph != null) Text(glyph.trim(), LcdType.data, Modifier.width(28.dp))
-                        Text(line.removePrefix(glyph.orEmpty()), LcdType.data, cursor = newest)
-                    }
+    val list = rememberLazyListState()
+    LaunchedEffect(lines.size, lines.lastOrNull()) { if (lines.isNotEmpty()) list.scrollToItem(lines.lastIndex) }
+    LazyColumn(
+        modifier.fillMaxWidth().background(LocalLcd.current.ground).padding(10.dp),
+        state = list,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        itemsIndexed(lines) { i, line ->
+            val glyph = GLYPH.find(line)?.value
+            Inverted(i == lines.lastIndex) {
+                Row(
+                    Modifier.fillMaxWidth().background(LocalLcd.current.ground).padding(horizontal = 4.dp, vertical = 3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (glyph != null) Text(glyph.trim(), LcdType.data, Modifier.width(28.dp))
+                    Text(line.removePrefix(glyph.orEmpty()), LcdType.data, cursor = i == lines.lastIndex)
                 }
-                Inverted(newest, body)
             }
         }
     }

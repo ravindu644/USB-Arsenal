@@ -12,23 +12,33 @@ const val WORKSPACE = "/data/local/USB-Arsenal"
 const val UA = "$WORKSPACE/bin/usb-arsenal"
 
 /*
+ * Reads run here, not through the daemon (UA_NO_PROXY): as root they read the same configfs and
+ * workspace, and Home re-reads status every 2s, which would fill the daemon's log with
+ * `Running: status --json` and bury the commands that changed something.
+ */
+// Run here, never relayed to a daemon
+private const val NO_PROXY = "UA_NO_PROXY=1"
+
+private const val READ = "$NO_PROXY $UA"
+
+/*
  * Setup checks with the binary it is about to install; UA_NO_PROXY keeps an older daemon from
  * answering for it. check probes by creating functions in configfs, so once the gadget may be
  * live it goes through the change lane ([onLane]) and never races a command.
  */
 suspend fun readCheck(binary: String = UA, onLane: Boolean = false): Result<Capabilities> {
-    val cmd = "UA_NO_PROXY=1 ${shellQuote(binary)} check --json"
+    val cmd = "$NO_PROXY ${shellQuote(binary)} check --json"
     return (if (onLane) Root.change(cmd) else Root.read(cmd)).json(::parseCheck)
 }
 
 // identity show's key column: "  tether_function  ncm"; a derived value reads "(derived)"
-suspend fun readProfile(): Map<String, String> = Root.read("$UA identity show").out
+suspend fun readProfile(): Map<String, String> = Root.read("$READ identity show").out
     .filter { it.startsWith("  ") }
     .mapNotNull { line -> line.trim().split(Regex("\\s+"), limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
     .filter { it.second != "(derived)" }
     .toMap()
 
-suspend fun readStatus(): Result<GadgetStatus> = Root.read("$UA status --json").json(::parseStatus)
+suspend fun readStatus(): Result<GadgetStatus> = Root.read("$READ status --json").json(::parseStatus)
 
 // What su -v prints, as it prints it: "3.3.0:KernelSU" on the a166p
 data class RootInfo(val su: String)

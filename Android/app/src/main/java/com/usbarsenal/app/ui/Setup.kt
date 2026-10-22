@@ -64,7 +64,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 // Every screen; App keeps them as a back stack
-private enum class Step { WELCOME, ROOT, CHECK, INSTALL, HOME }
+private enum class Step { WELCOME, ROOT, CHECK, INSTALL, HOME, LOG }
 
 // TYPING: Install was pressed and the command is typing; the installer starts when it has
 private enum class Phase { BEFORE, TYPING, RUNNING, DONE, FAILED }
@@ -144,7 +144,7 @@ fun App() {
             Step.INSTALL -> InstallScreen(update = update, back = ::pop, home = home)
             Step.HOME -> HomeScreen(
                 open = null,
-                openLog = null,
+                openLog = { push(Step.LOG) },
                 openSettings = null,
                 fix = { b ->
                     if (b.state == BackendState.NO_ROOT) {
@@ -158,6 +158,7 @@ fun App() {
                     }
                 },
             )
+            Step.LOG -> LogScreen(back = ::pop)
         }
     }
 }
@@ -408,9 +409,10 @@ private fun InstallScreen(update: String?, back: () -> Unit, home: () -> Unit) {
     val version = BuildConfig.VERSION_NAME
     val arch = deviceArch() ?: Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
     val opening = buildList {
-        if (update != null && update != version) {
-            add(ShellLine("# ", "# update $update → $version"))
-            // daemon stop leaves the gadget in the kernel (src/daemon.c), so this holds
+        if (update != null) {
+            // The same version rebuilt is still an update, but "1.2.0 → 1.2.0" would say nothing
+            add(ShellLine("# ", if (update != version) "# update $update → $version" else "# usb-arsenal $version for $arch"))
+            // The install never touches the gadget, so this holds
             add(ShellLine("# ", "# the gadget stays up while it updates"))
             add(ShellLine("# ", "# press update to update the backend"))
         } else {

@@ -280,7 +280,21 @@ static void handle_conn(int conn) {
     snprintf(line + len, sizeof(line) - len, "%s%s", i > 1 ? " " : "",
              r.argv[i]);
   }
-  ua_log("Running: %s", line);
+  /* status and `identity show` change nothing. A client that re-reads them
+   * every few seconds would otherwise bury the commands that did change
+   * something; the first word that is not an option (or --udc's value) is
+   * the command */
+  int quiet = 0;
+  for (int i = 1; i < r.argc; i++) {
+    if (r.argv[i][0] == '-' || (i > 1 && !strcmp(r.argv[i - 1], "--udc")))
+      continue;
+    quiet = !strcmp(r.argv[i], "status") ||
+            (!strcmp(r.argv[i], "identity") && i + 1 < r.argc &&
+             !strcmp(r.argv[i + 1], "show"));
+    break;
+  }
+  if (!quiet)
+    ua_log("Running: %s", line);
   session(conn, &r);
   _exit(0);
 }

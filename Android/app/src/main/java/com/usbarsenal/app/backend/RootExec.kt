@@ -6,10 +6,12 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
@@ -82,22 +84,29 @@ class RootExec(private val launch: (String) -> Process) {
 
     /*
      * A long-lived command: stdin is [RootStream.input], stdout and stderr are [RootStream.lines].
-     * Null without root, or when the shell does not start within [timeoutMs].
+     * Null without root, or when the shell does not start within [timeoutMs]. Its lines are
+     * polled like every pipe here, so cancelling a collector always gets through, and a cancel
+     * while it starts still kills what it started.
      */
-    suspend fun stream(cmd: String, timeoutMs: Long = 15_000): RootStream? = withContext(Dispatchers.IO) {
-        val p = start("echo $$; exec $cmd 2>&1") ?: return@withContext null
-        val raw = p.inputStream
-        // Polled, so a stalled su (a grant dialog left open) cannot pin this thread
-        val shellPid = withTimeoutOrNull(timeoutMs) { raw.pollLine(p) }?.toIntOrNull()
+    suspend fun stream(cmd: String, timeoutMs: Long = 15_000): RootStream? {
+        val p = withContext(Dispatchers.IO) { start("echo $$; exec $cmd 2>&1") } ?: return null
+        // Buffered, so polling a byte at a time costs no system call per byte
+        val raw = BufferedInputStream(p.inputStream)
+        val shellPid = try {
+            withTimeoutOrNull(timeoutMs) { raw.pollLine(p) }?.toIntOrNull()
+        } catch (e: CancellationException) {
+            // Its pid is likely a moment away; with Magisk it is the only handle on the shell
+            withContext(NonCancellable + Dispatchers.IO) {
+                kill(p, withTimeoutOrNull(1_000) { raw.pollLine(p) }?.toIntOrNull() ?: 0)
+            }
+            throw e
+        }
         if (shellPid == null) {
-            kill(p, 0)
-            return@withContext null
+            withContext(Dispatchers.IO) { kill(p, 0) }
+            return null
         }
-        val reader = raw.bufferedReader()
-        val lines = flow {
-            while (true) emit(withContext(Dispatchers.IO) { runCatching { reader.readLine() }.getOrNull() } ?: break)
-        }
-        RootStream(p.outputStream, lines) {
+        val lines = flow { while (true) emit(raw.pollLine(p) ?: break) }.flowOn(Dispatchers.IO)
+        return RootStream(p.outputStream, lines) {
             withContext(Dispatchers.IO) {
                 kill(p, shellPid)
                 runCatching { raw.close() }
