@@ -88,6 +88,37 @@ class GadgetTest {
         assertEquals("ncm", tetherFunction(TetherPlan(function = "rndis"), emptyMap(), caps().copy(ncm = Probe.OK, rndis = Probe.MISSING)))
     }
 
+    // Applying Storage touches only the LUNs that changed since its last start, so the host keeps the others
+    @Test
+    fun storageAppliesPerLun() {
+        val a = "/storage/emulated/0/USB-Arsenal/a.iso"
+        val b = "/storage/emulated/0/USB-Arsenal/b.img"
+        val c = "/storage/emulated/0/USB-Arsenal/c.img"
+        val before = listOf(Pick(0, "auto", a), Pick(1, "rw", b))
+        // As status shows it: the files under another path, and auto's choice
+        val live = listOf(Lun(0, "/mnt/x/a.iso", "cdrom", "ro"), Lun(1, "/mnt/x/b.img", "rw", "rw"))
+        // LUN1 no longer picked: ejected in place, LUN0 left alone
+        assertEquals(listOf(listOf("storage", "eject", "--lun", "1")), storageApply(before, listOf(Pick(0, "auto", a)), live))
+        // A new image on LUN1: a start of its own, which the backend swaps in place
+        assertEquals(listOf(listOf("storage", "start", "--lun", "1", "--mode", "rw", c)), storageApply(before, listOf(Pick(0, "auto", a), Pick(1, "rw", c)), live))
+        // Two swaps are two starts, so neither replugs the other
+        assertEquals(
+            listOf(listOf("storage", "start", "--lun", "0", "--mode", "auto", c), listOf("storage", "start", "--lun", "1", "--mode", "rw", a)),
+            storageApply(before, listOf(Pick(0, "auto", c), Pick(1, "rw", a)), live),
+        )
+        // rw to auto on the same file is a change: auto never serves writable
+        assertEquals(listOf(listOf("storage", "start", "--lun", "1", "--mode", "auto", b)), storageApply(before, listOf(Pick(0, "auto", a), Pick(1, "auto", b)), live))
+        // New LUNs share one start: one replug for all of them
+        assertEquals(
+            listOf(listOf("storage", "start", "--lun", "2", "--mode", "rw", c, "--lun", "3", "--mode", "disk", b)),
+            storageApply(before, before + Pick(2, "rw", c) + Pick(3, "disk", b), live),
+        )
+        // A drive the host ejected itself is loaded again, though its pick did not change
+        assertEquals(listOf(listOf("storage", "start", "--lun", "0", "--mode", "auto", a)), storageApply(before, before, listOf(Lun(0, "", "", ""), live[1])))
+        assertEquals(emptyList<List<String>>(), storageApply(before, before, live))
+        assertEquals(listOf(listOf("storage", "stop")), storageApply(before, emptyList(), live))
+    }
+
     @Test
     fun droidspacesContainers() {
         val json = """{"total":4,"running":[{"name":"Ubuntu 24.04","pid":10203},{"name":"OpenWrt","pid":4575}]}"""

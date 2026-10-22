@@ -37,7 +37,7 @@ private fun TypedRow(label: String, value: String, placeholder: String, problem:
 /*
  * Tether: what the next start brings up, every option `tether start` takes, around the live
  * chain and its counters. It only builds the setup Home's switch starts; a change while tether
- * runs waits for the rebind bar. The gateway is offered only with Droidspaces installed, and
+ * runs is applied, or discarded, on the way back. The gateway is offered only with Droidspaces installed, and
  * only its running containers can be chosen.
  */
 @Composable
@@ -79,7 +79,7 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
     val gatewayLive = live?.gateway ?: plan.gateway
     val address = plan.address.ifBlank { profile["tether_address"] ?: DEFAULT_ADDRESS }
     Box(Modifier.fillMaxSize()) {
-        Screen(bottomBar = rebindBar(Fn.TETHER)) {
+        Screen {
             Top { BackKey() }
             Title("Tether")
             fault?.let { Fault(it.message, onLog = openLog, modifier = Modifier.shake(shake)) }
@@ -146,6 +146,7 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
                 }
             }
         }
+        UnappliedSheet(Fn.TETHER, back)
         ChoiceSheet(
             choosing, "Container", containers.orEmpty(), plan.container,
             if (containers == null && ds != null) "Cannot read Droidspaces' containers" else "No containers are running",

@@ -29,6 +29,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -93,7 +95,7 @@ fun createBytes(size: String, gb: Boolean): Long? = size.trim().toLongOrNull()?.
  * Storage: a drive per LUN. The strip picks the LUN, the drive shows what is picked for it
  * (its LED, whether that LUN is live), the mode segments say how the host will see it, and
  * the files in /sdcard/USB-Arsenal load into it. It only builds the setup Home's switch
- * starts, every LUN in one start; a change while storage runs waits for the rebind bar.
+ * starts, every LUN in one start; a change while storage runs is applied, or discarded, on the way back.
  */
 @Composable
 fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
@@ -114,8 +116,10 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
     }
     val picks = Picks.all
     var lun by rememberSaveable { mutableIntStateOf(0) }
-    // Every LUN that serves or has a pick, and the one being added
-    val count = ((live.map { it.lun } + picks.map { it.lun } + lun).max() + 1).coerceAtMost(8)
+    // Every LUN with a pick, and the one being added: the setup, not what still serves. Storage
+    // the app did not start (the CLI) has no setup to compare, so its live LUNs show too
+    val shownLive = if (Gadget.startedPicks == null) live.map { it.lun } else emptyList()
+    val count = ((picks.map { it.lun } + shownLive + lun).max() + 1).coerceAtMost(8)
     val served = live.firstOrNull { it.lun == lun }
     val pick = picks.firstOrNull { it.lun == lun }
     val path = pick?.path
@@ -140,7 +144,7 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
     }
 
     Box(Modifier.fillMaxSize()) {
-        Screen(bottomBar = rebindBar(Fn.STORAGE)) {
+        Screen {
             Top { BackKey() }
             Title("Storage")
             fault?.let { Fault(it.message, onLog = openLog, modifier = Modifier.shake(shake)) }
@@ -193,6 +197,7 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                 Key("Create", Modifier.weight(1f), primary = true) { creating = true }
             }
         }
+        UnappliedSheet(Fn.STORAGE, back)
         CreateSheet(creating, dir, files, free, onDismiss = { creating = false }) { p ->
             creating = false
             reload++
@@ -276,7 +281,8 @@ private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, fre
         }
     }
 
-    Sheet(open, onDismiss = { if (!writing) onDismiss() }) {
+    val cancelKey = remember { FocusRequester() }
+    Sheet(open, onDismiss = { if (!writing) onDismiss() }, entry = cancelKey) {
         Title("Create")
         val progress = written
         if (progress == null) {
@@ -296,7 +302,7 @@ private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, fre
             Kv("Sparse") { Dip(sparse, { sparse = it }, "Sparse") }
             failed?.let { Fault(it, onLog = null) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Lcd.tight)) {
-                Key("Cancel", Modifier.weight(1f), onClick = onDismiss)
+                Key("Cancel", Modifier.weight(1f).focusRequester(cancelKey), onClick = onDismiss)
                 Key("Create", Modifier.weight(1f), primary = true, enabled = bytes != null && !taken && !tooBig && !badName && job?.isActive != true) { create() }
             }
         } else {
