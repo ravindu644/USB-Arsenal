@@ -286,11 +286,19 @@ fun Top(content: @Composable RowScope.() -> Unit = {}) = Row(
     content = content,
 )
 
-// A title types on, at typing speed, each time its screen is drawn
+// A title types on, at typing speed, each time its screen is drawn. A function's screen puts
+// its switch at the end of the line, the same switch as its row on Home
 @Composable
-fun Title(text: String) {
+fun Title(text: String, trailing: (@Composable () -> Unit)? = null) {
     val n = typedIn(rememberTyped(typeSteps(text.length), 1))
-    Text(text, LcdType.title, cursor = n < text.length, typed = n, cursorSpace = true)
+    if (trailing == null) {
+        Text(text, LcdType.title, cursor = n < text.length, typed = n, cursorSpace = true)
+        return
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text(text, LcdType.title, cursor = n < text.length, typed = n, cursorSpace = true)
+        trailing()
+    }
 }
 
 // .tag: a short inverted word beside data

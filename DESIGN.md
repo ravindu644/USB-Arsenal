@@ -345,16 +345,27 @@ dashed border.
 
 Class names are those in `docs/developer/design/lcd.css`.
 
+### Functions: set up, then switch on
+Storage, Tether and HID work one way.
+- **Home's row** opens the function's screen (`STORAGE >`), and its DIP is the quick switch.
+- **The function's screen** puts that same switch at the end of its title line.
+- **Off,** the screen only edits a setup that the app keeps: picks per LUN with their modes, NCM
+  or RNDIS and the gateway, the HID interval. Nothing touches the port. The switch starts the
+  whole setup in one command, so every LUN comes up in one replug.
+- **On,** a change applies at once, the way the hardware would take it. A disc swaps in its
+  drive; tether and HID restart, which is a replug the bottom bar shows. Text inputs lock
+  while on, so typing never restarts anything.
+
 ### Function row (`.row`)
-32px sprite, Silkscreen name, two VT323 status lines, DIP switch on the right. Selected row
-inverts. Status lines show live facts only (`LUN0 Win11_24H2_x64.iso · dvd`, `via rmnet_data0`,
+32px sprite, Silkscreen name with ` >` (the row opens its screen), two VT323 status lines, DIP
+switch on the right. Selected row inverts. Status lines show live facts only (`LUN0 Win11_24H2_x64.iso · dvd`, `via rmnet_data0`,
 `keyboard /dev/hidg1`). While a function starts or stops, its lines read `starting` or
 `stopping` and the command.
 
 ### DIP switch (`.dip`)
 On or off for one function, 68×32 inside a 44px hit area. Knob right with `ON` printed is on;
-knob left is off. Flipping it runs `<function> start` or `stop` at once. There is no pending
-state and no apply step.
+knob left is off. Flipping it runs `<function> start` with the screen's setup, or `stop`, at
+once. There is no pending state and no apply step.
 
 ### Key (`.key`, `.key.pri`)
 The only button. Plain keys are amber; the primary action of a screen (`Create`, `Save`,
@@ -697,7 +708,8 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 Every command runs through root in its own short-lived shell with a timeout (see AGENTS.md),
 so one stuck command can never freeze the screen.
 
-App-side features, done by the app itself: the `/sdcard/USB-Arsenal` file list, Create (a sparse
+App-side features, done by the app itself: each function's setup (Storage's picks, Tether's
+function and gateway), the `/sdcard/USB-Arsenal` file list, Create (a sparse
 image, as `truncate -s` does, or a full one with progress), HID input written to `/dev/hidgN`,
 and the Motion and Haptics switches in Settings. Settings' Daemon mode writes `1` or `0` to
 `/data/local/USB-Arsenal/.daemon_mode`, which the boot module's `service.sh` reads, and System

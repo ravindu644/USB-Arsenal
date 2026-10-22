@@ -63,8 +63,8 @@ private fun attention(b: Backend): Pair<String, String>? = when (b.state) {
 }
 
 /*
- * Home is the gadget: each function a row with its live facts and its switch, which runs start
- * or stop at once; the bottom bar says who holds the port. A backend that needs something says
+ * Home is the gadget: each function a row with its live facts and its switch, which starts it
+ * with what its screen set up, or stops it; the bottom bar says who holds the port. A backend that needs something says
  * so in one key above Log and Settings, and holds the switches until it is fixed (an update
  * does not hold them).
  */
@@ -122,12 +122,12 @@ fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings
                     line1 = l1,
                     line2 = l2,
                     on = on,
-                    onToggle = { flip(fn, it, picks) },
+                    onToggle = { flip(fn, it) },
                     onOpen = open(fn),
                     modifier = Modifier.drawnFrom(i, shown).shake(shake).then(if (i == 0) Modifier.focusRequester(first) else Modifier),
                     available = caps.has(fn),
                     // Storage starts from its picks; with none there is nothing to serve
-                    enabled = !held && (on || fn != Fn.STORAGE || picks.isNotEmpty()),
+                    enabled = !held && (on || startable(fn)),
                 )
                 // On the gutter, under the row that bleeds past it
                 if (fault != null) Fault(fault.message, onLog = openLog, modifier = Modifier.padding(horizontal = 10.dp))
@@ -142,11 +142,3 @@ fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings
     }
 }
 
-private fun flip(fn: Fn, on: Boolean, picks: List<Pick>) {
-    val verb = if (on) "start" else "stop"
-    when (fn) {
-        Fn.STORAGE -> if (on) Gadget.run(fn, *startArgs(picks).toTypedArray()) else Gadget.run(fn, "storage", "stop")
-        Fn.TETHER -> Gadget.run(fn, "tether", verb)
-        Fn.HID -> Gadget.run(fn, "hid", verb)
-    }
-}
