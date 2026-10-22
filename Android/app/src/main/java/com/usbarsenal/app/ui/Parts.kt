@@ -308,6 +308,10 @@ fun Title(text: String) {
     Text(text, LcdType.title, cursor = n < text.length, typed = n, cursorSpace = true)
 }
 
+// .rule: 2dp of ink across the 10dp bleed, the line between Home's rows; it parts a screen's sections
+@Composable
+fun Rule(modifier: Modifier = Modifier) = Box(modifier.bleed(10.dp).fillMaxWidth().height(Lcd.pixel).background(LocalLcd.current.ink))
+
 // .tag: a short inverted word beside data
 @Composable
 fun Tag(text: String) = Inverted {

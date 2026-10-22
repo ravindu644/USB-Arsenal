@@ -484,6 +484,30 @@ working or serving, and is hollow when there is nothing.
 A fact that cannot be tapped is 32px tall, not 44, so long lists like Check fit. A Silkscreen
 bold heading groups them (`MUST HAVE`, `FUNCTIONS`, `BACKEND`, `ABOUT`).
 
+
+### Rule (`.rule`)
+2px of ink across the 10px bleed, the line between Home's rows. It parts a screen's sections
+where they do different jobs: Settings' five sections, Identity's panel from its profiles,
+Storage's drive and mode from `FILES`, Tether's live chain and counters from its setup, HID's
+cards from `Interval`. Nowhere else: the setup flow, Log and Fonts are one block each.
+
+### Settings
+In sections, a rule between each: `APP` (Motion, Haptics), `IDENTITY` (one row, the profile in
+force by its name, `Built-in` with none, opening Identity), `BACKEND` (Daemon mode, System path,
+Reinstall), `CREDITS` (Fonts) and `ABOUT` (App, Source), last. Once Daemon mode or System path
+has been changed, a warning line under them says `both apply from the next boot`.
+
+### Identity
+The profile picked here as a panel in the drive's look: an inverted face with an LED (blinking
+while the host sees the gadget) and the name, over the USB sprite, product, maker, `vid:pid · N
+mA` and its serial (`serial from this phone` when it has none). Under a rule, `PROFILES` and the folder, then the rows like
+`FILES`: `Built-in` first, then each profile with its `vid:pid`, the picked one inverted. `Edit`
+(dead on Built-in) and `Create` open one sheet in the Create sheet's look: Name (locked when
+editing), Product, Maker, Serial (empty: the phone's own), USB IDs as two four-digit inputs,
+Power `100 / 250 / 500 mA`; each
+field says what is wrong under it, and the key waits until nothing is. With no gadget on the bus
+a pick is set at once; while the host sees it, a pick waits for the `Not applied` sheet on Back,
+whose Apply reconnects the gadget once.
 ### Attention key (`.alert`)
 Home's one line about the backend, inverted, above Log and Settings: the state on the left in
 Silkscreen (`BACKEND UPDATE`, `NOT INSTALLED`, `MODULE MISSING`, `BACKEND BROKEN`, `NO ROOT`),
@@ -742,7 +766,7 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | HID interval | `hid start --interval N`, period 2^(N-1)×125µs, set at start (without the f_hid patch the backend warns and keeps 1 ms) |
 | Keys + mouse, the gamepad | app-side: 8-byte keyboard and 4-byte mouse reports, each one write to `/dev/hidgN` through a root `dd` per node |
 | Quacky | nothing yet: a WIP page |
-| Identity fields, Save, Reset | profile keys, `identity set FILE`, `identity unset` |
+| Identity | `identity show` (the profile in force), `identity generate FILE --force` then the six keys written in (`product`, `manufacturer`, `serial`, `id_vendor`, `id_product`, `max_power`), an edit from the file as it is, through a rename, `identity set FILE`, `identity unset` for Built-in |
 | Log tabs | command output (CLI) and `Logs/usb-arsenald.log` (Daemon) |
 | Function names in the bind screen | `mass_storage.ua`, `ncm.ua`, `hid.ua_kbd`, `hid.ua_mouse` |
 | Root screen | `id -u; su -v` (prints `3.3.0:KernelSU` or `<version>:MAGISK`), shown as a shell session; its `#` comments are the app's narration |
@@ -757,7 +781,8 @@ so one stuck command can never freeze the screen.
 App-side features, done by the app itself: each function's setup (Storage's picks, every
 Tether option), the Not applied sheet, the `/sdcard/USB-Arsenal` file list, Create (a sparse
 image, as `truncate -s` does, or a full one with progress), HID input written to `/dev/hidgN`,
-and the Motion and Haptics switches in Settings. Settings' Daemon mode writes `1` or `0` to
+the Motion and Haptics switches in Settings, and the profiles folder,
+`/sdcard/USB-Arsenal/Profiles`, which Identity lists and writes. Settings' Daemon mode writes `1` or `0` to
 `/data/local/USB-Arsenal/.daemon_mode`, which the boot module's `service.sh` reads, and System
 path makes or removes `/data/adb/modules/usb-arsenal/system/bin/usb-arsenal`, a link to the
 workspace binary (Droidspaces' `DaemonModeRepository` and `SymlinkInstaller`); both act at the

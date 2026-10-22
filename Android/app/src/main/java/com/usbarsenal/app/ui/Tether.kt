@@ -115,6 +115,8 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
                     ValueBox("Tx", live?.txBytes?.takeIf { it >= 0 }?.let(::sizeText) ?: "-", Modifier.weight(1f))
                     ValueBox("Rx", live?.rxBytes?.takeIf { it >= 0 }?.let(::sizeText) ?: "-", Modifier.weight(1f))
                 }
+                // What runs above, what the next start brings up below
+                Rule()
                 Column {
                     // Without Droidspaces there is no container to hand the link to
                     if (ds?.installed != false) Kv("Gateway") { Dip(plan.gateway, { set(plan.copy(gateway = it)) }, "Gateway mode") }

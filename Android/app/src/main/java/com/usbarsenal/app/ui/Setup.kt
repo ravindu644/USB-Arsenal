@@ -65,7 +65,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 // Every screen; App keeps them as a back stack
-private enum class Step { WELCOME, ROOT, CHECK, INSTALL, HOME, LOG, SETTINGS, FONTS, STORAGE, TETHER, HID, KEYS, QUACKY }
+private enum class Step { WELCOME, ROOT, CHECK, INSTALL, HOME, LOG, SETTINGS, FONTS, STORAGE, TETHER, HID, KEYS, QUACKY, IDENTITY }
 
 // TYPING: Install was pressed and the command is typing; the installer starts when it has
 private enum class Phase { BEFORE, TYPING, RUNNING, DONE, FAILED }
@@ -171,11 +171,12 @@ fun App() {
             Step.LOG -> LogScreen(back = ::pop)
             Step.SETTINGS -> SettingsScreen(
                 back = ::pop,
-                openIdentity = null,
+                openIdentity = { push(Step.IDENTITY) },
                 openFonts = { push(Step.FONTS) },
                 fix = fix,
             )
             Step.FONTS -> FontsScreen(back = ::pop)
+            Step.IDENTITY -> IdentityScreen(back = ::pop, openLog = { push(Step.LOG) })
             Step.STORAGE -> StorageScreen(back = ::pop, openLog = { push(Step.LOG) })
             Step.TETHER -> TetherScreen(back = ::pop, openLog = { push(Step.LOG) })
             Step.HID -> HidScreen(back = ::pop, openKeys = { push(Step.KEYS) }, openQuacky = { push(Step.QUACKY) })
