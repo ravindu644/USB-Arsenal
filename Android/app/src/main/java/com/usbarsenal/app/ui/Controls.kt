@@ -349,6 +349,23 @@ fun LinkRow(label: String, value: String, onClick: (() -> Unit)?, modifier: Modi
 }
 
 /*
+ * A choice from a list: a LinkRow names the choice, and opens this sheet of rows, the chosen
+ * one inverted. With nothing to choose, one ghosted line says why.
+ */
+@Composable
+fun ChoiceSheet(open: Boolean, title: String, options: List<String>, chosen: String, empty: String, onPick: (String) -> Unit, onDismiss: () -> Unit) =
+    Sheet(open, onDismiss) {
+        Text(title, LcdType.labelStrong)
+        Column(Modifier.bleed(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            if (options.isEmpty()) {
+                val ground = LocalLcd.current.ground
+                Text(empty, LcdType.data, Modifier.padding(horizontal = 10.dp, vertical = 12.dp).ghost(ground))
+            }
+            options.forEach { FileRow(it, "", null, selected = it == chosen, onPick = { onPick(it) }) }
+        }
+    }
+
+/*
  * .sheet and .scrim: a short task over the screen. The screen behind is dithered, so it reads
  * as unavailable, and takes no touch; the sheet rises from the bottom in 4 frames (the scrim
  * on the first) and Back or [onDismiss] plays it in reverse. Its ground reaches under the
@@ -405,14 +422,18 @@ sealed interface Port {
     data class Replugging(val command: String) : Port
 
     data object Android : Port
+
+    // A function's screen: its setup changed while it ran, and a tap rebinds it
+    data object Pending : Port
 }
 
 /*
  * .strip: Home's bottom bar, flush to the screen edges under a 2dp rule, its ground reaching
- * under the navigation bar. A new state cuts in over two bands.
+ * under the navigation bar. A new state cuts in over two bands. On a function's screen it is
+ * the rebind bar: Pending is one key over the whole bar, then Replugging while it runs.
  */
 @Composable
-fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier = Modifier) = Redraw(
+fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier = Modifier, onRebind: (() -> Unit)? = null) = Redraw(
     port,
     back = false,
     modifier = modifier.fillMaxWidth(),
@@ -421,10 +442,14 @@ fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier = Modifier) 
     contentAlignment = Alignment.BottomStart,
 ) { shown ->
     val rule = LocalLcd.current.ink
+    val rebindKey = remember { MutableInteractionSource() }
+    val rebindFocused by rebindKey.collectIsFocusedAsState()
+    val rebindPressed by rebindKey.collectIsPressedAsState()
     val body = @Composable {
         Column(
             Modifier
                 .fillMaxWidth()
+                .then(if (shown is Port.Pending) Modifier.lcdClickable(rebindKey, outline = false, role = Role.Button, enabled = onRebind != null) { onRebind?.invoke() } else Modifier)
                 .background(LocalLcd.current.ground)
                 .drawBehind { drawRect(rule, size = Size(size.width, Lcd.pixel.toPx())) }
                 .windowInsetsPadding(WindowInsets.navigationBars)
@@ -455,12 +480,20 @@ fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier = Modifier) 
                         SpriteIcon(Sprites.PinBlink, 2.dp)
                         Text("Port with Android", LcdType.labelStrong)
                     }
+                    Port.Pending -> {
+                        Pin(2.dp)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Lcd.lines)) {
+                            Text("Not applied", LcdType.labelStrong)
+                            Text("tap to rebind", LcdType.data)
+                        }
+                    }
                 }
             }
             if (shown is Port.Bound) Key("Stop all", Modifier.fillMaxWidth(), haptic = { gestureEnd() }, onClick = onStopAll)
         }
     }
-    Inverted(shown is Port.Replugging, body)
+    // Focused or held, the rebind key inverts as rows do; replugging, the bar does
+    Inverted(shown is Port.Replugging || (shown is Port.Pending && (rebindFocused || rebindPressed)), body)
 }
 
 /*

@@ -70,6 +70,8 @@ body{margin:0}
 /* Rows bleed 10px past the gutter (margin:0 -10px on the list) and pad 10px back, so text stays on the gutter */
 .row{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;width:100%;min-height:80px;padding:10px}
 .row.on{background:var(--ink);color:var(--lcd)}
+/* Home's rows, one from the next */
+.row + .row{border-top:2px solid var(--ink)}
 .ico{display:block;flex:none;width:32px;height:32px}
 .tag{padding:0 6px;background:var(--ink);color:var(--lcd)}
 
@@ -80,6 +82,9 @@ body{margin:0}
 
 /* Bottom bar: gadget state, always on Home. Inverted only while replugging */
 .strip{display:flex;flex-direction:column;gap:16px;margin:auto -20px -68px;padding:14px 20px 68px;box-sizing:border-box;border-top:2px solid var(--ink)}
+/* The rebind bar: a function screen's strip that is one key, while its setup waits */
+.strip.rebind{cursor:pointer}
+.strip.rebind:focus-visible,.strip.rebind:active{background:var(--ink);color:var(--lcd)}
 .who{display:flex;align-items:center;gap:12px;min-height:44px}
 
 /* Inputs */
@@ -135,6 +140,9 @@ body{margin:0}
 
 /* Bottom sheet. The screen behind is shaded with dither, never a grey */
 .scrim{position:absolute;inset:0;z-index:5;background-image:repeating-conic-gradient(var(--ink) 0 25%,transparent 0 50%);background-size:4px 4px}
+/* A choice: a.kv opens a sheet of these rows, the chosen one .on; with none, one .ghost line */
+.choice{display:flex;align-items:center;min-height:48px;padding:6px 10px;margin:0 -10px}
+.choice.on{background:var(--ink);color:var(--lcd)}
 .sheet{position:absolute;left:0;right:0;bottom:0;z-index:6;display:flex;flex-direction:column;gap:16px;padding:20px 20px 68px;background:var(--lcd);border-top:2px solid var(--ink);box-sizing:border-box}
 
 /* Progress in whole tenths, so it steps like everything else */

@@ -9,9 +9,12 @@
         android:theme="@style/Lcd">
         <!-- Compose redraws for every one of these itself. Recreating the activity would cancel a
              su request mid-dialog and ask again, and replay every typed session; a gamepad or
-             keyboard connecting is one of them, and this app is meant to be driven by one -->
+             keyboard connecting is one of them, and this app is meant to be driven by one.
+             adjustResize: Screen pads for the keyboard itself; a window the system also pans
+             or resizes leaves a gap the keyboard's height above it -->
         <activity
             android:name=".MainActivity"
+            android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|fontScale|fontWeightAdjustment|uiMode|colorMode|keyboard|keyboardHidden|navigation|touchscreen|locale|layoutDirection|mcc|mnc"
             android:exported="true">
             <intent-filter>

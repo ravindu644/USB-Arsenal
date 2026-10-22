@@ -345,27 +345,30 @@ dashed border.
 
 Class names are those in `docs/developer/design/lcd.css`.
 
-### Functions: set up, then switch on
+### Functions: set up, then switch on at Home
 Storage, Tether and HID work one way.
-- **Home's row** opens the function's screen (`STORAGE >`), and its DIP is the quick switch.
-- **The function's screen** puts that same switch at the end of its title line.
-- **Off,** the screen only edits a setup that the app keeps: picks per LUN with their modes, NCM
-  or RNDIS and the gateway, the HID interval. Nothing touches the port. The switch starts the
+- **A function's screen only configures.** It edits a setup that the app keeps: picks per LUN
+  with their modes, every `tether start` option, the HID interval. It never touches the port and
+  has no switch.
+- **Home's row** opens that screen (`STORAGE >`), and its DIP is the only switch. It starts the
   whole setup in one command, so every LUN comes up in one replug.
-- **On,** a change applies at once, the way the hardware would take it. A disc swaps in its
-  drive; tether and HID restart, which is a replug the bottom bar shows. Text inputs lock
-  while on, so typing never restarts anything.
+- **A change while the function runs** waits. The screen gets a bottom bar, `Not applied` and
+  `tap to rebind`, and tapping it stops the function and starts it with the setup. While that
+  runs, the bar is the Replugging bar, inverted, with the command. The chain, the counters and
+  a drive's LED keep showing what runs.
 
 ### Function row (`.row`)
 32px sprite, Silkscreen name with ` >` (the row opens its screen), two VT323 status lines, DIP
-switch on the right. Selected row inverts. Status lines show live facts only (`LUN0 Win11_24H2_x64.iso · dvd`, `via rmnet_data0`,
-`keyboard /dev/hidg1`). While a function starts or stops, its lines read `starting` or
-`stopping` and the command.
+switch on the right. Selected row inverts, and a 2px rule divides one row from the next. On,
+the status lines show live facts only (`LUN0 Win11_24H2_x64.iso · dvd`, `via rmnet_data0`,
+`keyboard /dev/hidg1`). Off, they say what the function does (`ISOs and disk images` / `as
+drives for the host`): the DIP already says off. While a function starts or stops, its lines
+read `starting` or `stopping` and the command.
 
 ### DIP switch (`.dip`)
 On or off for one function, 68×32 inside a 44px hit area. Knob right with `ON` printed is on;
 knob left is off. Flipping it runs `<function> start` with the screen's setup, or `stop`, at
-once. There is no pending state and no apply step.
+once. It lives on Home's rows, and as a setting inside a screen (`Gateway`, `DHCP and NAT`).
 
 ### Key (`.key`, `.key.pri`)
 The only button. Plain keys are amber; the primary action of a screen (`Create`, `Save`,
@@ -467,8 +470,13 @@ tag. It is a key that opens Log, and it stays until the next action. The element
 frames with `Reject`, and switches show the real state again once `status --json` is re-read.
 The app's own timeout reads `[-] Timed out (30s)`.
 
+### Choice
+A choice from a list the phone has (a gateway's container). A `LinkRow` names it, `none` until
+something is chosen, and opens a sheet of rows like the files list, the chosen one inverted.
+With nothing to choose, the sheet holds one ghosted line (`No containers are running`).
+
 ### Sheet (`.sheet`, `.scrim`)
-A bottom sheet for a short task (Create). It rises over the screen with a 2px top rule and the
+A bottom sheet for a short task (Create, a choice). It rises over the screen with a 2px top rule and the
 normal gutters, its own `display-title`, and its keys at the bottom. The screen behind is
 shaded with a `.d50` scrim, so it reads as unavailable. Back or Cancel closes it.
 
@@ -695,7 +703,9 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | LUN strip | `--lun 0-7` |
 | NCM / RNDIS | `tether start --ncm` / `tether start --rndis` |
 | Tether chain, Tx, Rx | `status --json`: `tether`'s `iface`, `upstream`, `gateway_*`, `tx_bytes`, `rx_bytes` |
-| Gateway, container, its iface | `--gateway CONTAINER`, `--gateway-iface IFACE` |
+| Gateway, container, its iface | `--gateway CONTAINER`, `--gateway-iface IFACE`; the containers are `droidspaces show --json`'s `running`, and the gateway shows only with `/data/local/Droidspaces/bin/droidspaces` installed |
+| Tether address, DNS, upstream, DHCP and NAT | `--address CIDR`, `--dns IP[,IP]`, `--upstream IFACE`, `--no-net` |
+| Rebind bar | `<function> stop`, then `<function> start` with the setup |
 | HID interval | `hid start --interval N`, period 2^(N-1)×125µs, set at start |
 | Identity fields, Save, Reset | profile keys, `identity set FILE`, `identity unset` |
 | Log tabs | command output (CLI) and `Logs/usb-arsenald.log` (Daemon) |
@@ -709,8 +719,8 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 Every command runs through root in its own short-lived shell with a timeout (see AGENTS.md),
 so one stuck command can never freeze the screen.
 
-App-side features, done by the app itself: each function's setup (Storage's picks, Tether's
-function and gateway), the `/sdcard/USB-Arsenal` file list, Create (a sparse
+App-side features, done by the app itself: each function's setup (Storage's picks, every
+Tether option), the rebind bar, the `/sdcard/USB-Arsenal` file list, Create (a sparse
 image, as `truncate -s` does, or a full one with progress), HID input written to `/dev/hidgN`,
 and the Motion and Haptics switches in Settings. Settings' Daemon mode writes `1` or `0` to
 `/data/local/USB-Arsenal/.daemon_mode`, which the boot module's `service.sh` reads, and System
@@ -719,7 +729,8 @@ workspace binary (Droidspaces' `DaemonModeRepository` and `SymlinkInstaller`); b
 next boot.
 
 Not shown because the backend cannot: UVC (not built), host controller or port names, lease
-countdowns, link uptime, a configfs write trace, a pending-changes queue.
+countdowns, link uptime, a configfs write trace, a pending-changes queue (the rebind bar says only
+that a setup waits, not what changed).
 
 ## Do's and Don'ts
 
@@ -764,3 +775,6 @@ Looked at and kept. Do not "fix" these without a reason the original one misses.
 - **One theme.** An LCD has one look. Both system themes get the same screen.
 - **The marquee moves text.** Only for text that does not fit, in steps, so long filenames stay
   readable without wrapping the row.
+- **The rebind bar comes and goes.** It shows only while a running function's setup differs
+  from the start that brought it up, so a screen with nothing waiting stays clear. Coming or
+  going, it moves Storage's bottom keys, as Home's bar changes height between its states.
