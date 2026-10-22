@@ -7,13 +7,34 @@ import org.json.JSONObject
 // started from here must see the mounts init sees, not the app's own view
 val Root = RootExec { ProcessBuilder("su", "--mount-master", "-c", it).start() }
 
-// ua_ws_path()'s workspace on Android; bin/usb-arsenal links to the module's binary
+// ua_ws_path()'s workspace on Android; the binary lives in its bin/, the boot module only starts it
 const val WORKSPACE = "/data/local/USB-Arsenal"
 const val UA = "$WORKSPACE/bin/usb-arsenal"
 
-suspend fun readCheck(): Result<Capabilities> = Root.read("$UA check --json").json(::parseCheck)
+// Setup checks with the binary it is about to install; UA_NO_PROXY keeps an older daemon from answering for it
+suspend fun readCheck(binary: String = UA): Result<Capabilities> =
+    Root.read("UA_NO_PROXY=1 ${shellQuote(binary)} check --json").json(::parseCheck)
 
 suspend fun readStatus(): Result<GadgetStatus> = Root.read("$UA status --json").json(::parseStatus)
+
+// What su -v prints, as it prints it: "3.3.0:KernelSU" on the a166p
+data class RootInfo(val su: String)
+
+/*
+ * A failure carries what a shell would have said. KernelSU hides su from an app it has not
+ * granted, so a missing su reads as sh reports it; a su that ran and refused says so on stderr.
+ */
+suspend fun rootInfo(): Result<RootInfo> {
+    val timeoutMs = 15_000L
+    val r = Root.read("id -u; su -v", timeoutMs)
+    // The uid decides: the exit code is su -v's, which a root shell without su on its PATH fails
+    return when {
+        r.out.firstOrNull() == "0" -> Result.success(RootInfo(r.out.getOrNull(1).orEmpty()))
+        r.code == NO_ROOT && r.out.isEmpty() -> Result.failure(SecurityException("su: inaccessible or not found"))
+        r.timedOut -> Result.failure(SecurityException("su: no answer in ${timeoutMs / 1000}s"))
+        else -> Result.failure(SecurityException(r.err.lastOrNull() ?: "su: permission denied"))
+    }
+}
 
 // check exits 1 when a requirement is missing and still prints the report, so stdout decides
 private inline fun <T> RootResult.json(parse: (String) -> T): Result<T> = runCatching {

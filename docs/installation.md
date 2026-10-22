@@ -19,10 +19,12 @@ the daemon at boot. On Linux you copy the binary.
    ```
 
 What the module does:
-- **Installs the binary for the device's ABI** as `/system/bin/usb-arsenal`, so after the
-  reboot `usb-arsenal` works from any root shell, and links
-  `/data/local/USB-Arsenal/bin/usb-arsenal` to it.
-- **Starts the daemon at boot** (`service.sh`). The daemon owns the USB port, so the same
+- **Installs the binary for the device's ABI** as `/data/local/USB-Arsenal/bin/usb-arsenal`
+  and links `/system/bin/usb-arsenal` to it, so after the reboot `usb-arsenal` works from any
+  root shell. (Installed from the app, the link is a Settings switch.)
+- **Starts the daemon at boot** (`service.sh`) while daemon mode is on: the marker
+  `/data/local/USB-Arsenal/.daemon_mode` holds `1`. The zip turns it on; installed from the
+  app, it is a Settings switch. The daemon owns the USB port, so the same
   commands also work from containers; see [containers.md](containers.md).
 - **Gives the port back on uninstall** and stops the daemon.
 

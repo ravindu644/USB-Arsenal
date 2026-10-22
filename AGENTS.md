@@ -212,6 +212,17 @@ name.
   clock, the event map for haptics, the device tiers for rich effects. Never use
   `createOneShot` or a hand-made waveform for touch feedback. With reduced motion, every loop
   shows its resting frame.
+- **Fast work is paced so it can be read.** Nothing appears in a single frame: titles type,
+  shells play their session (DESIGN.md's Shell session row), Check's rows resolve one by one.
+  The pacing comes from the beat between lines, not from slow typing, and the keys never run
+  ahead of what the screen says. Check a change frame by frame in a `screenrecord`, not by eye.
+- **A screen never re-lays itself out when work finishes.** It shows its final layout from
+  the start (a disabled key where a key will be, an idle prompt where output will go), and a
+  line already drawn never moves.
+- **Never ask root for what the app knows itself** (its own version, the phone's codename),
+  and never ask twice: a probe's result lasts until the app leaves recents, and Back never
+  re-runs it. The activity handles configuration changes itself, so a rotation or a gamepad
+  connecting never cancels a su request.
 - **Every screen works without touch.** Before a screen is done, walk it with
   `adb shell input keyevent` (`KEYCODE_DPAD_*`, `KEYCODE_ENTER`, `KEYCODE_BUTTON_A`,
   `KEYCODE_BUTTON_B`, `KEYCODE_TAB`) and confirm every control is reachable and the focus
@@ -234,6 +245,17 @@ name.
   tails) use their own shells and never wait on the lane.
 - **The installer is ported from Droidspaces** (`BinaryInstaller`, `ModuleInstaller`,
   `DeviceArch`, the backend checker), restyled to DESIGN.md. The boot module is `module/`.
+  The binary lives in the workspace (`/data/local/USB-Arsenal/bin/usb-arsenal`); the module
+  only starts it. `/data/adb/modules/usb-arsenal/system/bin/usb-arsenal` is a link to it, there
+  only while the user wants `usb-arsenal` on PATH (Droidspaces' `SymlinkInstaller`; the zip
+  makes it, the app's Settings switch makes or removes it). The install is the binary,
+  then the module, and every step's real output goes to the screen. It never starts or stops
+  the daemon: daemon mode is a Settings switch that writes `1` to
+  `/data/local/USB-Arsenal/.daemon_mode`, and the boot module starts the daemon on it
+  (Droidspaces' marker).
+- **Never patch the live SELinux policy** (`ksud sepolicy patch`, `magiskpolicy --live`): root
+  detectors watch for it. `sepolicy.rule` loads at boot; when the module had none before an
+  install, the install says to reboot.
 - **Test over wireless ADB.** Binding the gadget takes the USB port from Android, so USB ADB
   drops the moment a test works.
 - **Test haptics on more than one phone:** one with rich haptics, one midrange, and once with

@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,12 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import com.usbarsenal.app.backend.Root
-import com.usbarsenal.app.backend.backendState
-import com.usbarsenal.app.backend.installBackend
 import com.usbarsenal.app.backend.readStatus
 import com.usbarsenal.app.lcd.Dither
 import com.usbarsenal.app.lcd.FRAME_MS
@@ -65,7 +60,6 @@ fun Kit() {
     var step by remember { mutableIntStateOf(0) }
     val first = remember { FocusRequester() }
     val colors = LocalLcd.current
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var lines by remember { mutableStateOf(listOf<String>()) }
     fun log(line: String) {
@@ -115,9 +109,7 @@ fun Kit() {
         TestKey("BIND HAPTIC", Modifier.focusRequester(first)) { haptics.keyPress(); binds++ }
         TestRow("SEGMENT $step  L1 R1", Modifier.shoulderStep { step += it; haptics.tick() }) { haptics.confirm() }
         TestRow("REJECT HAPTIC") { haptics.reject() }
-        // ponytail: backend probes until the setup screens (section C) drive these
-        TestRow("BACKEND STATE") { scope.launch { log(backendState(context).name) } }
-        TestRow("INSTALL BACKEND") { scope.launch { installBackend(context, ::log) } }
+        // ponytail: backend probes until Home (E1) drives these
         TestRow("STATUS JSON") { scope.launch { log(readStatus().toString()) } }
         TestRow("HUNG CHANGE + READ") {
             scope.launch {
@@ -130,13 +122,6 @@ fun Kit() {
         }
         for (line in lines) Text(line, LcdType.data)
     }
-}
-
-@Composable
-private fun Text(text: String, style: TextStyle) {
-    // Silkscreen is a menu face and always uppercase; VT323 keeps its case
-    val shown = if (style.fontFamily == LcdType.data.fontFamily) text else text.uppercase()
-    BasicText(shown, style = style.copy(color = LocalLcd.current.ink))
 }
 
 @Composable

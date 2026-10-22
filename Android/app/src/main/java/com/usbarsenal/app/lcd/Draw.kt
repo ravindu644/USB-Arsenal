@@ -66,11 +66,17 @@ fun Modifier.ghost(ground: Color) = drawWithCache {
     }
 }
 
-// ponytail: 6dp dashes and gaps, close to Chrome's dashed outline; tune against the renders in H3
-fun Modifier.focusOutline(ink: Color) = drawWithCache {
+// The focus cursor of keys, switches and inputs: dashed, 3dp clear of the element
+fun Modifier.focusOutline(ink: Color) = dashedRect(ink, 3.dp)
+
+/*
+ * A 2dp dashed rectangle whose inner edge is [outset] outside the element; -2dp draws it as
+ * the element's own border.
+ * ponytail: 6dp dashes and gaps, close to Chrome's dashed outline; tune against the renders in H3
+ */
+fun Modifier.dashedRect(ink: Color, outset: Dp) = drawWithCache {
     val width = Lcd.pixel.toPx()
-    // 3dp clear of the element, measured to the inner edge of the stroke
-    val inset = 3.dp.toPx() + width / 2
+    val inset = outset.toPx() + width / 2
     val stroke = Stroke(width, pathEffect = PathEffect.dashPathEffect(floatArrayOf(3 * width, 3 * width)))
     onDrawWithContent {
         drawContent()

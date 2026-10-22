@@ -128,6 +128,12 @@ components:
     typography: "{typography.data}"
     rounded: "{rounded.none}"
     padding: 10px
+  shell-strip:
+    backgroundColor: "{colors.lcd}"
+    textColor: "{colors.ink}"
+    typography: "{typography.label-strong}"
+    height: 32px
+    padding: 0 10px
   terminal-live-line:
     backgroundColor: "{colors.lcd}"
     textColor: "{colors.ink}"
@@ -233,6 +239,9 @@ Structure:
   Settings. Identity lives inside Settings, because it is configuration.
 - **First launch** runs Welcome, Root, Check and Install, then Home. Later launches open Home,
   which leads back to Root or Install only when the backend needs it.
+- **What setup finds lasts until the app leaves recents.** Back never asks su or the kernel
+  again; only Retry and Recheck do. A result that was already there shows at once; only one
+  that arrives on screen types or resolves.
 - **New functions are new rows.** The structure does not change.
 - **Tablets and landscape** keep the function list as a 420px pane beside the selected
   function's screen.
@@ -392,15 +401,33 @@ Silkscreen label left, VT323 value right, 44px tall. For settings and facts, one
 (`from this phone`).
 
 ### Terminal (`.term`, `.ln`)
-An inverted panel that fills the free height. Lines are `[+] message`, newest at the bottom.
-The newest line flips back to amber with the cursor.
+An inverted panel that fills the free height. It fills from the top down like a terminal and
+scrolls only once it is full, held at the newest line; a line already drawn never moves. A
+`[+] message` line puts its glyph in a 28px column so wrapped text lines up after it; any
+other line (a prompt, stderr) uses the whole width (`.ln.wide`). The newest line flips back to
+amber with the cursor.
+
+### Shell window (`.win`, `.strip`)
+Root and Backend play a shell session in the same window: a light 32px strip (the LED, what
+runs in Silkscreen bold, `su` or `sh`, and the phone's codename on the right in VT323) over
+the terminal, inside one 2px box. The codename is `ro.product.device` (`Build.DEVICE`, then
+`Build.PRODUCT`, then `localhost`), so the prompts are just `$` and `#`. The LED blinks while
+the session works, is lit when it succeeded, and is hollow when idle or refused.
+
+A session is real commands with the app's narration as shell comments:
+`# checking root access`, `$ su`, `# # root access granted !`, `# id -u`, `# su -v`, then an
+idle `#`. Backend opens with `# usb-arsenal 1.2.0 for aarch64` and `# press install to install the
+backend` (or `# update 1.1.0 → 1.2.0`, `# the gadget stays up while it updates` and `# press
+update to update the backend`), waits at an idle `#`, and Install types
+`./install-backend.sh`; the installer's `[+]` lines are its output. A denial prints what the
+shell would have said (`su: inaccessible or not found`, su's own stderr, or the timeout).
 
 ### Trackpad
 A `.d25` panel with a pixel pointer, a 44px wheel strip on its right, and an L/M/R segmented
 bar under it. Live report bytes sit below it in VT323.
 
 ### Device panel (`.panel`, `.face`, `.led`, `.body`)
-The drive and the su probe share it: a 2px box with an inverted 40px face (a LED and a short
+The drive's frame: a 2px box with an inverted 40px face (a LED and a short
 name) over a 96px body. The LED is lit (`.on`) when the thing works, blinks (`.busy`) while it is
 working or serving, and is hollow when there is nothing.
 
@@ -440,9 +467,11 @@ Home top bar (32×36, blinking), the bottom bar, Welcome and the empty storage s
 (128×144), the bind animation, the splash, the app icon.
 
 ### Splash
-Android's splash screen: the `lcd` ground and Pin at 6× (96×108dp), centred in the 240dp icon so
-it stays inside the 160dp circle the system shows. Pin blinks once, stepped (closed from 360 to
-440ms of 600ms). No scanline grid: the system draws it, not us.
+Android's splash screen: the `lcd` ground and Pin at 6× (96×108dp), centred in the 288dp icon so
+it stays inside the 192dp circle the system shows (with no icon background colour the system
+lays the icon out at 288dp; a 240dp one is scaled up 1.2×). Pin blinks once, stepped (closed
+from 360 to 440ms of 600ms). It leaves in one cut, never the system's fade. No scanline grid:
+the system draws it, not us.
 
 ## Motion
 
@@ -458,7 +487,8 @@ Interaction motion:
 
 | Motion | Frames | Rule |
 | --- | --- | --- |
-| Screen change | 4 (160ms) | The LCD redraw: the new screen paints in four horizontal bands, top to bottom. Back paints bottom to top |
+| Screen change | 4 (160ms) | The LCD redraw: the new screen paints in four horizontal bands, top to bottom. Back paints bottom to top. The old screen stays drawn underneath but takes no touch, and focus leaves it |
+| Typing | 2 per 3 characters | Whatever a person would type (titles, shell commands) types 3 characters every 2 frames, with the cursor at its end. A title types on each time its screen is drawn; the cursor's place is kept so it never re-wraps |
 | Key press | 1 | Down 4px into its shadow on press, back on release |
 | DIP switch | 1 | The knob snaps to the other side. No slide |
 | Focus cursor | 0 | Inversion moves to the focused element on the next frame |
@@ -468,6 +498,8 @@ Interaction motion:
 | Bottom bar state | 2 | Bound, replugging and port with Android cut over in two bands |
 | Sheet | 4 | Rises from the bottom; its scrim appears on the first frame. Back plays it in reverse |
 | Fault line | 1 | Appears with the error shake |
+| Shell session | 1 per step | A prompt appears at once and the cursor holds on it for a beat (7 frames, 280ms), then the command types at typing speed. Enter: the output types 4 characters a frame with a beat between its lines, and the next prompt comes the moment it ends. The work behind a command starts the moment it has typed. The keys appear one beat after the idle prompt |
+| Check answers | 4 per row | Check's cursors hold for at least one beat, then its rows resolve top to bottom, one every 4 frames. A probe that answers in 30ms would otherwise only flash |
 
 Ambient loops:
 
@@ -653,9 +685,9 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | Identity fields, Save, Reset | profile keys, `identity set FILE`, `identity unset` |
 | Log tabs | command output (CLI) and `Logs/usb-arsenald.log` (Daemon) |
 | Function names in the bind screen | `mass_storage.ua`, `ncm.ua`, `hid.ua_kbd`, `hid.ua_mouse` |
-| Root screen | `id -u; su -v` (prints `3.3.0:KernelSU` or `<version>:MAGISK`) |
+| Root screen | `id -u; su -v` (prints `3.3.0:KernelSU` or `<version>:MAGISK`), shown as a shell session; its `#` comments are the app's narration |
 | Check screen | `check --json`, run with the bundled binary before anything is installed |
-| Install screen | the ported installer: binary to the module's `system/bin`, `module/` beside it, the workspace link, the SELinux rule, a daemon restart |
+| Backend screen | the ported installer: the binary to `/data/local/USB-Arsenal/bin`, `module/` to `/data/adb/modules/usb-arsenal`, each step printing what it really printed, then `[+] Installed`, and `[!] Reboot to load the SELinux rule` only when the module had no rule before. The daemon is Settings' daemon mode, never the install's. `./install-backend.sh` is how the session shows it; there is no such script. The version is the app's own, never asked of root |
 | Home attention key | the installer's backend check: not installed, module missing, corrupted, update available, no root |
 | Home status, live rows | `status --json` |
 

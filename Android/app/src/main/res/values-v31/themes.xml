@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12's splash: the lcd ground and Pin, so launch goes amber to amber, not black -->
+    <style name="Lcd" parent="android:Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:windowBackground">#FFA62E</item>
+        <item name="android:windowSplashScreenBackground">#FFA62E</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_pin</item>
+    </style>
+</resources>

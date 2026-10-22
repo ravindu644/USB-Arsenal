@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pin at 6x (96x108dp) in the middle of the splash icon. With no icon background colour the
+     system lays the icon out at 288dp and shows the 192dp circle inside it, so this is 288dp;
+     a 240dp icon would be scaled up 1.2x. The rows are Sprites.Pin; viewport units are Pin's
+     pixels. 288dp is what the splash screen API asks for, so the 200dp vector limit does not apply -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="VectorRaster"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <group android:translateX="16" android:translateY="15">
+        <path android:fillColor="#1C1005" android:pathData="M3,0h10v1h-10zM3,1h1v1h-1zM12,1h1v1h-1zM3,2h1v1h-1zM5,2h2v1h-2zM9,2h2v1h-2zM12,2h1v1h-1zM3,3h1v1h-1zM5,3h2v1h-2zM9,3h2v1h-2zM12,3h1v1h-1zM3,4h1v1h-1zM12,4h1v1h-1zM2,5h12v1h-12zM1,6h14v1h-14zM1,7h14v1h-14zM1,8h6v1h-6zM9,8h6v1h-6zM1,9h14v1h-14zM1,10h14v1h-14zM2,11h12v1h-12zM4,12h2v1h-2zM7,12h2v1h-2zM10,12h2v1h-2zM4,13h2v1h-2zM7,13h2v1h-2zM10,13h2v1h-2zM3,14h3v1h-3zM7,14h2v1h-2zM10,14h3v1h-3zM7,15h2v1h-2zM7,16h4v1h-4zM10,17h2v1h-2z" />
+    </group>
+</vector>

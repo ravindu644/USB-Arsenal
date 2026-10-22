@@ -9,7 +9,9 @@ everywhere.
 
 ## Running the daemon
 
-The KernelSU module starts it at boot. By hand:
+The KernelSU module starts it at boot while daemon mode is on, that is while
+`/data/local/USB-Arsenal/.daemon_mode` holds `1` (the zip turns it on; the app has a switch).
+By hand:
 
 ```sh
 usb-arsenal daemon               # goes to the background; refuses a second copy
