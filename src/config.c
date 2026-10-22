@@ -116,7 +116,7 @@ static int valid_cidr(const char *v) {
          p >= 8 && p <= 30;
 }
 
-static int valid_dns(const char *v) {
+int ua_valid_dns(const char *v) {
   char tmp[128], *save = NULL;
   struct in_addr a;
   int n = 0;
@@ -177,7 +177,7 @@ static int set_key(struct ua_config *c, const struct key *k, const char *val) {
       return -1;
     break;
   case K_DNS:
-    if (*val && !valid_dns(val))
+    if (*val && !ua_valid_dns(val))
       return -1;
     break;
   }
