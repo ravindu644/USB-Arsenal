@@ -300,8 +300,10 @@ void ua_status_hid(const struct ua_gadget *g, int json) {
     if (find_node(g, fns[i].func, node, sizeof(node)) < 0)
       node[0] = '\0';
     if (json) {
-      /* The poll interval the function runs with; -1 where the kernel has no
-       * control for it (stock f_hid), so a client shows what the host gets */
+      /* The poll interval the function runs with: what the patched f_hid's
+       * attribute holds (0 for its default, 1 ms), or -1 where the kernel
+       * has no control for it (stock f_hid), so a client shows what the host
+       * gets */
       char dir[PATH_MAX], p[PATH_MAX + 16], v[16] = "";
       long interval = -1;
       if (ua_gadget_func_dir(g, fns[i].func, dir, sizeof(dir)) == 0) {

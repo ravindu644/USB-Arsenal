@@ -110,8 +110,9 @@ data class Capabilities(
 // An ejected LUN has an empty file, mode and access
 data class Lun(val lun: Int, val file: String, val mode: String, val access: String)
 
-// [interval] is the poll interval exponent the function runs with, -1 where the kernel has no
-// control for it (stock f_hid keeps 1 ms) or the backend is older
+// [interval] is the poll interval exponent the function runs with: 0 for the kernel's default
+// (1 ms), -1 where the kernel has no control for it (stock f_hid keeps 1 ms) or the backend is
+// older
 data class HidNode(val function: String, val node: String, val interval: Int = -1)
 
 data class Tether(
