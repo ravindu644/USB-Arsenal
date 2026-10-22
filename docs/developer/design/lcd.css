@@ -48,7 +48,7 @@ body{margin:0}
 .key.pri{background:var(--ink);color:var(--lcd)}
 .inv .key{border-color:var(--lcd);box-shadow:4px 4px 0 var(--lcd)}
 .key:active{transform:translate(4px,4px);box-shadow:none}
-.key[disabled]{border-style:dashed;box-shadow:none;cursor:not-allowed}
+.key[disabled]{background:var(--lcd);color:var(--ink);border-style:dashed;box-shadow:none;cursor:not-allowed}
 
 /* Segmented control: one choice of several, 2px dividers between options */
 .segs{display:flex;border:2px solid var(--ink)}
@@ -99,6 +99,47 @@ body{margin:0}
 .wire .lbl{position:absolute;left:22px;top:10px;white-space:nowrap}
 @keyframes down{from{top:0}to{top:32px}}
 @keyframes up{from{top:32px}to{top:0}}
+
+/* A fact that cannot be tapped needs no 44px target, so a long list still fits */
+.kv.fact{min-height:32px}
+.grp{padding-top:4px;font-weight:700}
+
+/* A device panel: the drive, the su probe. Inverted face with a LED, body below */
+.panel{position:relative;border:2px solid var(--ink);overflow:hidden}
+.face{display:flex;align-items:center;gap:10px;height:40px;padding:0 4px 0 12px;background:var(--ink);color:var(--lcd)}
+.led{width:8px;height:8px;box-sizing:border-box;border:2px solid var(--lcd)}
+.led.on{background:var(--lcd)}
+.led.busy{background:var(--lcd);animation:led 1.2s steps(1,end) infinite}
+@keyframes led{30%{visibility:hidden}40%{visibility:visible}55%{visibility:hidden}60%{visibility:visible}}
+.body{display:flex;align-items:center;gap:14px;min-height:96px;padding:12px 14px;box-sizing:border-box}
+
+/* A consequence, in the inverted voice. Never an explanation */
+.warn{padding:8px 10px;background:var(--ink);color:var(--lcd);font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none}
+
+/* Home's attention key: what the backend needs, and the way to the fix */
+.alert{all:unset;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:8px 10px;background:var(--ink);color:var(--lcd);font-weight:700;cursor:pointer}
+.alert .t{text-align:right}
+
+/* A failed command: stderr's last line, right under the element acted on. Tapping it opens Log */
+.fault{all:unset;box-sizing:border-box;display:flex;align-items:flex-start;gap:10px;width:100%;padding:8px 10px;background:var(--ink);color:var(--lcd);cursor:pointer}
+.fault .msg{flex:1;min-width:0;font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.fault .go{flex:none;padding:0 6px;background:var(--lcd);color:var(--ink);font-weight:700}
+@keyframes shake{0%{transform:translateX(-2px)}33%{transform:translateX(2px)}66%,100%{transform:none}}
+.shake{animation:shake 120ms steps(1,end) 1}
+
+/* Bottom sheet. The screen behind is shaded with dither, never a grey */
+.scrim{position:absolute;inset:0;z-index:5;background-image:repeating-conic-gradient(var(--ink) 0 25%,transparent 0 50%);background-size:4px 4px}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:6;display:flex;flex-direction:column;gap:16px;padding:20px 20px 68px;background:var(--lcd);border-top:2px solid var(--ink);box-sizing:border-box}
+
+/* Progress in whole tenths, so it steps like everything else */
+.cells{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:2px;height:28px;padding:2px;border:2px solid var(--ink);box-sizing:border-box}
+.cells i{display:block}
+.cells i.f{background:var(--ink)}
+
+/* A function this kernel lacks: the row stays, its switch cannot move */
+.dip[disabled]{cursor:not-allowed}
+.dip[disabled] .trk{background-image:repeating-conic-gradient(currentColor 0 25%,transparent 0 50%);background-size:4px 4px}
+.dip[disabled] .k,.dip[disabled] .lab{visibility:hidden}
 
 /* Motion is frame-stepped: cursor "working", Pin's double blink */
 .blk{display:inline-block;width:10px;height:16px;margin-left:4px;vertical-align:-2px;background:currentColor;animation:blk 1s steps(1,end) infinite}

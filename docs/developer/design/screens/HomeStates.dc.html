@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jersey+10&amp;family=Silkscreen:wght@400;700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0}
+.lcd{--lcd:#FFA62E;--ink:#1C1005;position:relative;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;gap:16px;padding:22px 20px 20px;background:var(--lcd);color:var(--ink);font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase;-webkit-font-smoothing:none;font-smooth:never}
+.lcd::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px),repeating-linear-gradient(90deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px)}
+.phone{width:390px;height:844px;padding-bottom:68px}
+.lcd :focus-visible{outline:2px dashed currentColor;outline-offset:3px}
+.s{font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase}
+.t{font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none}
+.b{font-weight:700}
+.big{margin:0;font-family:'Jersey 10','Silkscreen',sans-serif;font-weight:400;line-height:.8}
+.title{font-size:72px}
+.hero{font-size:104px}
+.inv{background:var(--ink);color:var(--lcd)}
+.d25{background-image:repeating-conic-gradient(var(--ink) 0 25%,transparent 0 100%);background-size:4px 4px}
+.d50{background-image:repeating-conic-gradient(var(--ink) 0 25%,transparent 0 50%);background-size:4px 4px}
+.ghost{position:relative;display:block}
+.ghost::after{content:"";position:absolute;inset:0;background:repeating-conic-gradient(var(--lcd) 0 25%,transparent 0 50%) 0 0/4px 4px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.lines{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;color:inherit;text-decoration:none}
+.kv{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+.field{display:flex;flex-direction:column;gap:6px}
+.box{display:flex;flex-direction:column;gap:5px;border:2px solid var(--ink);padding:8px 10px}
+.key{font:inherit;font-weight:700;color:var(--ink);background:var(--lcd);border:2px solid var(--ink);min-height:44px;padding:0 14px;box-sizing:border-box;box-shadow:4px 4px 0 var(--ink);display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;text-transform:uppercase;cursor:pointer}
+.key.pri{background:var(--ink);color:var(--lcd)}
+.inv .key{border-color:var(--lcd);box-shadow:4px 4px 0 var(--lcd)}
+.key:active{transform:translate(4px,4px);box-shadow:none}
+.key[disabled]{background:var(--lcd);color:var(--ink);border-style:dashed;box-shadow:none;cursor:not-allowed}
+.segs{display:flex;border:2px solid var(--ink)}
+.seg{all:unset;box-sizing:border-box;flex:1 1 0;min-width:0;min-height:44px;padding:0 4px;display:flex;align-items:center;justify-content:center;font-weight:700;cursor:pointer}
+.seg + .seg{border-left:2px solid var(--ink)}
+.seg.on{background:var(--ink);color:var(--lcd)}
+.luns{align-self:flex-start}
+.luns .seg{flex:0 0 40px}
+.dip{all:unset;box-sizing:border-box;display:flex;align-items:center;flex:none;min-height:44px;padding:0 2px;cursor:pointer}
+.dip .trk{box-sizing:border-box;width:68px;height:32px;border:2px solid currentColor;padding:2px;display:flex;justify-content:space-between}
+.dip .k{width:26px;background:currentColor}
+.dip .lab{flex:1;display:flex;align-items:center;justify-content:center;font-weight:700}
+.dip.off .trk{flex-direction:row-reverse}
+.dip.off .lab{visibility:hidden}
+.row{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;width:100%;min-height:80px;padding:10px}
+.row.on{background:var(--ink);color:var(--lcd)}
+.ico{display:block;flex:none;width:32px;height:32px}
+.tag{padding:0 6px;background:var(--ink);color:var(--lcd)}
+.st{display:block;overflow:hidden;white-space:nowrap;container-type:inline-size}
+.st > span{display:inline-block;min-width:100%;animation:mq 8s steps(32,end) infinite alternate}
+@keyframes mq{0%,20%{transform:translateX(0)}80%,100%{transform:translateX(min(0px,calc(100cqw - 100%)))}}
+.strip{display:flex;flex-direction:column;gap:16px;margin:auto -20px -68px;padding:14px 20px 68px;box-sizing:border-box;border-top:2px solid var(--ink)}
+.who{display:flex;align-items:center;gap:12px;min-height:44px}
+.inp{all:unset;box-sizing:border-box;width:100%;min-height:44px;border:2px solid var(--ink);padding:0 10px;font-family:'VT323',monospace;font-size:22px;text-transform:none}
+.inp::placeholder{color:var(--ink);opacity:1}
+.term{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;padding:10px;background:var(--ink);color:var(--lcd)}
+.ln{display:grid;grid-template-columns:28px minmax(0,1fr);gap:0 6px;padding:3px 4px}
+.ln.on{background:var(--lcd);color:var(--ink)}
+.node{display:flex;align-items:center;justify-content:space-between;gap:12px;border:2px solid var(--ink);padding:0 10px;min-height:44px;box-sizing:border-box}
+.wire{position:relative;height:40px;margin-left:44px;width:6px;background:repeating-linear-gradient(180deg,var(--ink) 0 4px,transparent 4px 8px)}
+.wire .pk{position:absolute;left:-5px;width:16px;height:8px;background:var(--ink);animation:down 1.2s steps(4,end) infinite}
+.wire .pk.up{animation-name:up}
+.wire .lbl{position:absolute;left:22px;top:10px;white-space:nowrap}
+@keyframes down{from{top:0}to{top:32px}}
+@keyframes up{from{top:32px}to{top:0}}
+.kv.fact{min-height:32px}
+.grp{padding-top:4px;font-weight:700}
+.panel{position:relative;border:2px solid var(--ink);overflow:hidden}
+.face{display:flex;align-items:center;gap:10px;height:40px;padding:0 4px 0 12px;background:var(--ink);color:var(--lcd)}
+.led{width:8px;height:8px;box-sizing:border-box;border:2px solid var(--lcd)}
+.led.on{background:var(--lcd)}
+.led.busy{background:var(--lcd);animation:led 1.2s steps(1,end) infinite}
+@keyframes led{30%{visibility:hidden}40%{visibility:visible}55%{visibility:hidden}60%{visibility:visible}}
+.body{display:flex;align-items:center;gap:14px;min-height:96px;padding:12px 14px;box-sizing:border-box}
+.warn{padding:8px 10px;background:var(--ink);color:var(--lcd);font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none}
+.alert{all:unset;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:8px 10px;background:var(--ink);color:var(--lcd);font-weight:700;cursor:pointer}
+.alert .t{text-align:right}
+.fault{all:unset;box-sizing:border-box;display:flex;align-items:flex-start;gap:10px;width:100%;padding:8px 10px;background:var(--ink);color:var(--lcd);cursor:pointer}
+.fault .msg{flex:1;min-width:0;font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.fault .go{flex:none;padding:0 6px;background:var(--lcd);color:var(--ink);font-weight:700}
+@keyframes shake{0%{transform:translateX(-2px)}33%{transform:translateX(2px)}66%,100%{transform:none}}
+.shake{animation:shake 120ms steps(1,end) 1}
+.scrim{position:absolute;inset:0;z-index:5;background-image:repeating-conic-gradient(var(--ink) 0 25%,transparent 0 50%);background-size:4px 4px}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:6;display:flex;flex-direction:column;gap:16px;padding:20px 20px 68px;background:var(--lcd);border-top:2px solid var(--ink);box-sizing:border-box}
+.cells{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:2px;height:28px;padding:2px;border:2px solid var(--ink);box-sizing:border-box}
+.cells i{display:block}
+.cells i.f{background:var(--ink)}
+.dip[disabled]{cursor:not-allowed}
+.dip[disabled] .trk{background-image:repeating-conic-gradient(currentColor 0 25%,transparent 0 50%);background-size:4px 4px}
+.dip[disabled] .k,.dip[disabled] .lab{visibility:hidden}
+.blk{display:inline-block;width:10px;height:16px;margin-left:4px;vertical-align:-2px;background:currentColor;animation:blk 1s steps(1,end) infinite}
+.big .blk{width:.32em;height:.62em;vertical-align:0}
+@keyframes blk{50%{visibility:hidden}}
+.shut{position:absolute;inset:0;opacity:0;background:var(--lcd);animation:shut 2.6s steps(1,end) infinite}
+@keyframes shut{0%{opacity:0}70%{opacity:1}76%{opacity:0}84%{opacity:1}90%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.lcd *{animation:none!important;transition:none!important}}
+.board{display:flex;align-items:flex-start;gap:48px;padding:48px;box-sizing:border-box;background:#1C1005}
+.state{display:flex;flex-direction:column;gap:16px;flex:none}
+.cap{font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;font-weight:700;text-transform:uppercase;color:#FFA62E}
+.mark{position:relative;display:block;width:32px;height:36px;flex:none}
+.mark svg,.ico svg{display:block}
+.alerts{width:390px;height:auto}
+</style>
+</helmet>
+<div class="board">
+  <sc-for list="{{phones}}" as="p" hint-placeholder-count="3">
+    <div class="state">
+      <div class="lcd phone">
+        <div class="top">
+          <span style="display:flex;align-items:center;gap:10px">
+            <span class="mark" aria-hidden="true"><svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges"><path d="{{sp.pin}}" fill="currentColor"></path></svg><span class="shut"><svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges"><path d="{{sp.pinBlink}}" fill="currentColor"></path></svg></span></span>
+            <span class="b">USB Arsenal</span>
+          </span>
+          <span class="t">v1.2.0</span>
+        </div>
+        <h1 class="big hero">{{p.hero}}</h1>
+        <div style="display:flex;flex-direction:column;gap:2px;margin:0 -10px">
+          <sc-for list="{{p.rows}}" as="f" hint-placeholder-count="3">
+            <div class="{{f.rowClass}}">
+              <span class="{{f.icoClass}}"><svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><path d="{{f.icon}}" fill="currentColor"></path></svg></span>
+              <span class="lines">
+                <span class="b">{{f.label}}</span>
+                <span class="t st"><span>{{f.l1}}</span></span>
+                <span class="t st"><span>{{f.l2}}</span></span>
+              </span>
+              <button class="{{f.dipClass}}" disabled="{{f.locked}}" aria-label="{{f.aria}}"><span class="trk"><span class="lab">on</span><span class="k"></span></span></button>
+            </div>
+          </sc-for>
+        </div>
+        <sc-if value="{{p.alert}}" hint-placeholder-val="{{ false }}">
+          <button class="alert"><span>{{p.alert}}</span><span class="t">{{p.fix}}</span></button>
+        </sc-if>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+          <a class="key" href="Log.dc.html">Log</a>
+          <a class="key" href="Settings.dc.html">Settings</a>
+        </div>
+        <sc-if value="{{p.bound}}" hint-placeholder-val="{{ true }}">
+          <div class="strip">
+            <div class="who"><svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges" aria-hidden="true"><path d="{{sp.pin}}" fill="currentColor"></path></svg><span class="lines"><span class="b">Bound</span><span class="t">a600000.dwc3</span></span></div>
+            <button class="key">Stop all</button>
+          </div>
+        </sc-if>
+        <sc-if value="{{p.android}}" hint-placeholder-val="{{ false }}">
+          <div class="strip">
+            <div class="who"><svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges" aria-hidden="true"><path d="{{sp.pinBlink}}" fill="currentColor"></path></svg><span class="b">Port with Android</span></div>
+          </div>
+        </sc-if>
+      </div>
+      <span class="cap">{{p.cap}}</span>
+    </div>
+  </sc-for>
+
+  <div class="state">
+    <div class="lcd alerts">
+      <sc-for list="{{alerts}}" as="a" hint-placeholder-count="5">
+        <button class="alert"><span>{{a.label}}</span><span class="t">{{a.fix}}</span></button>
+      </sc-for>
+    </div>
+    <span class="cap">Every attention line</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1800,"height":976}}'>
+class Component extends DCLogic {
+  px(rows) {
+    let d = '';
+    rows.forEach((r, y) => {
+      for (let x = 0; x < r.length; ) {
+        if (r[x] !== '#') { x++; continue; }
+        const s = x;
+        while (r[x] === '#') x++;
+        d += 'M' + s + ' ' + y + 'h' + (x - s) + 'v1h-' + (x - s) + 'z';
+      }
+    });
+    return d;
+  }
+  renderVals() {
+    const top = ['...##########...', '...#........#...'];
+    const body = ['..############..', '.##############.', '.##############.', '.######..######.', '.##############.', '.##############.', '..############..', '....##.##.##....', '....##.##.##....', '...###.##.###...', '.......##.......', '.......####.....', '..........##....'];
+    const sp = {
+      pin: this.px(top.concat(['...#.##..##.#...', '...#.##..##.#...', '...#........#...'], body)),
+      pinBlink: this.px(top.concat(['...#........#...', '...#.##..##.#...', '...#........#...'], body)),
+      disc: this.px(['.....######.....', '...##......##...', '..#.#........#..', '.#.##.........#.', '.#....####....#.', '#....#....#....#', '#...#......#...#', '#...#..##..#...#', '#...#..##..#...#', '#...#......#...#', '#....#....#....#', '.#....####....#.', '.#............#.', '..#..........#..', '...##......##...', '.....######.....']),
+      jack: this.px(['................', '################', '#..............#', '#..##..##..##..#', '#..##..##..##..#', '#..............#', '#..............#', '#..............#', '#..............#', '###..........###', '..#..........#..', '..#..........#..', '..###......###..', '....#......#....', '....########....']),
+      keyb: this.px(['...............', '...............', '...............', '###############', '#.............#', '#.#.#.#.#.#.#.#', '#.............#', '#..#.#.#.#.#..#', '#.............#', '#.#..#####..#.#', '#.............#', '###############'])
+    };
+    const row = (label, icon, l1, l2, opt) => Object.assign({
+      label, icon, l1, l2, rowClass: 'row', icoClass: 'ico', dipClass: 'dip', locked: false, aria: label + ' on'
+    }, opt || {});
+    const live = [
+      row('Storage', sp.disc, 'LUN0 Win11_24H2_x64.iso · dvd', 'LUN1 pendrive.img · rw', { rowClass: 'row on' }),
+      row('Tether', sp.jack, 'ncm 192.168.42.129 → .130', 'via rmnet_data0'),
+      row('HID', sp.keyb, 'keyboard /dev/hidg1', 'mouse /dev/hidg2')
+    ];
+    const off = { dipClass: 'dip off', locked: true };
+    return {
+      sp,
+      phones: [
+        { cap: 'Backend update', hero: '3 up', rows: live, alert: 'Backend update', fix: '1.1.0 → 1.2.0', bound: true, android: false },
+        {
+          cap: 'Backend not installed', hero: 'idle', bound: false, android: true, alert: 'Not installed', fix: 'install',
+          rows: [
+            row('Storage', sp.disc, 'off', 'pick an image to start', Object.assign({ rowClass: 'row on', aria: 'Storage off' }, off)),
+            row('Tether', sp.jack, 'off', 'ncm · 192.168.42.129/24', Object.assign({ aria: 'Tether off' }, off)),
+            row('HID', sp.keyb, 'off', 'keyboard and 5-button mouse', Object.assign({ aria: 'HID off' }, off))
+          ]
+        },
+        {
+          cap: 'A function this kernel lacks', hero: '2 up', alert: '', bound: true, android: false,
+          rows: [live[0], live[1],
+            row('HID', sp.keyb, 'no hid in this kernel', 'CONFIG_USB_CONFIGFS_F_HID', { icoClass: 'ico ghost', dipClass: 'dip off', locked: true, aria: 'HID unavailable' })]
+        }
+      ],
+      alerts: [
+        { label: 'Backend update', fix: '1.1.0 → 1.2.0' },
+        { label: 'Not installed', fix: 'install' },
+        { label: 'Module missing', fix: 'reinstall' },
+        { label: 'Backend broken', fix: 'reinstall' },
+        { label: 'No root', fix: 'grant' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

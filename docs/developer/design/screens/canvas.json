@@ -97,6 +97,78 @@
       "h": 640,
       "title": "App icon",
       "is_interactive": true
+    },
+    "Welcome.dc.html": {
+      "x": 0,
+      "y": 3800,
+      "w": 390,
+      "h": 844,
+      "title": "Welcome",
+      "is_interactive": true
+    },
+    "Root.dc.html": {
+      "x": 470,
+      "y": 3800,
+      "w": 1362,
+      "h": 976,
+      "title": "Root: asking, granted, denied",
+      "is_interactive": true
+    },
+    "Check.dc.html": {
+      "x": 1912,
+      "y": 3800,
+      "w": 1800,
+      "h": 976,
+      "title": "Check: checking, met, caveats, blocked",
+      "is_interactive": true
+    },
+    "Install.dc.html": {
+      "x": 3792,
+      "y": 3800,
+      "w": 2238,
+      "h": 976,
+      "title": "Install: before, running, success, failure",
+      "is_interactive": true
+    },
+    "HomeStates.dc.html": {
+      "x": 0,
+      "y": 5300,
+      "w": 1800,
+      "h": 976,
+      "title": "Home: attention and a missing function",
+      "is_interactive": true
+    },
+    "Failed.dc.html": {
+      "x": 1880,
+      "y": 5300,
+      "w": 1362,
+      "h": 976,
+      "title": "A command failed",
+      "is_interactive": true
+    },
+    "Create.dc.html": {
+      "x": 3322,
+      "y": 5300,
+      "w": 1800,
+      "h": 976,
+      "title": "Create sheet",
+      "is_interactive": true
+    },
+    "Settings.dc.html": {
+      "x": 0,
+      "y": 6800,
+      "w": 924,
+      "h": 976,
+      "title": "Settings and font licences",
+      "is_interactive": true
+    },
+    "Splash.dc.html": {
+      "x": 1004,
+      "y": 6800,
+      "w": 924,
+      "h": 976,
+      "title": "Splash",
+      "is_interactive": true
     }
   },
   "order": [
@@ -110,7 +182,16 @@
     "Identity.dc.html",
     "Tablet.dc.html",
     "Kit.dc.html",
-    "Icon.dc.html"
+    "Icon.dc.html",
+    "Welcome.dc.html",
+    "Root.dc.html",
+    "Check.dc.html",
+    "Install.dc.html",
+    "HomeStates.dc.html",
+    "Failed.dc.html",
+    "Create.dc.html",
+    "Settings.dc.html",
+    "Splash.dc.html"
   ],
   "notes": {
     "row1": {
@@ -133,6 +214,27 @@
       "text": "Large screens, the kit and the icon",
       "kind": "title1",
       "maxW": 3420
+    },
+    "row4": {
+      "x": 0,
+      "y": 3500,
+      "text": "Setup",
+      "kind": "title1",
+      "maxW": 6030
+    },
+    "row5": {
+      "x": 0,
+      "y": 5000,
+      "text": "States, failures and the sheet",
+      "kind": "title1",
+      "maxW": 5122
+    },
+    "row6": {
+      "x": 0,
+      "y": 6500,
+      "text": "Settings and splash",
+      "kind": "title1",
+      "maxW": 1928
     }
   },
   "designSystems": []

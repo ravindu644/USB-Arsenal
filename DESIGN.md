@@ -173,6 +173,28 @@ components:
   sprite:
     textColor: "{colors.ink}"
     size: 32px
+  alert:
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.lcd}"
+    typography: "{typography.label-strong}"
+    height: 44px
+    padding: 8px 10px
+  fault:
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.lcd}"
+    typography: "{typography.data}"
+    padding: 8px 10px
+  sheet:
+    backgroundColor: "{colors.lcd}"
+    textColor: "{colors.ink}"
+    typography: "{typography.label}"
+    rounded: "{rounded.none}"
+    padding: 20px 20px 68px
+  cells:
+    backgroundColor: "{colors.lcd}"
+    textColor: "{colors.ink}"
+    height: 28px
+    padding: 2px
 ---
 
 # DESIGN.md
@@ -207,7 +229,10 @@ Structure:
 - **A function drills down** into its own screen. Back returns to Home.
 - **Gadget state is always visible** in the bottom bar on Home: bound, replugging, or port
   with Android.
-- **Secondary screens** (Log, Identity) sit outside the function list, as keys above the bar.
+- **Secondary screens** sit outside the function list, as two keys above the bar: Log and
+  Settings. Identity lives inside Settings, because it is configuration.
+- **First launch** runs Welcome, Root, Check and Install, then Home. Later launches open Home,
+  which leads back to Root or Install only when the backend needs it.
 - **New functions are new rows.** The structure does not change.
 - **Tablets and landscape** keep the function list as a 420px pane beside the selected
   function's screen.
@@ -374,9 +399,50 @@ The newest line flips back to amber with the cursor.
 A `.d25` panel with a pixel pointer, a 44px wheel strip on its right, and an L/M/R segmented
 bar under it. Live report bytes sit below it in VT323.
 
+### Device panel (`.panel`, `.face`, `.led`, `.body`)
+The drive and the su probe share it: a 2px box with an inverted 40px face (a LED and a short
+name) over a 96px body. The LED is lit (`.on`) when the thing works, blinks (`.busy`) while it is
+working or serving, and is hollow when there is nothing.
+
+### Fact rows (`.kv.fact`) and group headings (`.grp`)
+A fact that cannot be tapped is 32px tall, not 44, so long lists like Check fit. A Silkscreen
+bold heading groups them (`MUST HAVE`, `FUNCTIONS`, `BACKEND`, `ABOUT`).
+
+### Attention key (`.alert`)
+Home's one line about the backend, inverted, above Log and Settings: the state on the left in
+Silkscreen (`BACKEND UPDATE`, `NOT INSTALLED`, `MODULE MISSING`, `BACKEND BROKEN`, `NO ROOT`),
+the fix on the right in VT323 (`1.1.0 → 1.2.0`, `install`, `reinstall`, `grant`). It is a key:
+it opens Install or Root. While it shows, the switches cannot move, except on an update.
+
+### Unavailable function
+The row stays so the user learns what the phone lacks. Its icon is `.ghost`, its DIP switch is
+`disabled` (a `.d50` track with no knob, skipped by focus), and its two status lines say why:
+`no hid in this kernel` and `CONFIG_USB_CONFIGFS_F_HID`. The text stays full ink.
+
+### Fault line (`.fault`)
+The one pattern for a failed command, on every screen. An inverted bar directly under the
+element that was acted on, holding stderr's last line (`[-] ...`, up to three lines) and a `LOG`
+tag. It is a key that opens Log, and it stays until the next action. The element shakes for 3
+frames with `Reject`, and switches show the real state again once `status --json` is re-read.
+The app's own timeout reads `[-] Timed out (30s)`.
+
+### Sheet (`.sheet`, `.scrim`)
+A bottom sheet for a short task (Create). It rises over the screen with a 2px top rule and the
+normal gutters, its own `display-title`, and its keys at the bottom. The screen behind is
+shaded with a `.d50` scrim, so it reads as unavailable. Back or Cancel closes it.
+
+### Progress (`.cells`)
+Ten cells in a 2px box, filled in whole tenths, with the amount in VT323 below
+(`1.6G of 4.0G`) and the cursor while it runs. Only for work long enough to wait on.
+
 ### Pin's places
-Home top bar (32×36, blinking), the bottom bar, the empty storage screen (128×144 with a pixel
-`?`), the bind animation, the app icon.
+Home top bar (32×36, blinking), the bottom bar, Welcome and the empty storage screen
+(128×144), the bind animation, the splash, the app icon.
+
+### Splash
+Android's splash screen: the `lcd` ground and Pin at 6× (96×108dp), centred in the 240dp icon so
+it stays inside the 160dp circle the system shows. Pin blinks once, stepped (closed from 360 to
+440ms of 600ms). No scanline grid: the system draws it, not us.
 
 ## Motion
 
@@ -400,6 +466,8 @@ Interaction motion:
 | Error shake | 3 | 2px left, 2px right, home. Paired with the `Reject` haptic |
 | Number change | 1 | Digits flip to the new value. No counting up |
 | Bottom bar state | 2 | Bound, replugging and port with Android cut over in two bands |
+| Sheet | 4 | Rises from the bottom; its scrim appears on the first frame. Back plays it in reverse |
+| Fault line | 1 | Appears with the error shake |
 
 Ambient loops:
 
@@ -456,7 +524,8 @@ the rich ones go through the tiers below.
 | Gadget bound (the bind animation) | Rich: three rising ticks as Pin climbs, a thud on the frame it plugs in |
 | Stop all, eject | `GestureEnd` |
 | Command refused or failed | `Reject`, with the error shake |
-| Save, image created | `Confirm` |
+| Save, image created, install finished | `Confirm` |
+| Root denied, Check blocked, install failed | `Reject` |
 | Warning shown | None. A warning is read, not felt |
 
 Device tiers for the rich effects, chosen once at start-up and cached:
@@ -584,14 +653,18 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | Identity fields, Save, Reset | profile keys, `identity set FILE`, `identity unset` |
 | Log tabs | command output (CLI) and `Logs/usb-arsenald.log` (Daemon) |
 | Function names in the bind screen | `mass_storage.ua`, `ncm.ua`, `hid.ua_kbd`, `hid.ua_mouse` |
-| Requirements and capability screen | `check --json` |
-| Home status, live rows | `status --json` (to be added to the C side before the app needs it) |
+| Root screen | `id -u; su -v` (prints `3.3.0:KernelSU` or `<version>:MAGISK`) |
+| Check screen | `check --json`, run with the bundled binary before anything is installed |
+| Install screen | the ported installer: binary to the module's `system/bin`, `module/` beside it, the workspace link, the SELinux rule, a daemon restart |
+| Home attention key | the installer's backend check: not installed, module missing, corrupted, update available, no root |
+| Home status, live rows | `status --json` |
 
 Every command runs through root in its own short-lived shell with a timeout (see AGENTS.md),
 so one stuck command can never freeze the screen.
 
 App-side features, done by the app itself: the `/sdcard/USB-Arsenal` file list, Create (a sparse
-image, as `truncate -s` does), and HID input written to `/dev/hidgN`.
+image, as `truncate -s` does, or a full one with progress), HID input written to `/dev/hidgN`,
+and the Motion and Haptics switches in Settings.
 
 Not shown because the backend cannot: UVC (not built), host controller or port names, lease
 countdowns, link uptime, a configfs write trace, a pending-changes queue.

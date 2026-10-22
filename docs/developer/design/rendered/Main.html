@@ -20,7 +20,7 @@ body{margin:0}
 .key.pri{background:var(--ink);color:var(--lcd)}
 .inv .key{border-color:var(--lcd);box-shadow:4px 4px 0 var(--lcd)}
 .key:active{transform:translate(4px,4px);box-shadow:none}
-.key[disabled]{border-style:dashed;box-shadow:none;cursor:not-allowed}
+.key[disabled]{background:var(--lcd);color:var(--ink);border-style:dashed;box-shadow:none;cursor:not-allowed}
 .segs{display:flex;border:2px solid var(--ink)}
 .seg{all:unset;box-sizing:border-box;flex:1 1 0;min-width:0;min-height:44px;padding:0 4px;display:flex;align-items:center;justify-content:center;font-weight:700;cursor:pointer}
 .seg.on{background:var(--ink);color:var(--lcd)}
@@ -94,7 +94,7 @@ body{margin:0}
   </div>
   <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
     <a class="key" href="Log.dc.html">Log</a>
-    <a class="key" href="Identity.dc.html">Identity</a>
+    <a class="key" href="Settings.dc.html">Settings</a>
   </div>
 
   
