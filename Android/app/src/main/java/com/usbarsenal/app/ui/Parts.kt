@@ -100,7 +100,8 @@ fun Screen(bottomBar: (@Composable () -> Unit)? = null, content: @Composable Col
     Modifier
         .fillMaxSize()
         .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-        .imePadding(),
+        // A sheet pads for the keyboard itself; the screen behind its scrim stays put
+        .then(if (SheetsOpen.count == 0) Modifier.imePadding() else Modifier),
 ) {
     Column(
         Modifier

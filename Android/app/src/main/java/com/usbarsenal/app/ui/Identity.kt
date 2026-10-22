@@ -281,7 +281,15 @@ private fun ProfileSheet(open: Boolean, editing: Profile?, dir: String, names: L
     }
 
     val cancelKey = remember { FocusRequester() }
-    Sheet(open, onDismiss = { if (!writing) onDismiss() }, entry = cancelKey) {
+    Sheet(
+        open,
+        onDismiss = { if (!writing) onDismiss() },
+        entry = cancelKey,
+        footer = {
+            Key("Cancel", Modifier.weight(1f).focusRequester(cancelKey), enabled = !writing, onClick = onDismiss)
+            Key(if (editing == null) "Create" else "Save", Modifier.weight(1f), primary = true, enabled = problems.isEmpty() && !writing && (editing != null || names != null)) { save() }
+        },
+    ) {
         Title(if (editing == null) "Create" else "Edit")
         Field("Name") { Input(name, { name = it }, Modifier.fillMaxWidth(), placeholder = "pixel-8", enabled = editing == null) }
         problems["name"]?.takeIf { name.isNotEmpty() }?.let { Warn(it) }
@@ -302,9 +310,5 @@ private fun ProfileSheet(open: Boolean, editing: Profile?, dir: String, names: L
         problems["ids"]?.let { Warn(it) }
         Field("Power") { Segs(POWERS.map { "$it mA" }, POWERS.indexOf(power), { power = POWERS[it] }) }
         failed?.let { Fault(it, onLog = null) }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Lcd.tight)) {
-            Key("Cancel", Modifier.weight(1f).focusRequester(cancelKey), enabled = !writing, onClick = onDismiss)
-            Key(if (editing == null) "Create" else "Save", Modifier.weight(1f), primary = true, enabled = problems.isEmpty() && !writing && (editing != null || names != null)) { save() }
-        }
     }
 }

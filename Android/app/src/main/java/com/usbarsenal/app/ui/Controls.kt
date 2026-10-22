@@ -42,6 +42,13 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.union
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusDirection
@@ -448,7 +455,14 @@ object SheetsOpen {
  * navigation bar.
  */
 @Composable
-fun Sheet(open: Boolean, onDismiss: () -> Unit, entry: FocusRequester? = null, content: @Composable ColumnScope.() -> Unit) {
+fun Sheet(
+    open: Boolean,
+    onDismiss: () -> Unit,
+    entry: FocusRequester? = null,
+    // The keys: pinned under the body, so they stay above the keyboard while the body scrolls
+    footer: (@Composable RowScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     // While it is open, Screen lets no focus into the screen behind (see SheetsOpen)
     DisposableEffect(open) {
         if (open) SheetsOpen.count++
@@ -475,9 +489,16 @@ fun Sheet(open: Boolean, onDismiss: () -> Unit, entry: FocusRequester? = null, c
     }
     Box(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize().dither(Dither.D50, ink).pointerInput(Unit) { detectTapGestures { dismiss() } })
+        /*
+         * The sheet is drawn beside Screen, not in it, so Screen's keyboard padding never reaches
+         * it: it pads for the keyboard itself (with the navigation bar, as one union, so neither
+         * counts twice), and a tall sheet stops under the status bar. Its body shrinks and
+         * scrolls in what is left, which brings the focused field into view above the keys
+         */
         Column(
             Modifier
                 .align(Alignment.BottomStart)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
                 .fillMaxWidth()
                 .layout { measurable, constraints ->
                     val p = measurable.measure(constraints)
@@ -486,14 +507,20 @@ fun Sheet(open: Boolean, onDismiss: () -> Unit, entry: FocusRequester? = null, c
                 .background(LocalLcd.current.ground)
                 .drawBehind { drawRect(ink, size = Size(size.width, Lcd.pixel.toPx())) }
                 .pointerInput(Unit) { detectTapGestures {} }
-                .windowInsetsPadding(WindowInsets.navigationBars)
+                .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
                 .padding(Lcd.gutter)
                 .focusRequester(group)
                 .focusProperties { onExit = { if (open) cancelFocusChange() } }
                 .focusable(),
             verticalArrangement = Arrangement.spacedBy(Lcd.section),
-            content = content,
-        )
+        ) {
+            Column(
+                Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(Lcd.section),
+                content = content,
+            )
+            footer?.let { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Lcd.tight), content = it) }
+        }
     }
 }
 

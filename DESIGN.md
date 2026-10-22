@@ -534,7 +534,9 @@ With nothing to choose, the sheet holds one ghosted line (`No containers are run
 ### Sheet (`.sheet`, `.scrim`)
 A bottom sheet for a short task (Create, a choice). It rises over the screen with a 2px top rule and the
 normal gutters, its own `display-title`, and its keys at the bottom. The screen behind is
-shaded with a `.d50` scrim, so it reads as unavailable. Back or Cancel closes it.
+shaded with a `.d50` scrim, so it reads as unavailable. Back or Cancel closes it. The sheet
+rides on the keyboard and stops under the status bar; when its body does not fit, the body
+scrolls and the keys stay pinned above the keyboard, so a field never sits under it.
 
 ### Progress (`.cells`)
 Ten cells in a 2px box, filled in whole tenths, with the amount in VT323 below
