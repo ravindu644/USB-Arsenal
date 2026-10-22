@@ -63,12 +63,13 @@ fun rememberReducedMotion(switches: Switches): Boolean {
  * is reduced.
  */
 @Composable
-fun <T> loop(periodMs: Int, frame: (Int) -> T): T {
+fun <T> loop(periodMs: Int, running: Boolean = true, frame: (Int) -> T): T {
     val reduced = LocalReducedMotion.current
     val rest = frame(0)
-    return produceState(rest, reduced, periodMs) {
+    // Not running holds the resting frame without waking every frame for it
+    return produceState(rest, reduced, periodMs, running) {
         value = rest
-        if (reduced) return@produceState
+        if (reduced || !running) return@produceState
         val start = withFrameMillis { it }
         while (true) {
             delay(FRAME_MS.toLong())

@@ -492,3 +492,6 @@ Tick a box only when the item is merged and verified as described in its phase.
   port back; `dmesg` clean. `start` refuses one file on two LUNs when either is writable,
   a failed start leaves no LUN of its own behind, and `--` passes an IMAGE named `-x`
   (verified through the daemon on the a166p).
+- 2026-10-22: `tether start --ncm` overrides a profile's `tether_function rndis` (NCM still
+  falls back to RNDIS where it is missing or unsafe), and `status --json` gives the link's
+  `tx_bytes` and `rx_bytes`, so the app's Tether shows traffic without a root read of its own.

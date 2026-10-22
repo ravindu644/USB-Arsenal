@@ -7,6 +7,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.usbarsenal.app.backend.Backend
+import com.usbarsenal.app.backend.BackendState
 import com.usbarsenal.app.backend.CHANGE_TIMEOUT_MS
 import androidx.core.content.edit
 import com.usbarsenal.app.backend.Capabilities
@@ -57,6 +59,9 @@ object Gadget {
     // The active identity profile's keys, as `identity show` prints them
     var profile by mutableStateOf<Map<String, String>>(emptyMap())
     var busy by mutableStateOf<Busy?>(null)
+
+    // The installer's verdict on the backend, as Home last read it; null until it has
+    var backend by mutableStateOf<Backend?>(null)
     var fault by mutableStateOf<Fault?>(null)
     val cli = mutableStateListOf<String>()
 
@@ -109,19 +114,33 @@ fun flip(fn: Fn, on: Boolean, onDone: (Boolean) -> Unit = {}) {
     val verb = if (on) "start" else "stop"
     when (fn) {
         Fn.STORAGE -> if (on) Gadget.run(fn, *startArgs(Picks.all).toTypedArray(), onDone = onDone) else Gadget.run(fn, "storage", "stop", onDone = onDone)
-        Fn.TETHER -> Gadget.run(fn, "tether", verb, onDone = onDone)
+        Fn.TETHER -> if (on) {
+            Gadget.run(fn, *tetherArgs(TetherSetup.plan, tetherFunction(TetherSetup.plan, Gadget.profile, Gadget.caps)).toTypedArray(), onDone = onDone)
+        } else {
+            Gadget.run(fn, "tether", "stop", onDone = onDone)
+        }
         Fn.HID -> Gadget.run(fn, "hid", verb, onDone = onDone)
     }
 }
 
-// Whether a start has anything to start: storage needs a pick
-fun startable(fn: Fn) = fn != Fn.STORAGE || Picks.all.isNotEmpty()
+// Whether a start has anything to start: storage needs a pick, a gateway needs its container
+fun startable(fn: Fn) = when (fn) {
+    Fn.STORAGE -> Picks.all.isNotEmpty()
+    Fn.TETHER -> !TetherSetup.plan.gateway || TetherSetup.plan.container.isNotBlank()
+    Fn.HID -> true
+}
 
-// The switch on a function's title: held while a command runs, dead where the kernel lacks it
+// Whether the backend stops the switches: until it is known, and while it needs a fix other
+// than an update
+fun Backend?.holds() = this == null || (state != BackendState.READY && state != BackendState.UPDATE_AVAILABLE)
+
+// The switch on a function's title, held as Home's are and dead where the kernel lacks the
+// function. A command running does not disable it, which would take its focus: Gadget.run
+// refuses a second one
 @Composable
 fun FnSwitch(fn: Fn, modifier: Modifier = Modifier, onFlip: () -> Unit = {}) {
     val on = Gadget.status.isOn(fn)
-    Dip(on, { onFlip(); flip(fn, it) }, fn.label, modifier, enabled = Gadget.busy == null && Gadget.caps.has(fn) && (on || startable(fn)))
+    Dip(on, { onFlip(); flip(fn, it) }, fn.label, modifier, enabled = !Gadget.backend.holds() && Gadget.caps.has(fn) && (on || startable(fn)))
 }
 
 // Whether the kernel has the function at all; null caps (not read yet) counts as yes
@@ -149,6 +168,7 @@ fun rowLines(
     busy: Busy?,
     pick: String? = null,
     profile: Map<String, String> = emptyMap(),
+    tether: TetherPlan = TetherPlan(),
 ): Pair<String, String> {
     if (!caps.has(fn)) {
         return when (fn) {
@@ -169,11 +189,9 @@ fun rowLines(
         Fn.TETHER -> {
             val t = status?.tether
             if (t == null) {
-                // What a start would bring up: the profile's function and address, NCM falling
-                // back to RNDIS where the kernel lacks it or it is unsafe (tether.c)
-                val wanted = profile["tether_function"] ?: "ncm"
-                val function = if (wanted == "ncm" && caps != null && caps.ncm != Probe.OK) "rndis" else wanted
-                "off" to "$function · ${profile["tether_address"] ?: "192.168.42.129/24"}"
+                // What a start would bring up: Tether's setup, and the profile's address
+                val function = tetherFunction(tether, profile, caps)
+                "off" to "$function · " + if (tether.gateway) "gateway ${tether.container}" else profile["tether_address"] ?: DEFAULT_ADDRESS
             } else {
                 val ip = t.address.substringBefore('/')
                 val line1 = hostOf(t.address)?.let { "${t.function} $ip → .${it.substringAfterLast('.')}" } ?: "${t.function} ${t.iface}"
@@ -227,6 +245,64 @@ object Picks {
 
     private fun prefs(context: Context) = context.getSharedPreferences("storage", Context.MODE_PRIVATE)
 }
+
+// What Tether sets up for the next start; the function is null until picked there
+data class TetherPlan(val function: String? = null, val gateway: Boolean = false, val container: String = "OpenWrt", val iface: String = "usb0")
+
+const val DEFAULT_ADDRESS = "192.168.42.129/24"
+
+object TetherSetup {
+    var plan by mutableStateOf(TetherPlan())
+        private set
+    private var loaded = false
+
+    fun load(context: Context) {
+        if (loaded) return
+        loaded = true
+        val p = prefs(context)
+        plan = TetherPlan(
+            p.getString("function", null),
+            p.getBoolean("gateway", false),
+            p.getString("container", null) ?: plan.container,
+            p.getString("iface", null) ?: plan.iface,
+        )
+    }
+
+    fun set(context: Context, next: TetherPlan) {
+        plan = next
+        prefs(context).edit {
+            putString("function", next.function)
+            putBoolean("gateway", next.gateway)
+            putString("container", next.container)
+            putString("iface", next.iface)
+        }
+    }
+
+    private fun prefs(context: Context) = context.getSharedPreferences("tether", Context.MODE_PRIVATE)
+}
+
+// Whether this kernel can run NCM: missing, or unsafe as Samsung's f_ncm is, means RNDIS
+fun Capabilities?.ncmOk() = this == null || ncm == Probe.OK
+
+// RNDIS left GKI after 5.10, so a kernel can have NCM alone
+fun Capabilities?.rndisOk() = this == null || rndis != Probe.MISSING
+
+// The function a start brings up: Tether's pick, else the profile's, else NCM, and the other
+// one where the kernel cannot run it (the backend falls back from NCM the same way, tether.c)
+fun tetherFunction(plan: TetherPlan, profile: Map<String, String>, caps: Capabilities?): String {
+    val wanted = plan.function ?: profile["tether_function"] ?: "ncm"
+    return when {
+        wanted == "ncm" && !caps.ncmOk() -> "rndis"
+        wanted == "rndis" && !caps.rndisOk() && caps.ncmOk() -> "ncm"
+        else -> wanted
+    }
+}
+
+// `tether start` for the setup, naming the function every time: without --ncm, a profile that
+// says RNDIS would win over Tether's pick
+fun tetherArgs(plan: TetherPlan, function: String): List<String> =
+    listOf("tether", "start", if (function == "rndis") "--rndis" else "--ncm") +
+        (if (plan.gateway) listOf("--gateway", plan.container.trim(), "--gateway-iface", plan.iface.trim().ifEmpty { "usb0" }) else emptyList())
 
 // `storage start` for every pick in one command: one replug however many LUNs
 fun startArgs(picks: List<Pick>): List<String> =

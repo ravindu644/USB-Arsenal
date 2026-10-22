@@ -182,13 +182,14 @@ fun Node(label: String, value: String? = null, inverted: Boolean = false) {
 
 /*
  * .wire: a dashed 6dp line joining two nodes, a packet stepping along it (4 steps a 1.2s
- * loop, against the line when [up]) and what carries it to the right. Reduced motion holds the
- * packet at its first step.
+ * loop, against the line when [up]) and what carries it to the right. Reduced motion, or a link
+ * that is not [moving], holds the packet at its first step.
  */
 @Composable
-fun Wire(label: String, up: Boolean = false) {
+fun Wire(label: String, up: Boolean = false, moving: Boolean = true) {
     val ink = LocalLcd.current.ink
-    val step = loop(1200) { it * 4 / 1200 }
+    // A link that is down carries nothing: its packet rests
+    val step = loop(1200, moving) { it * 4 / 1200 }
     Box(Modifier.fillMaxWidth().height(40.dp)) {
         Box(
             Modifier.padding(start = 44.dp).size(6.dp, 40.dp).drawBehind {
@@ -232,6 +233,8 @@ fun Input(
     modifier: Modifier = Modifier,
     placeholder: String = "",
     keyboard: KeyboardOptions = KeyboardOptions.Default,
+    // false locks it, ghosted: what it sets cannot change now
+    enabled: Boolean = true,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
@@ -243,7 +246,9 @@ fun Input(
             .focusTick()
             .then(if (focused) Modifier.focusOutline(ink) else Modifier)
             .heightIn(min = Lcd.touch)
-            .border(Lcd.pixel, ink),
+            .border(Lcd.pixel, ink)
+            .then(if (enabled) Modifier else Modifier.ghost(LocalLcd.current.ground)),
+        enabled = enabled,
         textStyle = LcdType.data.copy(color = ink),
         singleLine = true,
         keyboardOptions = keyboard,

@@ -26,8 +26,8 @@ usb-arsenal tether start --address 10.42.0.1/24 --dns 9.9.9.9 --upstream wlan0
   carrier, IPv6 is what carries the traffic. Without the nat table, the host gets IPv4
   only.
 - **NCM is used where it works:** it has class drivers in Windows 11, macOS and Linux.
-  RNDIS (`--rndis`) is for Windows 7 and 8. Both carry fixed MAC addresses, so Windows
-  does not add a new adapter every time.
+  RNDIS (`--rndis`) is for Windows 7 and 8, and `--ncm` overrides a profile that picks
+  RNDIS. Both carry fixed MAC addresses, so Windows does not add a new adapter every time.
 - **On Samsung 4.x kernels without the f_ncm fix,** USB Arsenal uses RNDIS automatically;
   see [kernel-requirements.md](kernel-requirements.md).
 

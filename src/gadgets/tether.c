@@ -80,6 +80,7 @@ void ua_help_tether(void) {
       "                         the box on Windows 11, macOS and Linux;\n"
       "                         RNDIS is for Windows 7/8 and older hosts.\n"
       "                         Picked automatically if NCM is missing.\n"
+      "      --ncm              Use NCM even if the profile says RNDIS\n"
       "  -u, --upstream IFACE   Share this interface instead of the one\n"
       "                         detected automatically (wlan0, rmnet_data0)\n"
       "  -a, --address CIDR     This side's address (default:\n"
@@ -1070,6 +1071,13 @@ static int do_stop(void) {
 }
 
 /* JSON: one object, or null with no tether function in the gadget */
+/* What the link has carried, counted by the kernel at our end; -1 unread */
+static long long link_bytes(const char *iface, const char *which) {
+  char p[PATH_MAX], v[32];
+  snprintf(p, sizeof(p), "/sys/class/net/%s/statistics/%s", iface, which);
+  return iface[0] && read_file(p, v, sizeof(v)) > 0 ? atoll(v) : -1;
+}
+
 void ua_status_tether(const struct ua_gadget *g, int json) {
   const char *func = live_func(g);
   char p[PATH_MAX], info[512] = "", iface[IFNAMSIZ] = "", addr[64], v6[64],
@@ -1106,6 +1114,8 @@ void ua_status_tether(const struct ua_gadget *g, int json) {
     ua_json_str("gateway_container", gw, &first);
     ua_json_str("gateway_iface", gw_if, &first);
     ua_json_int("gateway_waiting", wait[0] == '1', &first);
+    ua_json_int("tx_bytes", link_bytes(iface, "tx_bytes"), &first);
+    ua_json_int("rx_bytes", link_bytes(iface, "rx_bytes"), &first);
     printf("}");
   } else if (!running) {
     printf("Tether:     %s on %s (no network side running)\n", name,
@@ -1121,9 +1131,17 @@ void ua_status_tether(const struct ua_gadget *g, int json) {
 }
 
 int ua_cmd_tether(int argc, char **argv) {
-  enum { OPT_RNDIS = 256, OPT_NO_NET, OPT_GW_PID, OPT_GW_NETNS, OPT_GW_IFACE };
+  enum {
+    OPT_RNDIS = 256,
+    OPT_NCM,
+    OPT_NO_NET,
+    OPT_GW_PID,
+    OPT_GW_NETNS,
+    OPT_GW_IFACE
+  };
   static const struct option opts[] = {
       {"rndis", no_argument, NULL, OPT_RNDIS},
+      {"ncm", no_argument, NULL, OPT_NCM},
       {"no-net", no_argument, NULL, OPT_NO_NET},
       {"gateway", required_argument, NULL, 'G'},
       {"gateway-pid", required_argument, NULL, OPT_GW_PID},
@@ -1158,6 +1176,10 @@ int ua_cmd_tether(int argc, char **argv) {
     switch (c) {
     case OPT_RNDIS:
       rndis = 1;
+      break;
+    case OPT_NCM: /* still RNDIS where NCM is missing or unsafe: the probe
+                     decides */
+      rndis = 0;
       break;
     case OPT_NO_NET:
       no_net = 1;

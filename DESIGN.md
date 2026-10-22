@@ -693,7 +693,8 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | Eject | `storage eject` |
 | Mode segments | `storage start --mode auto\|cdrom\|dvd\|disk\|rw` |
 | LUN strip | `--lun 0-7` |
-| NCM / RNDIS | `tether start` / `tether start --rndis` |
+| NCM / RNDIS | `tether start --ncm` / `tether start --rndis` |
+| Tether chain, Tx, Rx | `status --json`: `tether`'s `iface`, `upstream`, `gateway_*`, `tx_bytes`, `rx_bytes` |
 | Gateway, container, its iface | `--gateway CONTAINER`, `--gateway-iface IFACE` |
 | HID interval | `hid start --interval N`, period 2^(N-1)×125µs, set at start |
 | Identity fields, Save, Reset | profile keys, `identity set FILE`, `identity unset` |
