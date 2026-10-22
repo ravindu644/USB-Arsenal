@@ -26,17 +26,7 @@ import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
-import android.os.SystemClock
-import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 /*
  * Focusable and pressable from touch, Enter and D-pad center, all handled by clickable.
@@ -118,51 +108,4 @@ fun Modifier.backKeys(dispatcher: OnBackPressedDispatcher?) = onPreviewKeyEvent 
     if (dispatcher == null || (it.key != Key.Escape && it.key != Key.Back)) return@onPreviewKeyEvent false
     if (it.type == KeyEventType.KeyUp) dispatcher.onBackPressed()
     true
-}
-
-/*
- * Pressed, held for two frames at least. In a scrolling screen Compose holds a touch's press
- * back until it knows the touch is not a scroll, so a quick tap reports its press and release
- * together as it lifts, and the pressed look would never draw. Held, every tap shows it.
- */
-@Composable
-fun InteractionSource.collectIsPressedHeld(): State<Boolean> {
-    val held = remember { mutableStateOf(false) }
-    LaunchedEffect(this) {
-        val presses = mutableListOf<PressInteraction.Press>()
-        val echoes = mutableListOf<PressInteraction.Press>()
-        var since = 0L
-        var endedAt = 0L
-        var letGo: Job? = null
-        interactions.collect { i ->
-            when (i) {
-                is PressInteraction.Press -> {
-                    val now = SystemClock.uptimeMillis()
-                    // clickable's own press for a touch pressOnDown already showed: in a scrolling
-                    // screen it is sent from a coroutine as the finger lifts, after ours has let go,
-                    // and holding it again would keep the key down 80ms past the lift
-                    if (!held.value && now - endedAt < FRAME_MS) {
-                        echoes += i
-                        return@collect
-                    }
-                    presses += i
-                    letGo?.cancel()
-                    // Timed from the touch, not from a later press within it
-                    if (!held.value) since = now
-                    held.value = true
-                }
-                is PressInteraction.Release -> if (!echoes.remove(i.press)) presses -= i.press
-                is PressInteraction.Cancel -> if (!echoes.remove(i.press)) presses -= i.press
-            }
-            if (presses.isEmpty() && held.value) {
-                letGo?.cancel()
-                letGo = launch {
-                    delay(2 * FRAME_MS - (SystemClock.uptimeMillis() - since))
-                    held.value = false
-                    endedAt = SystemClock.uptimeMillis()
-                }
-            }
-        }
-    }
-    return held
 }

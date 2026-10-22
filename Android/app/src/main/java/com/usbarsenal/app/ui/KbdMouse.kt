@@ -7,7 +7,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import com.usbarsenal.app.lcd.collectIsPressedHeld
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -345,7 +345,7 @@ private fun MouseButtons(onButton: (Int, Boolean) -> Unit) {
         listOf("L" to MOUSE_LEFT, "M" to MOUSE_MIDDLE, "R" to MOUSE_RIGHT).forEachIndexed { i, (label, bit) ->
             if (i > 0) Box(Modifier.width(Lcd.pixel).height(Lcd.touch).background(ink))
             val interaction = remember { MutableInteractionSource() }
-            val pressed by interaction.collectIsPressedHeld()
+            val pressed by interaction.collectIsPressedAsState()
             var fromPress by remember { mutableStateOf(false) }
             LaunchedEffect(interaction) {
                 interaction.interactions.collect {

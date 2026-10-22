@@ -13,7 +13,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import com.usbarsenal.app.lcd.collectIsPressedHeld
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -266,7 +266,7 @@ fun FunctionRow(
 ) {
     val open = remember { MutableInteractionSource() }
     val focused by open.collectIsFocusedAsState()
-    val pressed by open.collectIsPressedHeld()
+    val pressed by open.collectIsPressedAsState()
     val haptics = LocalHaptics.current
     val body = @Composable {
         val ground = LocalLcd.current.ground
@@ -337,14 +337,13 @@ fun Alert(label: String, fix: String, onClick: () -> Unit, modifier: Modifier = 
 /*
  * .card: a big way into a screen, in the drive panel's look: an inverted 40dp face with the
  * name and `>`, over a body with the sprite and one line. The whole card is one key. It
- * inverts while focused or pressed, and opens at once; the press look's own two-frame hold
- * shows even a quick tap land.
+ * inverts while focused or pressed; the screen change waits for its release to be drawn.
  */
 @Composable
 fun Card(label: String, line: String, icon: Sprite, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val pressed by interaction.collectIsPressedHeld()
+    val pressed by interaction.collectIsPressedAsState()
     val haptics = LocalHaptics.current
     val lit = focused || pressed
     Box(
@@ -390,7 +389,7 @@ fun Card(label: String, line: String, icon: Sprite, onOpen: () -> Unit, modifier
 fun LinkRow(label: String, value: String, onClick: (() -> Unit)?, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val pressed by interaction.collectIsPressedHeld()
+    val pressed by interaction.collectIsPressedAsState()
     val haptics = LocalHaptics.current
     Box(
         modifier.bleed(10.dp).lcdClickable(interaction, outline = false, role = Role.Button, enabled = onClick != null) {

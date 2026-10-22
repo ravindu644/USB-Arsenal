@@ -583,7 +583,7 @@ Interaction motion:
 | --- | --- | --- |
 | Screen change | 4 (160ms) | The LCD redraw: the new screen paints in four horizontal bands, top to bottom. Back paints bottom to top. The old screen stays drawn underneath but takes no touch, and focus leaves it |
 | Typing | 2 per 3 characters | Whatever a person would type (titles, shell commands) types 3 characters every 2 frames, with the cursor at its end. A title types on each time its screen is drawn; the cursor's place is kept so it never re-wraps |
-| Key press | 1 | Down 4px into its shadow on press, back on release, held 2 frames at least so a quick tap always shows it (a pressed row or card likewise) |
+| Key press | 1 | Down 4px into its shadow on press, back on release |
 | DIP switch | 1 | The knob snaps to the other side. No slide |
 | Focus cursor | 0 | Inversion moves to the focused element on the next frame |
 | Rows typing on | 1 per row | On first entry to a list, rows appear one per frame, six at most, then the rest at once |

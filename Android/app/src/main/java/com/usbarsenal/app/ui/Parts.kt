@@ -11,7 +11,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import com.usbarsenal.app.lcd.collectIsPressedHeld
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -391,7 +391,7 @@ fun Key(
     onClick: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedHeld()
+    val pressed by interaction.collectIsPressedAsState()
     val haptics = LocalHaptics.current
     val c = LocalLcd.current
     val filled = primary && enabled
