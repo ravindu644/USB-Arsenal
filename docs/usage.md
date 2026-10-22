@@ -41,7 +41,7 @@ usb-arsenal stop      # everything off, the port back to its owner
 | `bound` | `1` while our gadget holds the controller, `0` when it is with its owner |
 | `storage` | one object per LUN: `lun`, `file`, `mode` (`cdrom`, `dvd`, `disk`, `rw`), `access` (`ro`, `rw`); an ejected LUN has empty strings |
 | `hid` | one object per node: `function` (`keyboard`, `mouse`), `node` (`/dev/hidgN`, empty until it appears) |
-| `tether` | `null`, or `function` (`ncm`, `rndis`), `iface`, `running` (the network side is up), `address`, `ipv6`, `upstream`, `gateway` (`1` in gateway mode), `gateway_container`, `gateway_iface`, `gateway_waiting` (the container is not running yet) |
+| `tether` | `null`, or `function` (`ncm`, `rndis`), `iface`, `running` (the network side is up), `address`, `ipv6`, `upstream`, `gateway` (`1` in gateway mode), `gateway_container`, `gateway_iface`, `gateway_waiting` (the container is not running yet), `tx_bytes` and `rx_bytes` (what the phone's end of the link has sent and received, `-1` when unread) |
 
 `stop` is safe at any time, any number of times. It is also the recovery path: if a
 command was killed half-way, or the phone lost power, `stop` finishes the job.
@@ -133,7 +133,7 @@ Anyone who can write a node can type on the host.
 ## tether
 
 ```sh
-usb-arsenal tether start [--rndis] [--address CIDR] [--dns IP[,IP]] [--upstream IFACE]
+usb-arsenal tether start [--rndis | --ncm] [--address CIDR] [--dns IP[,IP]] [--upstream IFACE]
 usb-arsenal tether start --gateway CONTAINER [--gateway-iface IFACE]
 usb-arsenal tether start --no-net
 usb-arsenal tether stop

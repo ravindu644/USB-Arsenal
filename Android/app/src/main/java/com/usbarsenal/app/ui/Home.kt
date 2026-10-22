@@ -32,7 +32,7 @@ import com.usbarsenal.app.lcd.Sprites
 import kotlinx.coroutines.delay
 
 // Status is re-read this often while a gadget screen is in front (and after every command)
-private const val POLL_MS = 2_000L
+const val POLL_MS = 2_000L
 
 // Re-reads status while the screen is started; the read lane never waits on a command
 @Composable
@@ -64,24 +64,27 @@ private fun attention(b: Backend): Pair<String, String>? = when (b.state) {
 
 /*
  * Home is the gadget: each function a row with its live facts and its switch, which starts it
- * with what its screen set up, or stops it; the bottom bar says who holds the port. A backend that needs something says
- * so in one key above Log and Settings, and holds the switches until it is fixed (an update
- * does not hold them).
+ * with what its screen set up, or stops it; the bottom bar says who holds the port. A backend
+ * that needs something says so in one key above Log and Settings, and holds the switches here
+ * and on every function's screen until it is fixed (an update does not hold them).
  */
 @Composable
 fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings: (() -> Unit)?, fix: (Backend) -> Unit) {
     PollStatus()
     val context = LocalContext.current
-    var backend by remember { mutableStateOf<Backend?>(null) }
-    LaunchedEffect(Unit) { backend = backendState(context) }
-    LaunchedEffect(Unit) { Picks.load(context) }
+    LaunchedEffect(Unit) { Gadget.backend = backendState(context) }
+    val backend = Gadget.backend
+    LaunchedEffect(Unit) {
+        Picks.load(context)
+        TetherSetup.load(context)
+    }
     val picks = Picks.all
     val status = Gadget.status
     val caps = Gadget.caps
     val busy = Gadget.busy
     val needs = backend?.takeIf { it.state != BackendState.READY }
     // Held until the backend is known to be there, and while it needs fixing (an update does not)
-    val held = busy != null || backend == null || (needs != null && needs.state != BackendState.UPDATE_AVAILABLE)
+    val held = busy != null || backend.holds()
     val up = Fn.entries.count { status.isOn(it) }
     val shown = rememberTyped(Fn.entries.size, 1)
     val first = remember { FocusRequester() }
@@ -110,7 +113,7 @@ fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings
                 val shake = rememberShake()
                 val fault = Gadget.fault?.takeIf { it.where == fn }
                 LaunchedEffect(fault) { if (fault != null) shake.fire() }
-                val (l1, l2) = rowLines(fn, status, caps, busy, picks.firstOrNull()?.path, Gadget.profile)
+                val (l1, l2) = rowLines(fn, status, caps, busy, picks.firstOrNull()?.path, Gadget.profile, TetherSetup.plan)
                 val on = status.isOn(fn)
                 FunctionRow(
                     icon = when (fn) {

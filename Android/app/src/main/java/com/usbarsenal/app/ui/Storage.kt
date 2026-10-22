@@ -66,7 +66,12 @@ private val MODES = listOf("auto", "cdrom", "dvd", "disk", "rw")
 private val MODE_LABELS = listOf("auto", "cd", "dvd", "disk", "rw")
 
 // "5.8G", "412M": binary units, as the files list and the drive show sizes
-fun sizeText(bytes: Long): String = if (bytes >= GIB) "%.1fG".format(Locale.ROOT, bytes.toDouble() / GIB) else "${bytes / MIB}M"
+fun sizeText(bytes: Long): String = when {
+    bytes >= GIB -> "%.1fG".format(Locale.ROOT, bytes.toDouble() / GIB)
+    bytes >= MIB -> "${bytes / MIB}M"
+    bytes >= 1024 -> "${bytes / 1024}K"
+    else -> "${bytes}B"
+}
 
 // A warning only for a consequence (DESIGN.md): a CD-ROM past its limit
 fun storageWarning(mode: String, bytes: Long?): String? =

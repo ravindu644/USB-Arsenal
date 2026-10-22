@@ -108,6 +108,9 @@ data class Tether(
     val gatewayContainer: String,
     val gatewayIface: String,
     val gatewayWaiting: Boolean,
+    // What the phone's end of the link has sent and received; -1 unread, or an older backend
+    val txBytes: Long = -1,
+    val rxBytes: Long = -1,
 )
 
 data class GadgetStatus(
@@ -156,6 +159,8 @@ fun parseStatus(json: String): GadgetStatus = with(JSONObject(json)) {
                 gatewayContainer = getString("gateway_container"),
                 gatewayIface = getString("gateway_iface"),
                 gatewayWaiting = getInt("gateway_waiting") == 1,
+                txBytes = optLong("tx_bytes", -1),
+                rxBytes = optLong("rx_bytes", -1),
             )
         },
     )

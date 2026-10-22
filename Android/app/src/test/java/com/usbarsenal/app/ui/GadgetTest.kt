@@ -54,6 +54,25 @@ class GadgetTest {
         assertEquals("ncm usb0" to "gateway OpenWrt", rowLines(Fn.TETHER, gateway, caps(), null))
     }
 
+    // Tether's setup starts as it says, and Home's off line says the same
+    @Test
+    fun tetherSetup() {
+        assertEquals(listOf("tether", "start", "--ncm"), tetherArgs(TetherPlan(), "ncm"))
+        assertEquals(listOf("tether", "start", "--rndis"), tetherArgs(TetherPlan(function = "rndis"), "rndis"))
+        assertEquals(
+            listOf("tether", "start", "--ncm", "--gateway", "OpenWrt", "--gateway-iface", "usb0"),
+            tetherArgs(TetherPlan(gateway = true, container = " OpenWrt ", iface = ""), "ncm"),
+        )
+        // NCM picked on a kernel that cannot run it still starts RNDIS
+        assertEquals("rndis", tetherFunction(TetherPlan(function = "ncm"), emptyMap(), caps()))
+        assertEquals("ncm", tetherFunction(TetherPlan(), emptyMap(), caps().copy(ncm = Probe.OK)))
+        assertEquals("rndis", tetherFunction(TetherPlan(), mapOf("tether_function" to "rndis"), caps().copy(ncm = Probe.OK)))
+        // A kernel with NCM alone (no RNDIS past GKI 5.10) starts NCM whatever was picked
+        assertEquals("ncm", tetherFunction(TetherPlan(function = "rndis"), emptyMap(), caps().copy(ncm = Probe.OK, rndis = Probe.MISSING)))
+        val idle = live.copy(bound = false, tether = null)
+        assertEquals("off" to "rndis · gateway OpenWrt", rowLines(Fn.TETHER, idle, caps(), null, tether = TetherPlan(gateway = true)))
+    }
+
     // L1 and R1 skip a ghosted option, and stop at the ends
     @Test
     fun shoulderSkipsGhosted() {

@@ -99,7 +99,7 @@ fun Marquee(text: String, style: TextStyle, modifier: Modifier = Modifier, end: 
     var box by remember { mutableIntStateOf(0) }
     var width by remember { mutableIntStateOf(0) }
     val overflow = (width - box).coerceAtLeast(0)
-    val at = if (overflow == 0) 0f else loop(16_000, ::marqueeAt)
+    val at = if (overflow == 0) 0f else loop(16_000, frame = ::marqueeAt)
     Box(
         modifier.clipToBounds().onSizeChanged { box = it.width },
         contentAlignment = if (overflow == 0 && end) Alignment.CenterEnd else Alignment.CenterStart,

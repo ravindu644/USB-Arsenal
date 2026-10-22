@@ -9,6 +9,8 @@ class StorageTest {
     @Test
     fun sizes() {
         assertEquals("412M", sizeText(412L shl 20))
+        assertEquals("100K", sizeText(100L shl 10))
+        assertEquals("512B", sizeText(512))
         assertEquals("4.0G", sizeText(4L shl 30))
         assertEquals("5.8G", sizeText((5.8 * (1L shl 30)).toLong()))
     }
