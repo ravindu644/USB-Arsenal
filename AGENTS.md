@@ -35,7 +35,7 @@ including one in a container, relays its command line to it over a filesystem so
   the zip, `SHA256SUMS` and generated notes. The tag must equal `UA_VERSION`, so bump
   first: `make bump NEW=X.Y.Z`, commit, then `git tag vX.Y.Z && git push --tags`.
 - **No wildcard SRCS**: add each new `.c` to the list in the Makefile.
-- No header-dependency tracking: `make clean` after editing a header.
+- Header dependencies are tracked (`-MMD`), so a header edit rebuilds what includes it.
 - clangd reads `compile_flags.txt`.
 
 ## Layout

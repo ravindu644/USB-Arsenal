@@ -1,5 +1,7 @@
 package com.usbarsenal.app.ui
 
+import android.os.SystemClock
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,14 +22,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import com.usbarsenal.app.backend.Root
+import com.usbarsenal.app.backend.backendState
+import com.usbarsenal.app.backend.installBackend
+import com.usbarsenal.app.backend.readStatus
 import com.usbarsenal.app.lcd.Dither
 import com.usbarsenal.app.lcd.FRAME_MS
 import com.usbarsenal.app.lcd.Inverted
@@ -45,6 +54,7 @@ import com.usbarsenal.app.lcd.ghost
 import com.usbarsenal.app.lcd.lcdClickable
 import com.usbarsenal.app.lcd.shoulderStep
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 // ponytail: the groundwork on one screen, standing in for Home until E1 replaces it
 @Composable
@@ -55,6 +65,13 @@ fun Kit() {
     var step by remember { mutableIntStateOf(0) }
     val first = remember { FocusRequester() }
     val colors = LocalLcd.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var lines by remember { mutableStateOf(listOf<String>()) }
+    fun log(line: String) {
+        Log.i("UA", line)
+        lines = (lines + line).takeLast(3)
+    }
 
     BackHandler { backs++ }
     LaunchedEffect(Unit) { first.requestFocus() }
@@ -98,6 +115,20 @@ fun Kit() {
         TestKey("BIND HAPTIC", Modifier.focusRequester(first)) { haptics.keyPress(); binds++ }
         TestRow("SEGMENT $step  L1 R1", Modifier.shoulderStep { step += it; haptics.tick() }) { haptics.confirm() }
         TestRow("REJECT HAPTIC") { haptics.reject() }
+        // ponytail: backend probes until the setup screens (section C) drive these
+        TestRow("BACKEND STATE") { scope.launch { log(backendState(context).name) } }
+        TestRow("INSTALL BACKEND") { scope.launch { installBackend(context, ::log) } }
+        TestRow("STATUS JSON") { scope.launch { log(readStatus().toString()) } }
+        TestRow("HUNG CHANGE + READ") {
+            scope.launch {
+                val start = SystemClock.uptimeMillis()
+                launch { log("change: ${Root.change("sleep 60", timeoutMs = 3_000)}") }
+                delay(200)
+                val read = Root.read("echo read")
+                log("read ${read.out} after ${SystemClock.uptimeMillis() - start}ms")
+            }
+        }
+        for (line in lines) Text(line, LcdType.data)
     }
 }
 

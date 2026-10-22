@@ -47,6 +47,8 @@ CFLAGS += -Wformat=2 -Wformat-security -Wformat-overflow=2 -Wformat-truncation=2
 CFLAGS += -Wnull-dereference -Wcast-qual -Wlogical-op -Wshadow -Wdouble-promotion -Wundef
 CFLAGS += -Wduplicated-cond -Wduplicated-branches -Wimplicit-fallthrough=3
 CFLAGS += -fstack-protector-strong
+# A header edit rebuilds every object that includes it
+CFLAGS += -MMD -MP
 LDFLAGS = -static -no-pie -flto=auto -pthread
 
 ARCH := $(shell $(CC) -dumpmachine 2>/dev/null | cut -d'-' -f1 | \
@@ -54,6 +56,7 @@ ARCH := $(shell $(CC) -dumpmachine 2>/dev/null | cut -d'-' -f1 | \
 
 OBJ_DIR = $(OUT_DIR)/.obj/$(ARCH)
 OBJS    = $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
+-include $(OBJS:.o=.d)
 
 HOME_VAR := $(shell echo $$HOME)
 find-cc = $(shell \
