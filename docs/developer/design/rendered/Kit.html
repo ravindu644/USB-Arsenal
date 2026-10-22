@@ -1,0 +1,112 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jersey+10&amp;family=Silkscreen:wght@400;700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0}
+.lcd{--lcd:#FFA62E;--ink:#1C1005;position:relative;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;gap:16px;padding:22px 20px 20px;background:var(--lcd);color:var(--ink);font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase;-webkit-font-smoothing:none;font-smooth:never}
+.lcd::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px),repeating-linear-gradient(90deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px)}
+.sheet{width:880px;height:560px;display:grid;grid-template-columns:230px 250px minmax(0,1fr);gap:32px;padding:28px 32px}
+.s{font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase}
+.t{font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none}
+.b{font-weight:700}
+.big{margin:0;font-family:'Jersey 10','Silkscreen',sans-serif;font-weight:400;line-height:.8}
+.title{font-size:72px}
+.hero{font-size:104px}
+.inv{background:var(--ink);color:var(--lcd)}
+.d25{background-image:repeating-conic-gradient(var(--ink) 0 25%,transparent 0 100%);background-size:4px 4px}
+.d50{background-image:repeating-conic-gradient(var(--ink) 0 25%,transparent 0 50%);background-size:4px 4px}
+.key{font:inherit;font-weight:700;color:var(--ink);background:var(--lcd);border:2px solid var(--ink);min-height:44px;padding:0 14px;box-sizing:border-box;box-shadow:4px 4px 0 var(--ink);display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;text-transform:uppercase;cursor:pointer}
+.key.pri{background:var(--ink);color:var(--lcd)}
+.dip{all:unset;box-sizing:border-box;display:flex;align-items:center;flex:none;min-height:44px;padding:0 2px}
+.dip .trk{box-sizing:border-box;width:68px;height:32px;border:2px solid currentColor;padding:2px;display:flex;justify-content:space-between}
+.dip .k{width:26px;background:currentColor}
+.dip .lab{flex:1;display:flex;align-items:center;justify-content:center;font-weight:700}
+.dip.off .trk{flex-direction:row-reverse}
+.dip.off .lab{visibility:hidden}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.sw{min-height:44px;border:2px solid var(--ink);display:flex;align-items:center;padding:0 10px;box-sizing:border-box}
+.d{height:28px;border:2px solid var(--ink);box-sizing:border-box}
+.shut{position:absolute;inset:0;opacity:0;background:var(--lcd);animation:shut 2.6s steps(1,end) infinite}
+@keyframes shut{0%{opacity:0}70%{opacity:1}76%{opacity:0}84%{opacity:1}90%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.lcd *{animation:none!important;transition:none!important}}
+</style>
+</head><body>
+
+<div class="lcd sheet">
+  <div class="col">
+    <div style="position:relative;width:160px;height:180px">
+      <svg width="160" height="180" viewBox="0 0 16 18" shape-rendering="crispEdges" role="img" aria-label="Pin, the USB Arsenal mascot" style="display:block"><path d="M3 0h10v1h-10zM3 1h1v1h-1zM12 1h1v1h-1zM3 2h1v1h-1zM5 2h2v1h-2zM9 2h2v1h-2zM12 2h1v1h-1zM3 3h1v1h-1zM5 3h2v1h-2zM9 3h2v1h-2zM12 3h1v1h-1zM3 4h1v1h-1zM12 4h1v1h-1zM2 5h12v1h-12zM1 6h14v1h-14zM1 7h14v1h-14zM1 8h6v1h-6zM9 8h6v1h-6zM1 9h14v1h-14zM1 10h14v1h-14zM2 11h12v1h-12zM4 12h2v1h-2zM7 12h2v1h-2zM10 12h2v1h-2zM4 13h2v1h-2zM7 13h2v1h-2zM10 13h2v1h-2zM3 14h3v1h-3zM7 14h2v1h-2zM10 14h3v1h-3zM7 15h2v1h-2zM7 16h4v1h-4zM10 17h2v1h-2z" fill="currentColor"></path></svg>
+      <span class="shut" aria-hidden="true"><svg width="160" height="180" viewBox="0 0 16 18" shape-rendering="crispEdges" style="display:block"><path d="M3 0h10v1h-10zM3 1h1v1h-1zM12 1h1v1h-1zM3 2h1v1h-1zM12 2h1v1h-1zM3 3h1v1h-1zM5 3h2v1h-2zM9 3h2v1h-2zM12 3h1v1h-1zM3 4h1v1h-1zM12 4h1v1h-1zM2 5h12v1h-12zM1 6h14v1h-14zM1 7h14v1h-14zM1 8h6v1h-6zM9 8h6v1h-6zM1 9h14v1h-14zM1 10h14v1h-14zM2 11h12v1h-12zM4 12h2v1h-2zM7 12h2v1h-2zM10 12h2v1h-2zM4 13h2v1h-2zM7 13h2v1h-2zM10 13h2v1h-2zM3 14h3v1h-3zM7 14h2v1h-2zM10 14h3v1h-3zM7 15h2v1h-2zM7 16h4v1h-4zM10 17h2v1h-2z" fill="currentColor"></path></svg></span>
+    </div>
+    <h1 class="big title">Pin</h1>
+    <p class="t" style="margin:0">A USB-A plug that walks. The two holes in its shell are its eyes. It shows up when the tray is empty and when the gadget binds.</p>
+  </div>
+
+  <div class="col">
+    <span class="b">Sprites · 16 px grid</span>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 12px">
+      
+        <div style="display:flex;align-items:center;gap:12px">
+          <svg width="48" height="48" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true" style="flex:none"><path d="M5 0h6v1h-6zM3 1h2v1h-2zM11 1h2v1h-2zM2 2h1v1h-1zM4 2h1v1h-1zM13 2h1v1h-1zM1 3h1v1h-1zM3 3h2v1h-2zM14 3h1v1h-1zM1 4h1v1h-1zM6 4h4v1h-4zM14 4h1v1h-1zM0 5h1v1h-1zM5 5h1v1h-1zM10 5h1v1h-1zM15 5h1v1h-1zM0 6h1v1h-1zM4 6h1v1h-1zM11 6h1v1h-1zM15 6h1v1h-1zM0 7h1v1h-1zM4 7h1v1h-1zM7 7h2v1h-2zM11 7h1v1h-1zM15 7h1v1h-1zM0 8h1v1h-1zM4 8h1v1h-1zM7 8h2v1h-2zM11 8h1v1h-1zM15 8h1v1h-1zM0 9h1v1h-1zM4 9h1v1h-1zM11 9h1v1h-1zM15 9h1v1h-1zM0 10h1v1h-1zM5 10h1v1h-1zM10 10h1v1h-1zM15 10h1v1h-1zM1 11h1v1h-1zM6 11h4v1h-4zM14 11h1v1h-1zM1 12h1v1h-1zM14 12h1v1h-1zM2 13h1v1h-1zM13 13h1v1h-1zM3 14h2v1h-2zM11 14h2v1h-2zM5 15h6v1h-6z" fill="currentColor"></path></svg>
+          <span class="t">storage</span>
+        </div>
+      
+        <div style="display:flex;align-items:center;gap:12px">
+          <svg width="48" height="42" viewBox="0 0 16 14" shape-rendering="crispEdges" aria-hidden="true" style="flex:none"><path d="M0 0h16v1h-16zM0 1h1v1h-1zM15 1h1v1h-1zM0 2h1v1h-1zM3 2h2v1h-2zM7 2h2v1h-2zM11 2h2v1h-2zM15 2h1v1h-1zM0 3h1v1h-1zM3 3h2v1h-2zM7 3h2v1h-2zM11 3h2v1h-2zM15 3h1v1h-1zM0 4h1v1h-1zM15 4h1v1h-1zM0 5h1v1h-1zM15 5h1v1h-1zM0 6h1v1h-1zM15 6h1v1h-1zM0 7h1v1h-1zM15 7h1v1h-1zM0 8h3v1h-3zM13 8h3v1h-3zM2 9h1v1h-1zM13 9h1v1h-1zM2 10h1v1h-1zM13 10h1v1h-1zM2 11h3v1h-3zM11 11h3v1h-3zM4 12h1v1h-1zM11 12h1v1h-1zM4 13h8v1h-8z" fill="currentColor"></path></svg>
+          <span class="t">tether</span>
+        </div>
+      
+        <div style="display:flex;align-items:center;gap:12px">
+          <svg width="45" height="27" viewBox="0 0 15 9" shape-rendering="crispEdges" aria-hidden="true" style="flex:none"><path d="M0 0h15v1h-15zM0 1h1v1h-1zM14 1h1v1h-1zM0 2h1v1h-1zM2 2h1v1h-1zM4 2h1v1h-1zM6 2h1v1h-1zM8 2h1v1h-1zM10 2h1v1h-1zM12 2h1v1h-1zM14 2h1v1h-1zM0 3h1v1h-1zM14 3h1v1h-1zM0 4h1v1h-1zM3 4h1v1h-1zM5 4h1v1h-1zM7 4h1v1h-1zM9 4h1v1h-1zM11 4h1v1h-1zM14 4h1v1h-1zM0 5h1v1h-1zM14 5h1v1h-1zM0 6h1v1h-1zM2 6h1v1h-1zM5 6h5v1h-5zM12 6h1v1h-1zM14 6h1v1h-1zM0 7h1v1h-1zM14 7h1v1h-1zM0 8h15v1h-15z" fill="currentColor"></path></svg>
+          <span class="t">hid</span>
+        </div>
+      
+        <div style="display:flex;align-items:center;gap:12px">
+          <svg width="45" height="48" viewBox="0 0 15 16" shape-rendering="crispEdges" aria-hidden="true" style="flex:none"><path d="M7 0h1v1h-1zM6 1h3v1h-3zM5 2h5v1h-5zM7 3h1v1h-1zM12 3h3v1h-3zM2 4h2v1h-2zM7 4h1v1h-1zM12 4h3v1h-3zM1 5h4v1h-4zM7 5h1v1h-1zM12 5h3v1h-3zM1 6h4v1h-4zM7 6h1v1h-1zM13 6h1v1h-1zM2 7h2v1h-2zM7 7h1v1h-1zM13 7h1v1h-1zM3 8h1v1h-1zM7 8h1v1h-1zM12 8h1v1h-1zM4 9h1v1h-1zM7 9h1v1h-1zM11 9h1v1h-1zM5 10h1v1h-1zM7 10h1v1h-1zM10 10h1v1h-1zM6 11h3v1h-3zM7 12h1v1h-1zM6 13h3v1h-3zM5 14h5v1h-5zM6 15h3v1h-3z" fill="currentColor"></path></svg>
+          <span class="t">usb</span>
+        </div>
+      
+        <div style="display:flex;align-items:center;gap:12px">
+          <svg width="36" height="30" viewBox="0 0 12 10" shape-rendering="crispEdges" aria-hidden="true" style="flex:none"><path d="M5 0h2v1h-2zM4 1h4v1h-4zM3 2h6v1h-6zM2 3h8v1h-8zM1 4h10v1h-10zM0 5h12v1h-12zM0 8h12v1h-12zM0 9h12v1h-12z" fill="currentColor"></path></svg>
+          <span class="t">eject</span>
+        </div>
+      
+        <div style="display:flex;align-items:center;gap:12px">
+          <svg width="21" height="21" viewBox="0 0 7 7" shape-rendering="crispEdges" aria-hidden="true" style="flex:none"><path d="M3 0h1v1h-1zM3 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM3 4h1v1h-1zM3 6h1v1h-1z" fill="currentColor"></path></svg>
+          <span class="t">spark</span>
+        </div>
+      
+        <div style="display:flex;align-items:center;gap:12px">
+          <svg width="24" height="36" viewBox="0 0 8 12" shape-rendering="crispEdges" aria-hidden="true" style="flex:none"><path d="M0 0h1v1h-1zM0 1h2v1h-2zM0 2h3v1h-3zM0 3h4v1h-4zM0 4h5v1h-5zM0 5h6v1h-6zM0 6h7v1h-7zM0 7h4v1h-4zM0 8h2v1h-2zM3 8h2v1h-2zM0 9h1v1h-1zM3 9h2v1h-2zM4 10h2v1h-2zM4 11h2v1h-2z" fill="currentColor"></path></svg>
+          <span class="t">pointer</span>
+        </div>
+      
+    </div>
+    <span class="b" style="margin-top:auto">Switch and key</span>
+    <div style="display:flex;gap:12px;align-items:center">
+      <span class="dip" aria-hidden="true"><span class="trk"><span class="lab">on</span><span class="k"></span></span></span>
+      <span class="dip off" aria-hidden="true"><span class="trk"><span class="lab">on</span><span class="k"></span></span></span>
+      <span class="key" aria-hidden="true">Key</span>
+    </div>
+  </div>
+
+  <div class="col">
+    <span class="b">Two colours, nothing between</span>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+      <div class="sw t">#FFA62E light</div>
+      <div class="sw t inv">#1C1005 ink</div>
+    </div>
+    <span class="b">Shade is dither</span>
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+      <div style="display:flex;flex-direction:column;gap:5px"><div class="d"></div><span class="t">0</span></div>
+      <div style="display:flex;flex-direction:column;gap:5px"><div class="d d25"></div><span class="t">25</span></div>
+      <div style="display:flex;flex-direction:column;gap:5px"><div class="d d50"></div><span class="t">50</span></div>
+      <div style="display:flex;flex-direction:column;gap:5px"><div class="d inv"></div><span class="t">100</span></div>
+    </div>
+    <span class="b">Type</span>
+    <span class="big title">Bound</span>
+    <span class="b">Silkscreen for menus and keys</span>
+    <span class="t">VT323 for paths: /dev/hidg1</span>
+    <span class="b inv" style="margin-top:auto;padding:12px 10px">Inverted means selected</span>
+  </div>
+</div>
+</body></html>

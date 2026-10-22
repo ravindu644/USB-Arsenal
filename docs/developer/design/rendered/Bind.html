@@ -1,0 +1,114 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jersey+10&amp;family=Silkscreen:wght@400;700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0}
+.lcd{--lcd:#FFA62E;--ink:#1C1005;position:relative;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;gap:16px;padding:22px 20px 20px;background:var(--lcd);color:var(--ink);font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase;-webkit-font-smoothing:none;font-smooth:never}
+.lcd::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px),repeating-linear-gradient(90deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px)}
+.phone{width:390px;height:844px;padding-bottom:68px}
+.s{font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase}
+.t{font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none}
+.b{font-weight:700}
+.big{margin:0;font-family:'Jersey 10','Silkscreen',sans-serif;font-weight:400;line-height:.8}
+.title{font-size:72px}
+.hero{font-size:104px}
+.inv{background:var(--ink);color:var(--lcd)}
+.blk{display:inline-block;width:10px;height:16px;margin-left:4px;vertical-align:-2px;background:currentColor;animation:blk 1s steps(1,end) infinite}
+.big .blk{width:.32em;height:.62em;vertical-align:0}
+@keyframes blk{50%{visibility:hidden}}
+.stage{position:relative;height:330px;flex:none;margin:-22px -20px 0;overflow:hidden}
+.host{position:absolute;top:0;left:0;right:0;height:96px;z-index:3;display:flex;justify-content:space-between;align-items:flex-start;padding:22px 20px 0;box-sizing:border-box}
+.slot{position:absolute;left:calc(50% - 34px);top:66px;width:68px;height:30px;z-index:4;background:var(--ink);box-shadow:inset 0 0 0 2px var(--lcd);animation:slot 5s step-end infinite}
+.slot::before{content:"";position:absolute;left:4px;right:4px;top:4px;height:10px;background:var(--ink)}
+@keyframes slot{0%{background:var(--lcd)}66%{background:var(--ink)}}
+.pin{position:absolute;left:calc(50% - 48px);top:66px;width:96px;z-index:2;animation:seek 5s step-end infinite}
+@keyframes seek{0%{transform:translate(0,250px)}18%{transform:translate(-6px,180px)}33%{transform:translate(6px,120px)}46%{transform:translate(0,64px)}57%{transform:translate(0,28px)}66%{transform:translate(0,0)}}
+.cable{position:absolute;left:60px;top:108px;width:12px;height:40px;background:var(--ink)}
+.cable::after{content:"";position:absolute;left:0;top:28px;width:400px;height:12px;background:var(--ink)}
+.spark{position:absolute;top:100px;z-index:4;visibility:hidden;animation:spark 5s step-end infinite}
+@keyframes spark{66%{visibility:visible}76%{visibility:hidden}}
+.flash{position:absolute;inset:0;z-index:8;background:var(--lcd);mix-blend-mode:difference;pointer-events:none;visibility:hidden;animation:flash 5s step-end infinite}
+@keyframes flash{67%{visibility:visible}70%{visibility:hidden}}
+.say{animation:say 5s step-end infinite}
+@keyframes say{0%{visibility:hidden}70%{visibility:visible}}
+.fr{--bgc:var(--lcd);position:relative;height:96px;overflow:hidden;background:var(--bgc);color:var(--ink);box-shadow:inset 0 0 0 2px var(--ink)}
+.fr .hb{position:absolute;top:0;left:0;right:0;height:20px;background:currentColor;z-index:2}
+.fr .hs{position:absolute;left:calc(50% - 12px);top:12px;width:24px;height:8px;background:var(--bgc);z-index:3}
+.fr .hs::before{content:"";position:absolute;left:2px;right:2px;top:2px;height:2px;background:var(--ink)}
+.fr.bound .hs{background:var(--ink);box-shadow:inset 0 0 0 2px var(--lcd)}
+.fr .sp{position:absolute;top:26px;z-index:3;display:none}
+.fr.bound .sp{display:block}
+.fr svg{position:absolute;left:calc(50% - 16px);display:block}
+.fr .cb{position:absolute;left:calc(50% + 4px);width:4px;height:80px;background:currentColor}
+@media (prefers-reduced-motion:reduce){.lcd *{animation:none!important;transition:none!important}}
+</style>
+</head><body>
+
+<div class="lcd phone">
+  <div class="stage" aria-hidden="true">
+    <div class="host inv"><span class="b">Host</span></div>
+    <div class="slot"></div>
+    <div class="pin">
+      <svg width="96" height="108" viewBox="0 0 16 18" shape-rendering="crispEdges" style="display:block"><path d="M3 0h10v1h-10zM3 1h1v1h-1zM12 1h1v1h-1zM3 2h1v1h-1zM5 2h2v1h-2zM9 2h2v1h-2zM12 2h1v1h-1zM3 3h1v1h-1zM5 3h2v1h-2zM9 3h2v1h-2zM12 3h1v1h-1zM3 4h1v1h-1zM12 4h1v1h-1zM2 5h12v1h-12zM1 6h14v1h-14zM1 7h14v1h-14zM1 8h6v1h-6zM9 8h6v1h-6zM1 9h14v1h-14zM1 10h14v1h-14zM2 11h12v1h-12zM4 12h2v1h-2zM7 12h2v1h-2zM10 12h2v1h-2zM4 13h2v1h-2zM7 13h2v1h-2zM10 13h2v1h-2zM3 14h3v1h-3zM7 14h2v1h-2zM10 14h3v1h-3zM7 15h2v1h-2zM7 16h4v1h-4zM10 17h2v1h-2z" fill="currentColor"></path></svg>
+      <div class="cable"></div>
+    </div>
+    <svg class="spark" style="left:calc(50% - 86px)" width="28" height="28" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M3 0h1v1h-1zM3 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM3 4h1v1h-1zM3 6h1v1h-1z" fill="currentColor"></path></svg>
+    <svg class="spark" style="left:calc(50% + 58px)" width="28" height="28" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M3 0h1v1h-1zM3 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM3 4h1v1h-1zM3 6h1v1h-1z" fill="currentColor"></path></svg>
+  </div>
+
+  <div class="say" style="display:flex;flex-direction:column;gap:16px">
+    <h1 class="big hero">Gadget<br>bound<span class="blk"></span></h1>
+    <div class="t" style="display:flex;flex-direction:column;gap:4px">
+      <span>mass_storage.ua ncm.ua</span>
+      <span>hid.ua_kbd hid.ua_mouse</span>
+    </div>
+  </div>
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+    
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="fr" aria-hidden="true">
+          <div class="hb"></div><div class="hs"></div>
+          <svg class="sp" style="left:calc(50% - 32px)" width="14" height="14" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M3 0h1v1h-1zM3 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM3 4h1v1h-1zM3 6h1v1h-1z" fill="currentColor"></path></svg>
+          <svg class="sp" style="left:calc(50% + 18px)" width="14" height="14" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M3 0h1v1h-1zM3 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM3 4h1v1h-1zM3 6h1v1h-1z" fill="currentColor"></path></svg>
+          <svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges" style="top:56px;transform:translateX(-3px)"><path d="M3 0h10v1h-10zM3 1h1v1h-1zM12 1h1v1h-1zM3 2h1v1h-1zM5 2h2v1h-2zM9 2h2v1h-2zM12 2h1v1h-1zM3 3h1v1h-1zM5 3h2v1h-2zM9 3h2v1h-2zM12 3h1v1h-1zM3 4h1v1h-1zM12 4h1v1h-1zM2 5h12v1h-12zM1 6h14v1h-14zM1 7h14v1h-14zM1 8h6v1h-6zM9 8h6v1h-6zM1 9h14v1h-14zM1 10h14v1h-14zM2 11h12v1h-12zM4 12h2v1h-2zM7 12h2v1h-2zM10 12h2v1h-2zM4 13h2v1h-2zM7 13h2v1h-2zM10 13h2v1h-2zM3 14h3v1h-3zM7 14h2v1h-2zM10 14h3v1h-3zM7 15h2v1h-2zM7 16h4v1h-4zM10 17h2v1h-2z" fill="currentColor"></path></svg>
+          <div class="cb" style="top:92px;transform:translateX(-3px)"></div>
+        </div>
+        <span>seek</span>
+      </div>
+    
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="fr" aria-hidden="true">
+          <div class="hb"></div><div class="hs"></div>
+          <svg class="sp" style="left:calc(50% - 32px)" width="14" height="14" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M3 0h1v1h-1zM3 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM3 4h1v1h-1zM3 6h1v1h-1z" fill="currentColor"></path></svg>
+          <svg class="sp" style="left:calc(50% + 18px)" width="14" height="14" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M3 0h1v1h-1zM3 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM3 4h1v1h-1zM3 6h1v1h-1z" fill="currentColor"></path></svg>
+          <svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges" style="top:36px;transform:translateX(3px)"><path d="M3 0h10v1h-10zM3 1h1v1h-1zM12 1h1v1h-1zM3 2h1v1h-1zM5 2h2v1h-2zM9 2h2v1h-2zM12 2h1v1h-1zM3 3h1v1h-1zM5 3h2v1h-2zM9 3h2v1h-2zM12 3h1v1h-1zM3 4h1v1h-1zM12 4h1v1h-1zM2 5h12v1h-12zM1 6h14v1h-14zM1 7h14v1h-14zM1 8h6v1h-6zM9 8h6v1h-6zM1 9h14v1h-14zM1 10h14v1h-14zM2 11h12v1h-12zM4 12h2v1h-2zM7 12h2v1h-2zM10 12h2v1h-2zM4 13h2v1h-2zM7 13h2v1h-2zM10 13h2v1h-2zM3 14h3v1h-3zM7 14h2v1h-2zM10 14h3v1h-3zM7 15h2v1h-2zM7 16h4v1h-4zM10 17h2v1h-2z" fill="currentColor"></path></svg>
+          <div class="cb" style="top:72px;transform:translateX(3px)"></div>
+        </div>
+        <span>align</span>
+      </div>
+    
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="fr" aria-hidden="true">
+          <div class="hb"></div><div class="hs"></div>
+          <svg class="sp" style="left:calc(50% - 32px)" width="14" height="14" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M3 0h1v1h-1zM3 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM3 4h1v1h-1zM3 6h1v1h-1z" fill="currentColor"></path></svg>
+          <svg class="sp" style="left:calc(50% + 18px)" width="14" height="14" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M3 0h1v1h-1zM3 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM3 4h1v1h-1zM3 6h1v1h-1z" fill="currentColor"></path></svg>
+          <svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges" style="top:20px;transform:translateX(0px)"><path d="M3 0h10v1h-10zM3 1h1v1h-1zM12 1h1v1h-1zM3 2h1v1h-1zM5 2h2v1h-2zM9 2h2v1h-2zM12 2h1v1h-1zM3 3h1v1h-1zM5 3h2v1h-2zM9 3h2v1h-2zM12 3h1v1h-1zM3 4h1v1h-1zM12 4h1v1h-1zM2 5h12v1h-12zM1 6h14v1h-14zM1 7h14v1h-14zM1 8h6v1h-6zM9 8h6v1h-6zM1 9h14v1h-14zM1 10h14v1h-14zM2 11h12v1h-12zM4 12h2v1h-2zM7 12h2v1h-2zM10 12h2v1h-2zM4 13h2v1h-2zM7 13h2v1h-2zM10 13h2v1h-2zM3 14h3v1h-3zM7 14h2v1h-2zM10 14h3v1h-3zM7 15h2v1h-2zM7 16h4v1h-4zM10 17h2v1h-2z" fill="currentColor"></path></svg>
+          <div class="cb" style="top:56px;transform:translateX(0px)"></div>
+        </div>
+        <span>insert</span>
+      </div>
+    
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="fr bound" aria-hidden="true">
+          <div class="hb"></div><div class="hs"></div>
+          <svg class="sp" style="left:calc(50% - 32px)" width="14" height="14" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M3 0h1v1h-1zM3 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM3 4h1v1h-1zM3 6h1v1h-1z" fill="currentColor"></path></svg>
+          <svg class="sp" style="left:calc(50% + 18px)" width="14" height="14" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M3 0h1v1h-1zM3 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM3 4h1v1h-1zM3 6h1v1h-1z" fill="currentColor"></path></svg>
+          <svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges" style="top:10px;transform:translateX(0px)"><path d="M3 0h10v1h-10zM3 1h1v1h-1zM12 1h1v1h-1zM3 2h1v1h-1zM5 2h2v1h-2zM9 2h2v1h-2zM12 2h1v1h-1zM3 3h1v1h-1zM5 3h2v1h-2zM9 3h2v1h-2zM12 3h1v1h-1zM3 4h1v1h-1zM12 4h1v1h-1zM2 5h12v1h-12zM1 6h14v1h-14zM1 7h14v1h-14zM1 8h6v1h-6zM9 8h6v1h-6zM1 9h14v1h-14zM1 10h14v1h-14zM2 11h12v1h-12zM4 12h2v1h-2zM7 12h2v1h-2zM10 12h2v1h-2zM4 13h2v1h-2zM7 13h2v1h-2zM10 13h2v1h-2zM3 14h3v1h-3zM7 14h2v1h-2zM10 14h3v1h-3zM7 15h2v1h-2zM7 16h4v1h-4zM10 17h2v1h-2z" fill="currentColor"></path></svg>
+          <div class="cb" style="top:46px;transform:translateX(0px)"></div>
+        </div>
+        <span>bound</span>
+      </div>
+    
+  </div>
+  <div class="flash"></div>
+</div>
+</body></html>

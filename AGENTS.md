@@ -50,6 +50,8 @@ including one in a container, relays its command line to it over a filesystem so
 | `src/check.c` | capability probing |
 | `src/net/` | lifted from Droidspaces; keep its `ds_` names so it can be re-synced |
 | `kernel-patches/<kernel-version>/` | `git format-patch` exports of kernel fixes; list each in `docs/kernel-requirements.md` |
+| `DESIGN.md` | the Android app's design language: tokens, components, copy rules |
+| `docs/developer/design/` | the reference screens and `lcd.css`, the shared stylesheet |
 
 Two more facts:
 - **The workspace** is `/data/local/USB-Arsenal` on Android and `/var/lib/USB-Arsenal` on
@@ -184,3 +186,26 @@ name.
   `docs/developer/ROADMAP.md` and add a dated line to its status log.
 - **The README stays under 150 lines and claims nothing that was not verified on
   hardware.**
+
+## Designing the app
+
+- **[DESIGN.md](DESIGN.md) is the law** for anything the app shows. Read it before any UI
+  work and again before you call it finished. Closed world: two colours (`lcd`, `ink`),
+  three faces (Jersey 10, Silkscreen, VT323), four sizes (104, 72, 22, 16), square corners,
+  stepped motion. If a value is not in the file, the file is telling you not to want it.
+- **Start from what exists.** Take the rules from `docs/developer/design/lcd.css` and the
+  closest screen in `docs/developer/design/`. Never restyle a component that already has a
+  class there.
+- **Show only what the backend does.** Before a control, a status line or a number goes on
+  a screen, grep `src/` for the command or flag behind it. If the app does it on its own
+  (the image folder, Create, HID input), it is app-side; say so in DESIGN.md's Backend truth
+  table. No UVC, pending queue, host port, lease countdown or uptime until the C side has it.
+- **Say it once.** A fact appears once per screen. No status line that repeats what an
+  element shows (`host sees dvd`, `serving`, `configured`), no note beside a title that
+  echoes the box below it, no `by arsenal`, no subtitle explaining a control, nothing in the
+  top bar beside `< BACK`. Helper text only prevents a mistake; warnings only state a
+  consequence.
+- **Done means:** `npx @google/design.md lint DESIGN.md` reports no errors, every screen
+  renders at 390x844 with nothing clipped and the bottom 48px empty, and a grep for the em
+  dash finds nothing. A change to the language goes into DESIGN.md and `lcd.css` in the
+  same commit.

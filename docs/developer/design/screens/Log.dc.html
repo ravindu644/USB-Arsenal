@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>USB Arsenal log</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jersey+10&amp;family=Silkscreen:wght@400;700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0}
+.lcd{--lcd:#FFA62E;--ink:#1C1005;position:relative;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;gap:16px;padding:22px 20px 20px;background:var(--lcd);color:var(--ink);font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase;-webkit-font-smoothing:none;font-smooth:never}
+.lcd::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px),repeating-linear-gradient(90deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px)}
+.phone{width:390px;height:844px;padding-bottom:68px}
+.s{font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase}
+.t{font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none}
+.b{font-weight:700}
+.big{margin:0;font-family:'Jersey 10','Silkscreen',sans-serif;font-weight:400;line-height:.8}
+.title{font-size:72px}
+.hero{font-size:104px}
+.inv{background:var(--ink);color:var(--lcd)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.key{font:inherit;font-weight:700;color:var(--ink);background:var(--lcd);border:2px solid var(--ink);min-height:44px;padding:0 14px;box-sizing:border-box;box-shadow:4px 4px 0 var(--ink);display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;text-transform:uppercase;cursor:pointer}
+.key.pri{background:var(--ink);color:var(--lcd)}
+.key:active{transform:translate(4px,4px);box-shadow:none}
+.segs{display:flex;border:2px solid var(--ink)}
+.seg{all:unset;box-sizing:border-box;flex:1 1 0;min-width:0;min-height:44px;padding:0 4px;display:flex;align-items:center;justify-content:center;font-weight:700;cursor:pointer}
+.seg + .seg{border-left:2px solid var(--ink)}
+.seg.on{background:var(--ink);color:var(--lcd)}
+.term{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;padding:10px;background:var(--ink);color:var(--lcd)}
+.ln{display:grid;grid-template-columns:28px minmax(0,1fr);gap:0 6px;padding:3px 4px}
+.ln.on{background:var(--lcd);color:var(--ink)}
+.blk{display:inline-block;width:10px;height:16px;margin-left:4px;vertical-align:-2px;background:currentColor;animation:blk 1s steps(1,end) infinite}
+@keyframes blk{50%{visibility:hidden}}
+.lcd :focus-visible{outline:2px dashed currentColor;outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.lcd *{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div class="lcd phone">
+  <div class="top">
+    <a class="key" href="Main.dc.html" aria-label="Back to the gadget">&lt; Back</a>
+  </div>
+  <h1 class="big title">Log</h1>
+  <div class="segs" role="radiogroup" aria-label="Log file">
+    <sc-for list="{{tabs}}" as="c" hint-placeholder-count="2">
+      <button class="{{c.cls}}" role="radio" aria-checked="{{c.checked}}" onClick="{{c.pick}}">{{c.label}}</button>
+    </sc-for>
+  </div>
+  <div class="t term">
+    <sc-for list="{{lines}}" as="l" hint-placeholder-count="14">
+      <div class="{{l.cls}}"><span>{{l.g}}</span><span style="overflow-wrap:anywhere">{{l.text}}<span class="{{l.cur}}"></span></span></div>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+    <button class="key" onClick="{{clear}}">Clear</button>
+    <button class="key pri">Copy logs</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = Object.assign({ src: 'cli', cleared: {} }, this.state || {});
+    const raw = [
+      ['d', 'USB Arsenal daemon 1.2.0 listening on /data/local/USB-Arsenal/Run/usb-arsenal.sock (pid 812, group 3460)'],
+      ['d', 'Running: storage start /sdcard/Download/Win11_24H2_x64.iso'],
+      ['cli', 'Serving Win11_24H2_x64.iso as a read-only disk with 2048-byte sectors on LUN 0'],
+      ['d', 'Running: storage start --lun 1 --mode rw /sdcard/pendrive.img'],
+      ['cli', 'Serving pendrive.img as a writable disk on LUN 1'],
+      ['d', 'Running: tether start'],
+      ['cli', 'NCM is up on usb0'],
+      ['cli', 'Sharing rmnet_data0 (netd rule)'],
+      ['d', 'Running: hid start'],
+      ['cli', 'keyboard /dev/hidg1'],
+      ['cli', 'mouse    /dev/hidg2']
+    ];
+    const shown = st.cleared[st.src] ? [] : raw.filter((r) => r[0] === st.src);
+    const lines = shown.map((r, i) => {
+      const last = i === shown.length - 1;
+      return { g: '[+]', text: r[1], cls: 'ln' + (last ? ' on' : ''), cur: last ? 'blk' : '' };
+    });
+    return {
+      lines,
+      tabs: [['cli', 'CLI'], ['d', 'Daemon']].map(([id, label]) => ({
+        label, cls: 'seg' + (st.src === id ? ' on' : ''), checked: st.src === id ? 'true' : 'false',
+        pick: () => this.setState({ src: id, cleared: st.cleared })
+      })),
+      clear: () => this.setState({ src: st.src, cleared: Object.assign({}, st.cleared, { [st.src]: true }) })
+    };
+  }
+}
+</script>
+</body>
+</html>

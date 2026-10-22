@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>USB Arsenal home</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jersey+10&amp;family=Silkscreen:wght@400;700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0}
+.lcd{--lcd:#FFA62E;--ink:#1C1005;position:relative;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;gap:16px;padding:22px 20px 20px;background:var(--lcd);color:var(--ink);font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase;-webkit-font-smoothing:none;font-smooth:never}
+.lcd::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px),repeating-linear-gradient(90deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px)}
+.phone{width:390px;height:844px;padding-bottom:68px}
+.s{font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase}
+.t{font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none}
+.b{font-weight:700}
+.big{margin:0;font-family:'Jersey 10','Silkscreen',sans-serif;font-weight:400;line-height:.8}
+.title{font-size:72px}
+.hero{font-size:104px}
+.inv{background:var(--ink);color:var(--lcd)}
+.d25{background-image:repeating-conic-gradient(var(--ink) 0 25%,transparent 0 100%);background-size:4px 4px}
+.d50{background-image:repeating-conic-gradient(var(--ink) 0 25%,transparent 0 50%);background-size:4px 4px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.key{font:inherit;font-weight:700;color:var(--ink);background:var(--lcd);border:2px solid var(--ink);min-height:44px;padding:0 14px;box-sizing:border-box;box-shadow:4px 4px 0 var(--ink);display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;text-transform:uppercase;cursor:pointer}
+.key.pri{background:var(--ink);color:var(--lcd)}
+.inv .key{border-color:var(--lcd);box-shadow:4px 4px 0 var(--lcd)}
+.key:active{transform:translate(4px,4px);box-shadow:none}
+.key[disabled]{border-style:dashed;box-shadow:none;cursor:not-allowed}
+.segs{display:flex;border:2px solid var(--ink)}
+.seg{all:unset;box-sizing:border-box;flex:1 1 0;min-width:0;min-height:44px;padding:0 4px;display:flex;align-items:center;justify-content:center;font-weight:700;cursor:pointer}
+.seg.on{background:var(--ink);color:var(--lcd)}
+.dip{all:unset;box-sizing:border-box;display:flex;align-items:center;flex:none;min-height:44px;padding:0 2px;cursor:pointer}
+.dip .trk{box-sizing:border-box;width:68px;height:32px;border:2px solid currentColor;padding:2px;display:flex;justify-content:space-between}
+.dip .k{width:26px;background:currentColor}
+.dip .lab{flex:1;display:flex;align-items:center;justify-content:center;font-weight:700}
+.dip.off .trk{flex-direction:row-reverse}
+.dip.off .lab{visibility:hidden}
+.row{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;width:100%;min-height:80px;padding:10px}
+.row.on{background:var(--ink);color:var(--lcd)}
+.ico{display:block;flex:none;width:32px;height:32px}
+.lines{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;color:inherit;text-decoration:none}
+.st{display:block;overflow:hidden;white-space:nowrap;container-type:inline-size}
+.st > span{display:inline-block;min-width:100%;animation:mq 8s steps(32,end) infinite alternate}
+@keyframes mq{0%,20%{transform:translateX(0)}80%,100%{transform:translateX(min(0px,calc(100cqw - 100%)))}}
+.kv{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+.strip{display:flex;flex-direction:column;gap:16px;margin:auto -20px -68px;padding:14px 20px 68px;box-sizing:border-box;border-top:2px solid var(--ink)}
+.who{display:flex;align-items:center;gap:12px;min-height:44px}
+.blk{display:inline-block;width:10px;height:16px;margin-left:4px;vertical-align:-2px;background:currentColor;animation:blk 1s steps(1,end) infinite}
+.big .blk{width:.32em;height:.62em;vertical-align:0}
+@keyframes blk{50%{visibility:hidden}}
+.lcd :focus-visible{outline:2px dashed currentColor;outline-offset:3px}
+.shut{position:absolute;inset:0;opacity:0;background:var(--lcd);animation:shut 2.6s steps(1,end) infinite}
+@keyframes shut{0%{opacity:0}70%{opacity:1}76%{opacity:0}84%{opacity:1}90%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.lcd *{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div class="lcd phone">
+  <div class="top">
+    <span style="display:flex;align-items:center;gap:10px">
+      <span style="position:relative;display:block;width:32px;height:36px;flex:none" aria-hidden="true"><svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges" style="display:block"><path d="{{sp.pin}}" fill="currentColor"></path></svg><span class="shut"><svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges" style="display:block"><path d="{{sp.pinBlink}}" fill="currentColor"></path></svg></span></span>
+      <span class="b">USB Arsenal</span>
+    </span>
+    <span class="t">v1.2.0</span>
+  </div>
+  <h1 class="big hero">{{upBig}}</h1>
+  <div style="display:flex;flex-direction:column;gap:2px;margin:0 -10px">
+    <sc-for list="{{fns}}" as="f" hint-placeholder-count="3">
+      <div class="{{f.rowClass}}" onMouseEnter="{{f.hover}}">
+        <svg class="ico" width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><path d="{{f.icon}}" fill="currentColor"></path></svg>
+        <a class="lines" href="{{f.href}}" onFocus="{{f.hover}}">
+          <span class="b">{{f.label}}</span>
+          <span class="t st"><span>{{f.l1}}</span></span>
+          <span class="t st"><span>{{f.l2}}</span></span>
+        </a>
+        <button class="{{f.dipClass}}" aria-pressed="{{f.pressed}}" aria-label="{{f.aria}}" disabled="{{busy}}" onClick="{{f.toggle}}"><span class="trk"><span class="lab">on</span><span class="k"></span></span></button>
+      </div>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+    <a class="key" href="Log.dc.html">Log</a>
+    <a class="key" href="Identity.dc.html">Identity</a>
+  </div>
+
+  <sc-if value="{{isBound}}" hint-placeholder-val="{{ true }}">
+    <div class="strip">
+      <div class="who">
+        <svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges" aria-hidden="true"><path d="{{sp.pin}}" fill="currentColor"></path></svg>
+        <span class="lines"><span class="b">Bound</span><span class="t">a600000.dwc3</span></span>
+      </div>
+      <button class="key" onClick="{{stopAll}}">Stop all</button>
+    </div>
+  </sc-if>
+  <sc-if value="{{busy}}" hint-placeholder-val="{{ false }}">
+    <div class="strip inv">
+      <div class="who">
+        <svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges" aria-hidden="true"><path d="{{sp.pinBlink}}" fill="currentColor"></path></svg>
+        <span class="lines"><span class="b">Replugging<span class="blk"></span></span><span class="t st"><span>{{busyLine}}</span></span></span>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{isAndroid}}" hint-placeholder-val="{{ false }}">
+    <div class="strip">
+      <div class="who">
+        <svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges" aria-hidden="true"><path d="{{sp.pinBlink}}" fill="currentColor"></path></svg>
+        <span class="b">Port with Android</span>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  px(rows) {
+    let d = '';
+    rows.forEach((r, y) => {
+      for (let x = 0; x < r.length; ) {
+        if (r[x] !== '#') { x++; continue; }
+        const s = x;
+        while (r[x] === '#') x++;
+        d += 'M' + s + ' ' + y + 'h' + (x - s) + 'v1h-' + (x - s) + 'z';
+      }
+    });
+    return d;
+  }
+  art() {
+    if (this._art) return this._art;
+    const top = ['...##########...', '...#........#...'];
+    const body = ['..############..', '.##############.', '.##############.', '.######..######.', '.##############.', '.##############.', '..############..', '....##.##.##....', '....##.##.##....', '...###.##.###...', '.......##.......', '.......####.....', '..........##....'];
+    this._art = {
+      pin: this.px(top.concat(['...#.##..##.#...', '...#.##..##.#...', '...#........#...'], body)),
+      pinBlink: this.px(top.concat(['...#........#...', '...#.##..##.#...', '...#........#...'], body)),
+      disc: this.px(['.....######.....', '...##......##...', '..#.#........#..', '.#.##.........#.', '.#....####....#.', '#....#....#....#', '#...#......#...#', '#...#..##..#...#', '#...#..##..#...#', '#...#......#...#', '#....#....#....#', '.#....####....#.', '.#............#.', '..#..........#..', '...##......##...', '.....######.....']),
+      jack: this.px(['................', '################', '#..............#', '#..##..##..##..#', '#..##..##..##..#', '#..............#', '#..............#', '#..............#', '#..............#', '###..........###', '..#..........#..', '..#..........#..', '..###......###..', '....#......#....', '....########....']),
+      keyb: this.px(['...............', '...............', '...............', '###############', '#.............#', '#.#.#.#.#.#.#.#', '#.............#', '#..#.#.#.#.#..#', '#.............#', '#.#..#####..#.#', '#.............#', '###############'])
+    };
+    return this._art;
+  }
+  componentWillUnmount() { clearTimeout(this._t); }
+  renderVals() {
+    const a = this.art();
+    const st = Object.assign({ on: { storage: true, tether: true, hid: true }, busy: '', cur: 'storage' }, this.state || {});
+    const save = (p) => this.setState(Object.assign({ on: st.on, busy: st.busy, cur: st.cur }, p));
+    const defs = [
+      { id: 'storage', label: 'Storage', icon: a.disc, href: 'Storage.dc.html', live: ['LUN0 Win11_24H2_x64.iso · dvd', 'LUN1 pendrive.img · rw'], off: 'pick an image to start' },
+      { id: 'tether', label: 'Tether', icon: a.jack, href: 'Tether.dc.html', live: ['ncm 192.168.42.129 → .130', 'via rmnet_data0'], off: 'ncm · 192.168.42.129/24' },
+      { id: 'hid', label: 'HID', icon: a.keyb, href: 'Hid.dc.html', live: ['keyboard /dev/hidg1', 'mouse /dev/hidg2'], off: 'keyboard and 5-button mouse' }
+    ];
+    const anyOn = defs.some((d) => st.on[d.id]);
+    const fns = defs.map((d) => {
+      const on = !!st.on[d.id];
+      let l1 = on ? d.live[0] : 'off', l2 = on ? d.live[1] : d.off;
+      if (st.busy === d.id) { l1 = on ? 'starting' : 'stopping'; l2 = (on ? d.label + ' start' : d.label + ' stop').toLowerCase(); }
+      return Object.assign({}, d, {
+        l1, l2,
+        rowClass: 'row' + (st.cur === d.id ? ' on' : ''),
+        dipClass: 'dip' + (on ? '' : ' off'),
+        pressed: on ? 'true' : 'false',
+        aria: d.label + (on ? ' on' : ' off'),
+        hover: () => { if (st.cur !== d.id) save({ cur: d.id }); },
+        toggle: () => {
+          save({ on: Object.assign({}, st.on, { [d.id]: !on }), busy: d.id });
+          clearTimeout(this._t);
+          this._t = setTimeout(() => this.setState({ busy: '' }), 1200);
+        }
+      });
+    });
+    const up = defs.filter((d) => st.on[d.id]).length;
+    return {
+      sp: a, fns,
+      busy: !!st.busy,
+      busyLine: 'usb-arsenal ' + st.busy + (st.on[st.busy] ? ' start' : ' stop'),
+      upBig: up ? up + ' up' : 'idle',
+      isBound: !st.busy && anyOn,
+      isAndroid: !st.busy && !anyOn,
+      stopAll: () => save({ on: { storage: false, tether: false, hid: false }, busy: '' })
+    };
+  }
+}
+</script>
+</body>
+</html>

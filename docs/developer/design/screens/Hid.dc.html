@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HID</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jersey+10&amp;family=Silkscreen:wght@400;700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0}
+.lcd{--lcd:#FFA62E;--ink:#1C1005;position:relative;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;gap:16px;padding:22px 20px 20px;background:var(--lcd);color:var(--ink);font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase;-webkit-font-smoothing:none;font-smooth:never}
+.lcd::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px),repeating-linear-gradient(90deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px)}
+.phone{width:390px;height:844px;padding-bottom:68px}
+.s{font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase}
+.t{font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none}
+.b{font-weight:700}
+.big{margin:0;font-family:'Jersey 10','Silkscreen',sans-serif;font-weight:400;line-height:.8}
+.title{font-size:72px}
+.hero{font-size:104px}
+.inv{background:var(--ink);color:var(--lcd)}
+.d25{background-image:repeating-conic-gradient(var(--ink) 0 25%,transparent 0 100%);background-size:4px 4px}
+.d50{background-image:repeating-conic-gradient(var(--ink) 0 25%,transparent 0 50%);background-size:4px 4px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.key{font:inherit;font-weight:700;color:var(--ink);background:var(--lcd);border:2px solid var(--ink);min-height:44px;padding:0 14px;box-sizing:border-box;box-shadow:4px 4px 0 var(--ink);display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;text-transform:uppercase;cursor:pointer}
+.key:active{transform:translate(4px,4px);box-shadow:none}
+.segs{display:flex;border:2px solid var(--ink)}
+.seg{all:unset;box-sizing:border-box;flex:1 1 0;min-width:0;min-height:44px;padding:0 4px;display:flex;align-items:center;justify-content:center;font-weight:700;cursor:pointer;user-select:none}
+.seg + .seg{border-left:2px solid var(--ink)}
+.seg:active{background:var(--ink);color:var(--lcd)}
+.lines{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.kv{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+.pad{position:relative;height:236px;flex:none;border:2px solid var(--ink);border-bottom:0;overflow:hidden;cursor:none;touch-action:none}
+.wheel{position:absolute;top:0;right:0;bottom:0;width:44px;border-left:2px solid var(--ink);background:var(--lcd);display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:8px 0;box-sizing:border-box}
+.wheel .w{flex:1;width:16px;margin:8px 0;background:repeating-linear-gradient(180deg,var(--ink) 0 4px,transparent 4px 10px)}
+.rep{display:flex;flex-direction:column;gap:5px}
+.rep > div{display:flex;align-items:baseline;gap:8px}
+.rep .bytes{margin-left:auto;white-space:nowrap}
+.inp{all:unset;box-sizing:border-box;flex:1;min-width:0;min-height:44px;border:2px solid var(--ink);padding:0 10px;font-family:'VT323',monospace;font-size:22px;text-transform:none}
+.inp::placeholder{color:var(--ink);opacity:1}
+.read{min-width:44px;min-height:44px;box-sizing:border-box;border:2px solid var(--ink);display:flex;align-items:center;justify-content:center}
+.lcd :focus-visible{outline:2px dashed currentColor;outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.lcd *{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div class="lcd phone">
+  <div class="top">
+    <a class="key" href="Main.dc.html" aria-label="Back to the gadget">&lt; Back</a>
+  </div>
+  <h1 class="big title">HID</h1>
+
+  <div style="display:flex;flex-direction:column">
+    <div class="pad d25" onPointerMove="{{move}}" onPointerLeave="{{leave}}" aria-label="Trackpad" role="application">
+      <svg style="{{cursorPos}}" width="16" height="24" viewBox="0 0 8 12" shape-rendering="crispEdges" aria-hidden="true"><path d="{{arrow}}" style="fill:var(--ink);stroke:var(--lcd);stroke-width:1;paint-order:stroke"></path></svg>
+      <div class="wheel" aria-hidden="true"><span class="b">^</span><span class="w"></span><span class="b">v</span></div>
+    </div>
+    <div class="segs">
+      <button class="seg" onPointerDown="{{btn.l}}" onPointerUp="{{btn.up}}">L</button>
+      <button class="seg" onPointerDown="{{btn.m}}" onPointerUp="{{btn.up}}">M</button>
+      <button class="seg" onPointerDown="{{btn.r}}" onPointerUp="{{btn.up}}">R</button>
+    </div>
+  </div>
+
+  <div class="t rep" aria-live="polite">
+    <div><span class="s b">Mouse</span><span>hidg2</span><span class="bytes">{{mouseRep}}</span></div>
+    <div><span class="s b">Kbd</span><span>hidg1</span><span class="bytes">{{kbdRep}}</span></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+    <sc-for list="{{keys}}" as="k" hint-placeholder-count="4">
+      <button class="key" style="padding:0 4px" onClick="{{k.send}}">{{k.label}}</button>
+    </sc-for>
+  </div>
+  <div style="display:flex;gap:12px;align-items:center">
+    <label for="hid-type" class="b">Type</label>
+    <input id="hid-type" class="inp" placeholder="text goes to the host" value="{{text}}" onChange="{{type}}" autocomplete="off">
+  </div>
+
+  <div class="kv">
+    <span class="lines"><span class="b">Interval</span><span class="t">{{period}}{{pending}}</span></span>
+    <button class="key" style="padding:0 4px;width:44px" onClick="{{faster}}" aria-label="Poll faster">-</button>
+    <span class="read t" aria-label="Interval exponent">{{interval}}</span>
+    <button class="key" style="padding:0 4px;width:44px" onClick="{{slower}}" aria-label="Poll slower">+</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  px(rows) {
+    let d = '';
+    rows.forEach((r, y) => {
+      for (let x = 0; x < r.length; ) {
+        if (r[x] !== '#') { x++; continue; }
+        const s = x;
+        while (r[x] === '#') x++;
+        d += 'M' + s + ' ' + y + 'h' + (x - s) + 'v1h-' + (x - s) + 'z';
+      }
+    });
+    return d;
+  }
+  renderVals() {
+    const st = Object.assign({ x: 132, y: 96, btn: 0, dx: 10, dy: -2, kbd: [0, 0, 4, 0, 0, 0, 0, 0], text: 'a', n: 4 }, this.state || {});
+    const hx = (n) => ((n + 256) % 256).toString(16).padStart(2, '0');
+    const clamp = (n) => Math.max(-127, Math.min(127, n));
+    const usage = { ESC: [0, 0x29], TAB: [0, 0x2b], CTRL: [0x01, 0], ALT: [0x04, 0] };
+    /* hid.c: at high speed the period is 2^(N-1) x 125us, so 4 is 1 ms */
+    const us = Math.pow(2, st.n - 1) * 125;
+    return {
+      arrow: this.px(['#.......', '##......', '###.....', '####....', '#####...', '######..', '#######.', '####....', '##.##...', '#..##...', '....##..', '....##..']),
+      cursorPos: 'position:absolute;left:' + st.x + 'px;top:' + st.y + 'px;display:block',
+      mouseRep: [st.btn, st.dx, st.dy, 0].map(hx).join(' '),
+      kbdRep: st.kbd.map(hx).join(' '),
+      text: st.text,
+      interval: String(st.n).padStart(2, '0'),
+      pending: st.n === 4 ? '' : ' · on restart',
+      period: us < 1000 ? us + ' us' : us < 1e6 ? us / 1000 + ' ms' : us / 1e6 + ' s',
+      move: (e) => {
+        const el = e.currentTarget, r = el.getBoundingClientRect(), k = r.width / el.offsetWidth || 1;
+        const x = Math.round((e.clientX - r.left) / k / 2) * 2, y = Math.round((e.clientY - r.top) / k / 2) * 2;
+        if (x > el.offsetWidth - 52) return;
+        this.setState({ x, y, dx: clamp(x - st.x), dy: clamp(y - st.y) });
+      },
+      leave: () => this.setState({ dx: 0, dy: 0 }),
+      btn: {
+        l: () => this.setState({ btn: 1, dx: 0, dy: 0 }),
+        r: () => this.setState({ btn: 2, dx: 0, dy: 0 }),
+        m: () => this.setState({ btn: 4, dx: 0, dy: 0 }),
+        up: () => this.setState({ btn: 0 })
+      },
+      keys: Object.keys(usage).map((label) => ({
+        label, send: () => this.setState({ kbd: [usage[label][0], 0, usage[label][1], 0, 0, 0, 0, 0] })
+      })),
+      type: (e) => {
+        const v = e.target.value, c = v.slice(-1).toLowerCase();
+        let code = 0, mod = 0;
+        if (c >= 'a' && c <= 'z') code = 4 + c.charCodeAt(0) - 97;
+        else if (c >= '1' && c <= '9') code = 0x1e + c.charCodeAt(0) - 49;
+        else if (c === '0') code = 0x27;
+        else if (c === ' ') code = 0x2c;
+        if (v.slice(-1) !== c) mod = 0x02;
+        this.setState({ text: v, kbd: [mod, 0, code, 0, 0, 0, 0, 0] });
+      },
+      slower: () => this.setState({ n: Math.min(16, st.n + 1) }),
+      faster: () => this.setState({ n: Math.max(1, st.n - 1) })
+    };
+  }
+}
+</script>
+</body>
+</html>

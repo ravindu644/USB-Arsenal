@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tether</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jersey+10&amp;family=Silkscreen:wght@400;700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0}
+.lcd{--lcd:#FFA62E;--ink:#1C1005;position:relative;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;gap:16px;padding:22px 20px 20px;background:var(--lcd);color:var(--ink);font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase;-webkit-font-smoothing:none;font-smooth:never}
+.lcd::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px),repeating-linear-gradient(90deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px)}
+.phone{width:390px;height:844px;padding-bottom:68px}
+.t{font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none}
+.b{font-weight:700}
+.big{margin:0;font-family:'Jersey 10','Silkscreen',sans-serif;font-weight:400;line-height:.8}
+.title{font-size:72px}
+.inv{background:var(--ink);color:var(--lcd)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+.key{font:inherit;font-weight:700;color:var(--ink);background:var(--lcd);border:2px solid var(--ink);min-height:44px;padding:0 14px;box-sizing:border-box;box-shadow:4px 4px 0 var(--ink);display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;text-transform:uppercase;cursor:pointer}
+.key:active{transform:translate(4px,4px);box-shadow:none}
+.segs{display:flex;border:2px solid var(--ink)}
+.seg{all:unset;box-sizing:border-box;flex:1 1 0;min-width:0;min-height:44px;padding:0 4px;display:flex;align-items:center;justify-content:center;font-weight:700;cursor:pointer}
+.seg + .seg{border-left:2px solid var(--ink)}
+.seg.on{background:var(--ink);color:var(--lcd)}
+.dip{all:unset;box-sizing:border-box;display:flex;align-items:center;flex:none;min-height:44px;padding:0 2px;cursor:pointer}
+.dip .trk{box-sizing:border-box;width:68px;height:32px;border:2px solid currentColor;padding:2px;display:flex;justify-content:space-between}
+.dip .k{width:26px;background:currentColor}
+.dip .lab{flex:1;display:flex;align-items:center;justify-content:center;font-weight:700}
+.dip.off .trk{flex-direction:row-reverse}
+.dip.off .lab{visibility:hidden}
+.kv{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+.box{display:flex;flex-direction:column;gap:5px;border:2px solid var(--ink);padding:8px 10px}
+.node{display:flex;align-items:center;justify-content:space-between;gap:12px;border:2px solid var(--ink);padding:0 10px;min-height:44px;box-sizing:border-box}
+.wire{position:relative;height:40px;margin-left:44px;width:6px;background:repeating-linear-gradient(180deg,var(--ink) 0 4px,transparent 4px 8px)}
+.wire .pk{position:absolute;left:-5px;width:16px;height:8px;background:var(--ink);animation:down 1.2s steps(4,end) infinite}
+.wire .pk.up{animation-name:up}
+.wire .lbl{position:absolute;left:22px;top:10px;white-space:nowrap}
+@keyframes down{from{top:0}to{top:32px}}
+@keyframes up{from{top:32px}to{top:0}}
+.inp{all:unset;box-sizing:border-box;width:170px;min-height:44px;border:2px solid var(--ink);padding:0 10px;font-family:'VT323',monospace;font-size:22px;text-transform:none}
+.lcd :focus-visible{outline:2px dashed currentColor;outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.lcd *{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div class="lcd phone">
+  <div class="top">
+    <a class="key" href="Main.dc.html" aria-label="Back to the gadget">&lt; Back</a>
+  </div>
+  <h1 class="big title">Tether</h1>
+  <div class="segs" role="radiogroup" aria-label="Network function">
+    <sc-for list="{{fns}}" as="f" hint-placeholder-count="2">
+      <button class="{{f.cls}}" role="radio" aria-checked="{{f.checked}}" onClick="{{f.pick}}">{{f.label}}</button>
+    </sc-for>
+  </div>
+
+  <div style="display:flex;flex-direction:column">
+    <div class="node"><span class="b">Host</span></div>
+    <div class="wire" aria-hidden="true"><span class="pk"></span><span class="lbl t">{{fnName}}</span></div>
+    <div class="node inv"><span class="b">Phone</span><span class="t">{{phone}}</span></div>
+    <div class="wire" aria-hidden="true"><span class="pk up"></span><span class="lbl t">{{midLine}}</span></div>
+    <div class="node"><span class="b">{{upTitle}}</span><span class="t">{{up}}</span></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+    <div class="box"><span class="b">Tx</span><span class="t">14.2 MB</span></div>
+    <div class="box"><span class="b">Rx</span><span class="t">3.1 MB</span></div>
+  </div>
+
+  <div style="display:flex;flex-direction:column">
+    <div class="kv">
+      <span class="b">Gateway</span>
+      <button class="{{gwClass}}" aria-pressed="{{gwPressed}}" aria-label="Gateway mode" onClick="{{gwToggle}}"><span class="trk"><span class="lab">on</span><span class="k"></span></span></button>
+    </div>
+    <div class="kv"><span class="b">IPv4</span><span class="t">{{v4}}</span></div>
+    <div class="kv"><span class="b">IPv6</span><span class="t">{{v6}}</span></div>
+    <sc-if value="{{nat}}" hint-placeholder-val="{{ true }}">
+      <div class="kv"><span class="b">Dns</span><span class="t">1.1.1.1, 8.8.8.8</span></div>
+    </sc-if>
+    <sc-if value="{{gw}}" hint-placeholder-val="{{ false }}">
+      <div class="kv"><label class="b" for="tether-ct">Container</label><input id="tether-ct" class="inp" value="OpenWrt" autocomplete="off"></div>
+      <div class="kv"><label class="b" for="tether-if">Its iface</label><input id="tether-if" class="inp" value="usb0" autocomplete="off"></div>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = Object.assign({ fn: 'ncm', gw: false }, this.state || {});
+    const save = (p) => this.setState(Object.assign({ fn: st.fn, gw: st.gw }, p));
+    return {
+      fnName: st.fn,
+      fns: [['ncm', 'NCM'], ['rndis', 'RNDIS']].map(([id, label]) => ({
+        label, cls: 'seg' + (st.fn === id ? ' on' : ''), checked: st.fn === id ? 'true' : 'false', pick: () => save({ fn: id })
+      })),
+      nat: !st.gw, gw: st.gw,
+      phone: st.gw ? 'ua-usb' : 'usb0',
+      midLine: st.gw ? 'virtual cable' : 'masquerade',
+      upTitle: st.gw ? 'OpenWrt' : 'Upstream',
+      up: st.gw ? 'usb0' : 'rmnet_data0',
+      v4: st.gw ? 'by OpenWrt' : '192.168.42.130',
+      v6: st.gw ? 'by OpenWrt' : 'fd75:7361::/64',
+      gwClass: 'dip' + (st.gw ? '' : ' off'),
+      gwPressed: st.gw ? 'true' : 'false',
+      gwToggle: () => save({ gw: !st.gw })
+    };
+  }
+}
+</script>
+</body>
+</html>

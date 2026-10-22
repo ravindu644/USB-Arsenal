@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>USB Arsenal on a tablet</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jersey+10&amp;family=Silkscreen:wght@400;700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0}
+.lcd{--lcd:#FFA62E;--ink:#1C1005;position:relative;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;gap:16px;padding:22px 20px 20px;background:var(--lcd);color:var(--ink);font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase;-webkit-font-smoothing:none;font-smooth:never}
+.lcd::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px),repeating-linear-gradient(90deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px)}
+.tablet{width:1280px;height:800px;display:grid;grid-template-columns:420px minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:0;padding:0}
+.pane{display:flex;flex-direction:column;gap:16px;padding:22px 20px 20px;min-width:0;min-height:0}
+.s{font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase}
+.t{font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none}
+.b{font-weight:700}
+.big{margin:0;font-family:'Jersey 10','Silkscreen',sans-serif;font-weight:400;line-height:.8}
+.title{font-size:72px}
+.hero{font-size:104px}
+.inv{background:var(--ink);color:var(--lcd)}
+.d25{background-image:repeating-conic-gradient(var(--ink) 0 25%,transparent 0 100%);background-size:4px 4px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.key{font:inherit;font-weight:700;color:var(--ink);background:var(--lcd);border:2px solid var(--ink);min-height:44px;padding:0 14px;box-sizing:border-box;box-shadow:4px 4px 0 var(--ink);display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;text-transform:uppercase;cursor:pointer}
+.key.pri{background:var(--ink);color:var(--lcd)}
+.key:active{transform:translate(4px,4px);box-shadow:none}
+.segs{display:flex;border:2px solid var(--ink)}
+.seg{all:unset;box-sizing:border-box;flex:1 1 0;min-width:0;min-height:44px;padding:0 4px;display:flex;align-items:center;justify-content:center;font-weight:700;cursor:pointer}
+.seg + .seg{border-left:2px solid var(--ink)}
+.seg.on{background:var(--ink);color:var(--lcd)}
+.dip{all:unset;box-sizing:border-box;display:flex;align-items:center;flex:none;min-height:44px;padding:0 2px}
+.dip .trk{box-sizing:border-box;width:68px;height:32px;border:2px solid currentColor;padding:2px;display:flex;justify-content:space-between}
+.dip .k{width:26px;background:currentColor}
+.dip .lab{flex:1;display:flex;align-items:center;justify-content:center;font-weight:700}
+.row{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;width:100%;min-height:80px;padding:10px;cursor:pointer}
+.row.on{background:var(--ink);color:var(--lcd)}
+.row.img{min-height:56px;padding:8px 10px}
+.ico{display:block;flex:none;width:32px;height:32px}
+.lines{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.st{display:block;overflow:hidden;white-space:nowrap;container-type:inline-size}
+.st > span{display:inline-block;min-width:100%;animation:mq 8s steps(32,end) infinite alternate}
+@keyframes mq{0%,20%{transform:translateX(0)}80%,100%{transform:translateX(min(0px,calc(100cqw - 100%)))}}
+.tag{padding:0 6px;background:var(--ink);color:var(--lcd)}
+.luns{align-self:flex-start}
+.luns .seg{flex:0 0 40px}
+.note{padding:8px 10px}
+.box{display:flex;flex-direction:column;gap:5px;border:2px solid var(--ink);padding:8px 10px}
+.node{display:flex;align-items:center;justify-content:space-between;gap:12px;border:2px solid var(--ink);padding:0 12px;min-height:44px;flex:1;min-width:0;box-sizing:border-box}
+.hw{flex:0 0 72px;height:6px;align-self:center;position:relative;background:repeating-linear-gradient(90deg,var(--ink) 0 4px,transparent 4px 8px)}
+.hw i{position:absolute;top:-5px;width:8px;height:16px;background:var(--ink);animation:rt 1.2s steps(4,end) infinite}
+@keyframes rt{from{left:0}to{left:64px}}
+.strip{grid-column:1 / -1;display:flex;align-items:center;gap:12px;padding:14px 20px 68px;box-sizing:border-box;border-top:2px solid var(--ink)}
+.blk{display:inline-block;width:10px;height:16px;margin-left:4px;vertical-align:-2px;background:currentColor;animation:blk 1s steps(1,end) infinite}
+@keyframes blk{50%{visibility:hidden}}
+.lcd :focus-visible{outline:2px dashed currentColor;outline-offset:3px}
+.shut{position:absolute;inset:0;opacity:0;background:var(--lcd);animation:shut 2.6s steps(1,end) infinite}
+@keyframes shut{0%{opacity:0}70%{opacity:1}76%{opacity:0}84%{opacity:1}90%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.lcd *{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div class="lcd tablet">
+  <div class="pane" style="border-right:2px solid var(--ink)">
+    <div class="top">
+      <span style="display:flex;align-items:center;gap:10px">
+        <span style="position:relative;display:block;width:32px;height:36px;flex:none" aria-hidden="true"><svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges" style="display:block"><path d="{{sp.pin}}" fill="currentColor"></path></svg><span class="shut"><svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges" style="display:block"><path d="{{sp.pinBlink}}" fill="currentColor"></path></svg></span></span>
+        <span class="b">USB Arsenal</span>
+      </span>
+      <span class="t">v1.2.0</span>
+    </div>
+    <h1 class="big hero">3 up</h1>
+    <div style="display:flex;flex-direction:column;gap:2px;margin:0 -10px">
+      <sc-for list="{{fns}}" as="f" hint-placeholder-count="3">
+        <button class="{{f.cls}}" aria-current="{{f.current}}" onClick="{{f.pick}}">
+          <svg class="ico" width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><path d="{{f.icon}}" fill="currentColor"></path></svg>
+          <span class="lines"><span class="b">{{f.label}}</span><span class="t st"><span>{{f.l1}}</span></span><span class="t st"><span>{{f.l2}}</span></span></span>
+          <span class="dip" aria-hidden="true"><span class="trk"><span class="lab">on</span><span class="k"></span></span></span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="margin-top:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+      <a class="key" href="Log.dc.html">Log</a>
+      <a class="key" href="Identity.dc.html">Identity</a>
+    </div>
+  </div>
+
+  <div class="pane" style="padding:22px 32px 20px">
+    <sc-if value="{{isStorage}}" hint-placeholder-val="{{ true }}">
+      <h2 class="big title">Storage</h2>
+      <div class="segs luns" role="radiogroup" aria-label="LUN">
+        <button class="seg on" role="radio" aria-checked="true">0</button>
+        <button class="seg" role="radio" aria-checked="false">1</button>
+        <button class="seg" aria-label="Add a LUN">+</button>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);flex:1;min-height:0">
+        <div style="display:flex;flex-direction:column;gap:16px;padding-right:32px">
+          <div style="border:2px solid var(--ink)">
+            <div class="inv" style="height:40px;display:flex;align-items:center;gap:10px;padding:0 12px"><span style="width:8px;height:8px;background:var(--lcd)"></span><span class="b">lun0</span></div>
+            <div style="display:flex;align-items:center;gap:14px;padding:16px 14px">
+              <svg width="96" height="96" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><path d="{{sp.disc}}" fill="currentColor"></path></svg>
+              <span class="lines"><span class="t st"><span>Win11_24H2_x64.iso</span></span><span class="t" style="display:flex;gap:8px;align-items:center"><span>5.8G · dvd</span><span class="tag">ro</span></span></span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span class="b">Mode</span>
+            <div class="segs" role="radiogroup" aria-label="Mode">
+              <sc-for list="{{modes}}" as="m" hint-placeholder-count="5">
+                <button class="{{m.cls}}" role="radio" aria-checked="{{m.checked}}" onClick="{{m.pick}}">{{m.label}}</button>
+              </sc-for>
+            </div>
+            <sc-if value="{{warn}}" hint-placeholder-val="{{ false }}"><span class="t note inv">{{warn}}</span></sc-if>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:2px;border-left:2px solid var(--ink);padding-left:22px">
+          <div style="display:flex;justify-content:space-between;padding:0 10px 4px"><span class="b">Files</span><span class="t">/sdcard/USB-Arsenal</span></div>
+          <sc-for list="{{imgs}}" as="i" hint-placeholder-count="4">
+            <button class="{{i.cls}}" role="radio" aria-checked="{{i.checked}}" onClick="{{i.pick}}">
+              <span class="t st" style="flex:1;min-width:0"><span>{{i.name}}</span></span>
+              <sc-if value="{{i.lun}}" hint-placeholder-val="{{ false }}"><span class="t tag">{{i.lun}}</span></sc-if><span class="t">{{i.size}}</span>
+            </button>
+          </sc-for>
+          <div style="margin-top:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding-top:16px">
+            <button class="key">Pick image</button>
+            <button class="key pri">Create</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{isTether}}" hint-placeholder-val="{{ false }}">
+      <h2 class="big title">Tether</h2>
+      <div style="display:flex;align-items:stretch">
+        <div class="node"><span class="b">Host</span><span class="t">ncm</span></div>
+        <span class="hw" aria-hidden="true"><i></i></span>
+        <div class="node inv"><span class="b">Phone</span><span class="t">usb0</span></div>
+        <span class="hw" aria-hidden="true"><i></i></span>
+        <div class="node"><span class="b">Upstream</span><span class="t">rmnet_data0</span></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+        <div class="box"><span class="b">Tx</span><span class="t">14.2 MB</span></div>
+        <div class="box"><span class="b">Rx</span><span class="t">3.1 MB</span></div>
+        <div class="box"><span class="b">IPv4</span><span class="t">192.168.42.130</span></div>
+        <div class="box"><span class="b">IPv6</span><span class="t">fd75:7361::/64</span></div>
+      </div>
+    </sc-if>
+    <sc-if value="{{isHid}}" hint-placeholder-val="{{ false }}">
+      <h2 class="big title">HID</h2>
+      <div class="d25" style="flex:1;border:2px solid var(--ink)" role="img" aria-label="Trackpad"></div>
+      <div class="t" style="display:flex;gap:40px"><span>mouse 00 0a fe 00</span><span>kbd 00 00 04 00 00 00 00 00</span><span>interval 4 · 1 ms</span></div>
+    </sc-if>
+  </div>
+
+  <div class="strip">
+    <svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges" aria-hidden="true"><path d="{{sp.pin}}" fill="currentColor"></path></svg>
+    <span class="lines"><span class="b">Bound</span><span class="t">a600000.dwc3</span></span>
+    <button class="key">Stop all</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  px(rows) {
+    let d = '';
+    rows.forEach((r, y) => {
+      for (let x = 0; x < r.length; ) {
+        if (r[x] !== '#') { x++; continue; }
+        const s = x;
+        while (r[x] === '#') x++;
+        d += 'M' + s + ' ' + y + 'h' + (x - s) + 'v1h-' + (x - s) + 'z';
+      }
+    });
+    return d;
+  }
+  art() {
+    if (this._art) return this._art;
+    this._art = {
+      pin: this.px(['...##########...', '...#........#...', '...#.##..##.#...', '...#.##..##.#...', '...#........#...', '..############..', '.##############.', '.##############.', '.######..######.', '.##############.', '.##############.', '..############..', '....##.##.##....', '....##.##.##....', '...###.##.###...', '.......##.......', '.......####.....', '..........##....']),
+      pinBlink: this.px(['...##########...', '...#........#...', '...#........#...', '...#.##..##.#...', '...#........#...', '..############..', '.##############.', '.##############.', '.######..######.', '.##############.', '.##############.', '..############..', '....##.##.##....', '....##.##.##....', '...###.##.###...', '.......##.......', '.......####.....', '..........##....']),
+      disc: this.px(['.....######.....', '...##......##...', '..#.#........#..', '.#.##.........#.', '.#....####....#.', '#....#....#....#', '#...#......#...#', '#...#..##..#...#', '#...#..##..#...#', '#...#......#...#', '#....#....#....#', '.#....####....#.', '.#............#.', '..#..........#..', '...##......##...', '.....######.....']),
+      jack: this.px(['................', '################', '#..............#', '#..##..##..##..#', '#..##..##..##..#', '#..............#', '#..............#', '#..............#', '#..............#', '###..........###', '..#..........#..', '..#..........#..', '..###......###..', '....#......#....', '....########....']),
+      keyb: this.px(['...............', '...............', '...............', '###############', '#.............#', '#.#.#.#.#.#.#.#', '#.............#', '#..#.#.#.#.#..#', '#.............#', '#.#..#####..#.#', '#.............#', '###############'])
+    };
+    return this._art;
+  }
+  renderVals() {
+    const a = this.art();
+    const st = Object.assign({ sel: 'storage', mode: 'auto', img: 0 }, this.state || {});
+    const save = (p) => this.setState(Object.assign({ sel: st.sel, mode: st.mode, img: st.img }, p));
+    const fns = [
+      { id: 'storage', label: 'Storage', icon: a.disc, l1: 'LUN0 Win11_24H2_x64.iso · dvd', l2: 'LUN1 pendrive.img · rw' },
+      { id: 'tether', label: 'Tether', icon: a.jack, l1: 'ncm 192.168.42.129 → .130', l2: 'via rmnet_data0' },
+      { id: 'hid', label: 'HID', icon: a.keyb, l1: 'keyboard /dev/hidg1', l2: 'mouse /dev/hidg2' }
+    ].map((f) => Object.assign(f, {
+      cls: 'row' + (st.sel === f.id ? ' on' : ''),
+      current: st.sel === f.id ? 'page' : 'false',
+      pick: () => save({ sel: f.id })
+    }));
+    const list = [
+      { name: 'Win11_24H2_x64.iso', size: '5.8G', gb: 5.8, auto: 'dvd' },
+      { name: 'archlinux-2026.10.01-x86_64.iso', size: '1.2G', gb: 1.2, auto: 'disk' },
+      { name: 'drivers-2025.iso', size: '412M', gb: 0.4, auto: 'cdrom' },
+      { name: 'pendrive.img', size: '4.0G', gb: 4, auto: 'dvd', lun: 'lun1' }
+    ];
+    const img = list[st.img];
+    let warn = '';
+    if (st.mode === 'cdrom' && img.gb > 2.36) warn = 'cd-rom stops at 2.36G. the host reads a truncated disc';
+    else if (st.mode === 'rw') warn = 'host can write to this file';
+    return {
+      sp: a, fns, warn,
+      isStorage: st.sel === 'storage', isTether: st.sel === 'tether', isHid: st.sel === 'hid',
+      modes: ['auto', 'cdrom', 'dvd', 'disk', 'rw'].map((m) => ({ label: m === 'cdrom' ? 'cd' : m, cls: 'seg' + (st.mode === m ? ' on' : ''), checked: st.mode === m ? 'true' : 'false', pick: () => save({ mode: m }) })),
+      imgs: list.map((x, n) => ({
+        name: x.name, size: x.size, lun: x.lun || '',
+        cls: 'row img' + (n === st.img ? ' on' : ''), checked: n === st.img ? 'true' : 'false', pick: () => save({ img: n })
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

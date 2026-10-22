@@ -1,0 +1,75 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jersey+10&amp;family=Silkscreen:wght@400;700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0}
+.lcd{--lcd:#FFA62E;--ink:#1C1005;position:relative;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;gap:16px;padding:22px 20px 20px;background:var(--lcd);color:var(--ink);font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase;-webkit-font-smoothing:none;font-smooth:never}
+.sheet{width:1100px;height:640px;display:grid;grid-template-columns:512px minmax(0,1fr);gap:48px;padding:40px;background:var(--ink);color:var(--lcd)}
+.t{font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none}
+.b{font-weight:700}
+.big{margin:0;font-family:'Jersey 10','Silkscreen',sans-serif;font-weight:400;line-height:.8}
+.title{font-size:72px}
+.ic{position:relative;flex:none;display:flex;align-items:center;justify-content:center;background:var(--lcd);color:var(--ink);overflow:hidden}
+.ic::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px),repeating-linear-gradient(90deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px)}
+.ic.round{border-radius:50%}
+.ic.dark{background:var(--ink);color:var(--lcd);box-shadow:inset 0 0 0 2px var(--lcd)}
+.ic.dark::after{display:none}
+.pin{position:relative;display:block}
+.pin svg{display:block}
+.shut{position:absolute;inset:0;opacity:0;background:var(--lcd);animation:shut 2.6s steps(1,end) infinite}
+.dark .shut{background:var(--ink)}
+@keyframes shut{0%{opacity:0}70%{opacity:1}76%{opacity:0}84%{opacity:1}90%{opacity:0}}
+.cap{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+@media (prefers-reduced-motion:reduce){.lcd *{animation:none!important}}
+</style>
+</head><body>
+
+<div class="lcd sheet">
+  <div class="cap">
+    <div class="ic" style="width:512px;height:512px" role="img" aria-label="USB Arsenal app icon, 512 pixels">
+      <span class="pin" aria-hidden="true">
+        <svg width="288" height="324" viewBox="0 0 16 18" shape-rendering="crispEdges"><path d="M3 0h10v1h-10zM3 1h1v1h-1zM12 1h1v1h-1zM3 2h1v1h-1zM5 2h2v1h-2zM9 2h2v1h-2zM12 2h1v1h-1zM3 3h1v1h-1zM5 3h2v1h-2zM9 3h2v1h-2zM12 3h1v1h-1zM3 4h1v1h-1zM12 4h1v1h-1zM2 5h12v1h-12zM1 6h14v1h-14zM1 7h14v1h-14zM1 8h6v1h-6zM9 8h6v1h-6zM1 9h14v1h-14zM1 10h14v1h-14zM2 11h12v1h-12zM4 12h2v1h-2zM7 12h2v1h-2zM10 12h2v1h-2zM4 13h2v1h-2zM7 13h2v1h-2zM10 13h2v1h-2zM3 14h3v1h-3zM7 14h2v1h-2zM10 14h3v1h-3zM7 15h2v1h-2zM7 16h4v1h-4zM10 17h2v1h-2z" fill="currentColor"></path></svg>
+        <span class="shut"><svg width="288" height="324" viewBox="0 0 16 18" shape-rendering="crispEdges"><path d="M3 0h10v1h-10zM3 1h1v1h-1zM12 1h1v1h-1zM3 2h1v1h-1zM12 2h1v1h-1zM3 3h1v1h-1zM5 3h2v1h-2zM9 3h2v1h-2zM12 3h1v1h-1zM3 4h1v1h-1zM12 4h1v1h-1zM2 5h12v1h-12zM1 6h14v1h-14zM1 7h14v1h-14zM1 8h6v1h-6zM9 8h6v1h-6zM1 9h14v1h-14zM1 10h14v1h-14zM2 11h12v1h-12zM4 12h2v1h-2zM7 12h2v1h-2zM10 12h2v1h-2zM4 13h2v1h-2zM7 13h2v1h-2zM10 13h2v1h-2zM3 14h3v1h-3zM7 14h2v1h-2zM10 14h3v1h-3zM7 15h2v1h-2zM7 16h4v1h-4zM10 17h2v1h-2z" fill="currentColor"></path></svg></span>
+      </span>
+    </div>
+    <span class="t">512 · play store</span>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:32px">
+    <h1 class="big title">Pin</h1>
+    <div style="display:flex;gap:32px;align-items:flex-end">
+      <div class="cap">
+        <div class="ic" style="width:192px;height:192px" role="img" aria-label="Launcher icon, square">
+          <span class="pin" aria-hidden="true"><svg width="96" height="108" viewBox="0 0 16 18" shape-rendering="crispEdges"><path d="M3 0h10v1h-10zM3 1h1v1h-1zM12 1h1v1h-1zM3 2h1v1h-1zM5 2h2v1h-2zM9 2h2v1h-2zM12 2h1v1h-1zM3 3h1v1h-1zM5 3h2v1h-2zM9 3h2v1h-2zM12 3h1v1h-1zM3 4h1v1h-1zM12 4h1v1h-1zM2 5h12v1h-12zM1 6h14v1h-14zM1 7h14v1h-14zM1 8h6v1h-6zM9 8h6v1h-6zM1 9h14v1h-14zM1 10h14v1h-14zM2 11h12v1h-12zM4 12h2v1h-2zM7 12h2v1h-2zM10 12h2v1h-2zM4 13h2v1h-2zM7 13h2v1h-2zM10 13h2v1h-2zM3 14h3v1h-3zM7 14h2v1h-2zM10 14h3v1h-3zM7 15h2v1h-2zM7 16h4v1h-4zM10 17h2v1h-2z" fill="currentColor"></path></svg></span>
+        </div>
+        <span class="t">192 · launcher</span>
+      </div>
+      <div class="cap">
+        <div class="ic round" style="width:192px;height:192px" role="img" aria-label="Launcher icon, round mask">
+          <span class="pin" aria-hidden="true"><svg width="96" height="108" viewBox="0 0 16 18" shape-rendering="crispEdges"><path d="M3 0h10v1h-10zM3 1h1v1h-1zM12 1h1v1h-1zM3 2h1v1h-1zM5 2h2v1h-2zM9 2h2v1h-2zM12 2h1v1h-1zM3 3h1v1h-1zM5 3h2v1h-2zM9 3h2v1h-2zM12 3h1v1h-1zM3 4h1v1h-1zM12 4h1v1h-1zM2 5h12v1h-12zM1 6h14v1h-14zM1 7h14v1h-14zM1 8h6v1h-6zM9 8h6v1h-6zM1 9h14v1h-14zM1 10h14v1h-14zM2 11h12v1h-12zM4 12h2v1h-2zM7 12h2v1h-2zM10 12h2v1h-2zM4 13h2v1h-2zM7 13h2v1h-2zM10 13h2v1h-2zM3 14h3v1h-3zM7 14h2v1h-2zM10 14h3v1h-3zM7 15h2v1h-2zM7 16h4v1h-4zM10 17h2v1h-2z" fill="currentColor"></path></svg></span>
+        </div>
+        <span class="t">192 · round mask</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:32px;align-items:flex-end">
+      <div class="cap">
+        <div class="ic dark" style="width:96px;height:96px" role="img" aria-label="Themed icon">
+          <span class="pin" aria-hidden="true"><svg width="48" height="54" viewBox="0 0 16 18" shape-rendering="crispEdges"><path d="M3 0h10v1h-10zM3 1h1v1h-1zM12 1h1v1h-1zM3 2h1v1h-1zM5 2h2v1h-2zM9 2h2v1h-2zM12 2h1v1h-1zM3 3h1v1h-1zM5 3h2v1h-2zM9 3h2v1h-2zM12 3h1v1h-1zM3 4h1v1h-1zM12 4h1v1h-1zM2 5h12v1h-12zM1 6h14v1h-14zM1 7h14v1h-14zM1 8h6v1h-6zM9 8h6v1h-6zM1 9h14v1h-14zM1 10h14v1h-14zM2 11h12v1h-12zM4 12h2v1h-2zM7 12h2v1h-2zM10 12h2v1h-2zM4 13h2v1h-2zM7 13h2v1h-2zM10 13h2v1h-2zM3 14h3v1h-3zM7 14h2v1h-2zM10 14h3v1h-3zM7 15h2v1h-2zM7 16h4v1h-4zM10 17h2v1h-2z" fill="currentColor"></path></svg></span>
+        </div>
+        <span class="t">96 · themed</span>
+      </div>
+      <div class="cap">
+        <div class="ic" style="width:96px;height:96px" role="img" aria-label="Icon at 96 pixels">
+          <span class="pin" aria-hidden="true"><svg width="48" height="54" viewBox="0 0 16 18" shape-rendering="crispEdges"><path d="M3 0h10v1h-10zM3 1h1v1h-1zM12 1h1v1h-1zM3 2h1v1h-1zM5 2h2v1h-2zM9 2h2v1h-2zM12 2h1v1h-1zM3 3h1v1h-1zM5 3h2v1h-2zM9 3h2v1h-2zM12 3h1v1h-1zM3 4h1v1h-1zM12 4h1v1h-1zM2 5h12v1h-12zM1 6h14v1h-14zM1 7h14v1h-14zM1 8h6v1h-6zM9 8h6v1h-6zM1 9h14v1h-14zM1 10h14v1h-14zM2 11h12v1h-12zM4 12h2v1h-2zM7 12h2v1h-2zM10 12h2v1h-2zM4 13h2v1h-2zM7 13h2v1h-2zM10 13h2v1h-2zM3 14h3v1h-3zM7 14h2v1h-2zM10 14h3v1h-3zM7 15h2v1h-2zM7 16h4v1h-4zM10 17h2v1h-2z" fill="currentColor"></path></svg></span>
+        </div>
+        <span class="t">96</span>
+      </div>
+      <div class="cap">
+        <div class="ic" style="width:48px;height:48px" role="img" aria-label="Icon at 48 pixels">
+          <span class="pin" aria-hidden="true"><svg width="32" height="36" viewBox="0 0 16 18" shape-rendering="crispEdges"><path d="M3 0h10v1h-10zM3 1h1v1h-1zM12 1h1v1h-1zM3 2h1v1h-1zM5 2h2v1h-2zM9 2h2v1h-2zM12 2h1v1h-1zM3 3h1v1h-1zM5 3h2v1h-2zM9 3h2v1h-2zM12 3h1v1h-1zM3 4h1v1h-1zM12 4h1v1h-1zM2 5h12v1h-12zM1 6h14v1h-14zM1 7h14v1h-14zM1 8h6v1h-6zM9 8h6v1h-6zM1 9h14v1h-14zM1 10h14v1h-14zM2 11h12v1h-12zM4 12h2v1h-2zM7 12h2v1h-2zM10 12h2v1h-2zM4 13h2v1h-2zM7 13h2v1h-2zM10 13h2v1h-2zM3 14h3v1h-3zM7 14h2v1h-2zM10 14h3v1h-3zM7 15h2v1h-2zM7 16h4v1h-4zM10 17h2v1h-2z" fill="currentColor"></path></svg></span>
+        </div>
+        <span class="t">48</span>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

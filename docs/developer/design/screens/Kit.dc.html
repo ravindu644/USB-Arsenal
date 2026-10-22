@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>USB Arsenal pixel kit</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jersey+10&amp;family=Silkscreen:wght@400;700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0}
+.lcd{--lcd:#FFA62E;--ink:#1C1005;position:relative;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;gap:16px;padding:22px 20px 20px;background:var(--lcd);color:var(--ink);font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase;-webkit-font-smoothing:none;font-smooth:never}
+.lcd::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px),repeating-linear-gradient(90deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px)}
+.sheet{width:880px;height:560px;display:grid;grid-template-columns:230px 250px minmax(0,1fr);gap:32px;padding:28px 32px}
+.s{font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase}
+.t{font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none}
+.b{font-weight:700}
+.big{margin:0;font-family:'Jersey 10','Silkscreen',sans-serif;font-weight:400;line-height:.8}
+.title{font-size:72px}
+.hero{font-size:104px}
+.inv{background:var(--ink);color:var(--lcd)}
+.d25{background-image:repeating-conic-gradient(var(--ink) 0 25%,transparent 0 100%);background-size:4px 4px}
+.d50{background-image:repeating-conic-gradient(var(--ink) 0 25%,transparent 0 50%);background-size:4px 4px}
+.key{font:inherit;font-weight:700;color:var(--ink);background:var(--lcd);border:2px solid var(--ink);min-height:44px;padding:0 14px;box-sizing:border-box;box-shadow:4px 4px 0 var(--ink);display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;text-transform:uppercase;cursor:pointer}
+.key.pri{background:var(--ink);color:var(--lcd)}
+.dip{all:unset;box-sizing:border-box;display:flex;align-items:center;flex:none;min-height:44px;padding:0 2px}
+.dip .trk{box-sizing:border-box;width:68px;height:32px;border:2px solid currentColor;padding:2px;display:flex;justify-content:space-between}
+.dip .k{width:26px;background:currentColor}
+.dip .lab{flex:1;display:flex;align-items:center;justify-content:center;font-weight:700}
+.dip.off .trk{flex-direction:row-reverse}
+.dip.off .lab{visibility:hidden}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.sw{min-height:44px;border:2px solid var(--ink);display:flex;align-items:center;padding:0 10px;box-sizing:border-box}
+.d{height:28px;border:2px solid var(--ink);box-sizing:border-box}
+.shut{position:absolute;inset:0;opacity:0;background:var(--lcd);animation:shut 2.6s steps(1,end) infinite}
+@keyframes shut{0%{opacity:0}70%{opacity:1}76%{opacity:0}84%{opacity:1}90%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.lcd *{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div class="lcd sheet">
+  <div class="col">
+    <div style="position:relative;width:160px;height:180px">
+      <svg width="160" height="180" viewBox="0 0 16 18" shape-rendering="crispEdges" role="img" aria-label="Pin, the USB Arsenal mascot" style="display:block"><path d="{{pin}}" fill="currentColor"></path></svg>
+      <span class="shut" aria-hidden="true"><svg width="160" height="180" viewBox="0 0 16 18" shape-rendering="crispEdges" style="display:block"><path d="{{pinBlink}}" fill="currentColor"></path></svg></span>
+    </div>
+    <h1 class="big title">Pin</h1>
+    <p class="t" style="margin:0">A USB-A plug that walks. The two holes in its shell are its eyes. It shows up when the tray is empty and when the gadget binds.</p>
+  </div>
+
+  <div class="col">
+    <span class="b">Sprites · 16 px grid</span>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 12px">
+      <sc-for list="{{sprites}}" as="s" hint-placeholder-count="7">
+        <div style="display:flex;align-items:center;gap:12px">
+          <svg width="{{s.w}}" height="{{s.h}}" viewBox="{{s.vb}}" shape-rendering="crispEdges" aria-hidden="true" style="flex:none"><path d="{{s.d}}" fill="currentColor"></path></svg>
+          <span class="t">{{s.name}}</span>
+        </div>
+      </sc-for>
+    </div>
+    <span class="b" style="margin-top:auto">Switch and key</span>
+    <div style="display:flex;gap:12px;align-items:center">
+      <span class="dip" aria-hidden="true"><span class="trk"><span class="lab">on</span><span class="k"></span></span></span>
+      <span class="dip off" aria-hidden="true"><span class="trk"><span class="lab">on</span><span class="k"></span></span></span>
+      <span class="key" aria-hidden="true">Key</span>
+    </div>
+  </div>
+
+  <div class="col">
+    <span class="b">Two colours, nothing between</span>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+      <div class="sw t">#FFA62E light</div>
+      <div class="sw t inv">#1C1005 ink</div>
+    </div>
+    <span class="b">Shade is dither</span>
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+      <div style="display:flex;flex-direction:column;gap:5px"><div class="d"></div><span class="t">0</span></div>
+      <div style="display:flex;flex-direction:column;gap:5px"><div class="d d25"></div><span class="t">25</span></div>
+      <div style="display:flex;flex-direction:column;gap:5px"><div class="d d50"></div><span class="t">50</span></div>
+      <div style="display:flex;flex-direction:column;gap:5px"><div class="d inv"></div><span class="t">100</span></div>
+    </div>
+    <span class="b">Type</span>
+    <span class="big title">Bound</span>
+    <span class="b">Silkscreen for menus and keys</span>
+    <span class="t">VT323 for paths: /dev/hidg1</span>
+    <span class="b inv" style="margin-top:auto;padding:12px 10px">Inverted means selected</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":880,"height":560}}'>
+class Component extends DCLogic {
+  px(rows) {
+    let d = '';
+    rows.forEach((r, y) => {
+      for (let x = 0; x < r.length; ) {
+        if (r[x] !== '#') { x++; continue; }
+        const s = x;
+        while (r[x] === '#') x++;
+        d += 'M' + s + ' ' + y + 'h' + (x - s) + 'v1h-' + (x - s) + 'z';
+      }
+    });
+    return d;
+  }
+  renderVals() {
+    const top = ['...##########...', '...#........#...'];
+    const body = ['..############..', '.##############.', '.##############.', '.######..######.', '.##############.', '.##############.', '..############..', '....##.##.##....', '....##.##.##....', '...###.##.###...', '.......##.......', '.......####.....', '..........##....'];
+    const sp = (name, rows) => {
+      const w = rows[0].length, h = rows.length;
+      return { name, d: this.px(rows), vb: '0 0 ' + w + ' ' + h, w: w * 3, h: h * 3 };
+    };
+    return {
+      pin: this.px(top.concat(['...#.##..##.#...', '...#.##..##.#...', '...#........#...'], body)),
+      pinBlink: this.px(top.concat(['...#........#...', '...#.##..##.#...', '...#........#...'], body)),
+      sprites: [
+        sp('storage', ['.....######.....', '...##......##...', '..#.#........#..', '.#.##.........#.', '.#....####....#.', '#....#....#....#', '#...#......#...#', '#...#..##..#...#', '#...#..##..#...#', '#...#......#...#', '#....#....#....#', '.#....####....#.', '.#............#.', '..#..........#..', '...##......##...', '.....######.....']),
+        sp('tether', ['################', '#..............#', '#..##..##..##..#', '#..##..##..##..#', '#..............#', '#..............#', '#..............#', '#..............#', '###..........###', '..#..........#..', '..#..........#..', '..###......###..', '....#......#....', '....########....']),
+        sp('hid', ['###############', '#.............#', '#.#.#.#.#.#.#.#', '#.............#', '#..#.#.#.#.#..#', '#.............#', '#.#..#####..#.#', '#.............#', '###############']),
+        sp('usb', ['.......#.......', '......###......', '.....#####.....', '.......#....###', '..##...#....###', '.####..#....###', '.####..#.....#.', '..##...#.....#.', '...#...#....#..', '....#..#...#...', '.....#.#..#....', '......###......', '.......#.......', '......###......', '.....#####.....', '......###......']),
+        sp('eject', ['.....##.....', '....####....', '...######...', '..########..', '.##########.', '############', '............', '............', '############', '############']),
+        sp('spark', ['...#...', '.......', '...#...', '#.###.#', '...#...', '.......', '...#...']),
+        sp('pointer', ['#.......', '##......', '###.....', '####....', '#####...', '######..', '#######.', '####....', '##.##...', '#..##...', '....##..', '....##..'])
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-10-22T12:00:00Z"
+  },
+  "title": "USB Arsenal Screens",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "Home: the gadget",
+      "is_interactive": true
+    },
+    "Bind.dc.html": {
+      "x": 470,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "The bind moment",
+      "is_interactive": true
+    },
+    "Log.dc.html": {
+      "x": 940,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "Log",
+      "is_interactive": true
+    },
+    "Storage.dc.html": {
+      "x": 0,
+      "y": 1300,
+      "w": 390,
+      "h": 844,
+      "title": "Storage",
+      "is_interactive": true
+    },
+    "StorageEmpty.dc.html": {
+      "x": 470,
+      "y": 1300,
+      "w": 390,
+      "h": 844,
+      "title": "Storage: no image",
+      "is_interactive": true
+    },
+    "Tether.dc.html": {
+      "x": 940,
+      "y": 1300,
+      "w": 390,
+      "h": 844,
+      "title": "Tether",
+      "is_interactive": true
+    },
+    "Hid.dc.html": {
+      "x": 1410,
+      "y": 1300,
+      "w": 390,
+      "h": 844,
+      "title": "HID",
+      "is_interactive": true
+    },
+    "Identity.dc.html": {
+      "x": 1880,
+      "y": 1300,
+      "w": 390,
+      "h": 844,
+      "title": "Identity",
+      "is_interactive": true
+    },
+    "Tablet.dc.html": {
+      "x": 0,
+      "y": 2600,
+      "w": 1280,
+      "h": 800,
+      "title": "Tablet: list and detail",
+      "is_interactive": true
+    },
+    "Kit.dc.html": {
+      "x": 1360,
+      "y": 2600,
+      "w": 880,
+      "h": 560,
+      "title": "Pixel kit",
+      "is_interactive": true
+    },
+    "Icon.dc.html": {
+      "x": 2320,
+      "y": 2600,
+      "w": 1100,
+      "h": 640,
+      "title": "App icon",
+      "is_interactive": true
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Bind.dc.html",
+    "Log.dc.html",
+    "Storage.dc.html",
+    "StorageEmpty.dc.html",
+    "Tether.dc.html",
+    "Hid.dc.html",
+    "Identity.dc.html",
+    "Tablet.dc.html",
+    "Kit.dc.html",
+    "Icon.dc.html"
+  ],
+  "notes": {
+    "row1": {
+      "x": 0,
+      "y": -300,
+      "text": "The gadget",
+      "kind": "title1",
+      "maxW": 1330
+    },
+    "row2": {
+      "x": 0,
+      "y": 1000,
+      "text": "Functions",
+      "kind": "title1",
+      "maxW": 2270
+    },
+    "row3": {
+      "x": 0,
+      "y": 2300,
+      "text": "Large screens, the kit and the icon",
+      "kind": "title1",
+      "maxW": 3420
+    }
+  },
+  "designSystems": []
+}

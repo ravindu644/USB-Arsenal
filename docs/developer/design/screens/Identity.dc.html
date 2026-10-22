@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Identity</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jersey+10&amp;family=Silkscreen:wght@400;700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0}
+.lcd{--lcd:#FFA62E;--ink:#1C1005;position:relative;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;gap:16px;padding:22px 20px 20px;background:var(--lcd);color:var(--ink);font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase;-webkit-font-smoothing:none;font-smooth:never}
+.lcd::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px),repeating-linear-gradient(90deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px)}
+.phone{width:390px;height:844px;padding-bottom:68px}
+.t{font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none}
+.b{font-weight:700}
+.big{margin:0;font-family:'Jersey 10','Silkscreen',sans-serif;font-weight:400;line-height:.8}
+.title{font-size:72px}
+.inv{background:var(--ink);color:var(--lcd)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+.key{font:inherit;font-weight:700;color:var(--ink);background:var(--lcd);border:2px solid var(--ink);min-height:44px;padding:0 14px;box-sizing:border-box;box-shadow:4px 4px 0 var(--ink);display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;text-transform:uppercase;cursor:pointer}
+.key.pri{background:var(--ink);color:var(--lcd)}
+.key:active{transform:translate(4px,4px);box-shadow:none}
+.segs{display:flex;border:2px solid var(--ink)}
+.seg{all:unset;box-sizing:border-box;flex:1 1 0;min-width:0;min-height:44px;padding:0 4px;display:flex;align-items:center;justify-content:center;font-weight:700;cursor:pointer;text-transform:none}
+.seg + .seg{border-left:2px solid var(--ink)}
+.seg.on{background:var(--ink);color:var(--lcd)}
+.field{display:flex;flex-direction:column;gap:6px}
+.inp{all:unset;box-sizing:border-box;width:100%;min-height:44px;border:2px solid var(--ink);padding:0 10px;font-family:'VT323',monospace;font-size:22px;text-transform:none}
+.inp::placeholder{color:var(--ink);opacity:1}
+.lcd :focus-visible{outline:2px dashed currentColor;outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.lcd *{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div class="lcd phone">
+  <div class="top">
+    <a class="key" href="Main.dc.html" aria-label="Back to the gadget">&lt; Back</a>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <h1 class="big title">Identity</h1>
+    <span class="t">what the computer sees when you plug in</span>
+  </div>
+
+  <div class="segs" role="radiogroup" aria-label="Profile">
+    <sc-for list="{{profiles}}" as="p" hint-placeholder-count="3">
+      <button class="{{p.cls}}" role="radio" aria-checked="{{p.checked}}" aria-label="{{p.aria}}" onClick="{{p.pick}}">{{p.label}}</button>
+    </sc-for>
+  </div>
+
+  <div class="field">
+    <label class="b" for="id-product">Product name</label>
+    <input id="id-product" class="inp" value="{{product}}" onChange="{{setProduct}}" autocomplete="off">
+  </div>
+  <div class="field">
+    <label class="b" for="id-maker">Maker</label>
+    <input id="id-maker" class="inp" value="{{maker}}" onChange="{{setMaker}}" autocomplete="off">
+  </div>
+  <div class="field">
+    <label class="b" for="id-serial">Serial number</label>
+    <input id="id-serial" class="inp" placeholder="from this phone" value="{{serial}}" onChange="{{setSerial}}" autocomplete="off">
+  </div>
+  <div class="field">
+    <label class="b" for="id-vid">USB IDs</label>
+    <div style="display:flex;align-items:center;gap:8px">
+      <input id="id-vid" class="inp" style="width:96px" aria-label="Vendor ID" maxlength="4" value="{{vid}}" onChange="{{setVid}}" autocomplete="off">
+      <span class="t">:</span>
+      <input id="id-pid" class="inp" style="width:96px" aria-label="Product ID" maxlength="4" value="{{pid}}" onChange="{{setPid}}" autocomplete="off">
+    </div>
+    <span class="t">{{idHint}}</span>
+  </div>
+  <div class="field">
+    <span class="b">Power</span>
+    <div class="segs" role="radiogroup" aria-label="Power">
+      <sc-for list="{{powers}}" as="w" hint-placeholder-count="3">
+        <button class="{{w.cls}}" role="radio" aria-checked="{{w.checked}}" onClick="{{w.pick}}">{{w.label}}</button>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+    <button class="key" onClick="{{reset}}">Reset</button>
+    <button class="key pri">{{saveLabel}}</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const def = { profile: 'pixel', product: 'USB Arsenal', maker: 'USB Arsenal', serial: '', vid: '1d6b', pid: '0104', power: 250, dirty: false };
+    const st = Object.assign({}, def, this.state || {});
+    const save = (p) => this.setState(Object.assign({}, st, p, { dirty: true }));
+    const text = (k) => (e) => save({ [k]: e.target.value });
+    return {
+      product: st.product, maker: st.maker, serial: st.serial, vid: st.vid, pid: st.pid,
+      setProduct: text('product'), setMaker: text('maker'), setSerial: text('serial'), setVid: text('vid'), setPid: text('pid'),
+      idHint: st.vid === '1d6b' && st.pid === '0104' ? 'lsusb: Linux Foundation Multifunction Composite Gadget' : 'custom ID',
+      profiles: [['builtin', 'Built-in', 'Built-in profile'], ['pixel', 'pixel', 'pixel.conf'], ['new', '+', 'New profile']].map(([id, label, aria]) => ({
+        label, aria, cls: 'seg' + (st.profile === id ? ' on' : ''), checked: st.profile === id ? 'true' : 'false',
+        pick: () => save({ profile: id })
+      })),
+      powers: [100, 250, 500].map((n) => ({
+        label: n + ' mA', cls: 'seg' + (st.power === n ? ' on' : ''), checked: st.power === n ? 'true' : 'false',
+        pick: () => save({ power: n })
+      })),
+      saveLabel: st.dirty ? 'Save · replugs' : 'Save',
+      reset: () => this.setState(Object.assign({}, def, { profile: 'builtin', dirty: true }))
+    };
+  }
+}
+</script>
+</body>
+</html>
