@@ -133,8 +133,10 @@ fun InteractionSource.collectIsPressedHeld(): State<Boolean> {
                 is PressInteraction.Press -> {
                     presses += i
                     letGo?.cancel()
+                    // Timed from the touch, not from clickable's own press, which in a scrolling
+                    // screen arrives only as the finger lifts and would hold the look 80ms past it
+                    if (!held.value) since = SystemClock.uptimeMillis()
                     held.value = true
-                    since = SystemClock.uptimeMillis()
                 }
                 is PressInteraction.Release -> presses -= i.press
                 is PressInteraction.Cancel -> presses -= i.press
