@@ -45,7 +45,6 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.runtime.DisposableEffect
@@ -338,8 +337,8 @@ fun Alert(label: String, fix: String, onClick: () -> Unit, modifier: Modifier = 
 /*
  * .card: a big way into a screen, in the drive panel's look: an inverted 40dp face with the
  * name and `>`, over a body with the sprite and one line. The whole card is one key. It
- * inverts while focused or held, and a tap keeps it inverted for 2 frames before the screen
- * changes, so even a quick tap is seen to land.
+ * inverts while focused or pressed, and opens at once; the press look's own two-frame hold
+ * shows even a quick tap land.
  */
 @Composable
 fun Card(label: String, line: String, icon: Sprite, onOpen: () -> Unit, modifier: Modifier = Modifier) {
@@ -347,22 +346,13 @@ fun Card(label: String, line: String, icon: Sprite, onOpen: () -> Unit, modifier
     val focused by interaction.collectIsFocusedAsState()
     val pressed by interaction.collectIsPressedHeld()
     val haptics = LocalHaptics.current
-    val reduced = LocalReducedMotion.current
-    var opening by remember { mutableStateOf(false) }
-    val open by rememberUpdatedState(onOpen)
-    LaunchedEffect(opening) {
-        if (!opening) return@LaunchedEffect
-        if (!reduced) delay(2L * FRAME_MS)
-        opening = false
-        open()
-    }
-    val lit = focused || pressed || opening
+    val lit = focused || pressed
     Box(
         modifier
             .fillMaxWidth()
             .lcdClickable(interaction, outline = false, role = Role.Button) {
                 haptics.keyPress()
-                opening = true
+                onOpen()
             },
     ) {
         Inverted(lit) {

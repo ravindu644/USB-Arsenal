@@ -226,7 +226,14 @@ fun Modifier.lcdScroll(state: ScrollState, inset: Dp = Lcd.gutter) = composed {
         if (max in 1 until Int.MAX_VALUE) {
             thumb(ink, size.width + inset.toPx() - 8.dp.toPx(), size.height, size.height + max, state.value.toFloat() / max)
         }
-    }.verticalScroll(state)
+    }.verticalScroll(
+        state,
+        // No stretch: it is smooth motion, and while it relaxes the scroll takes the next tap.
+        // No scroll at all when everything fits, so the keys there have no gesture above them
+        // to wait on, and press and click at once as the pinned keys do
+        overscrollEffect = null,
+        enabled = state.maxValue in 1 until Int.MAX_VALUE,
+    )
 }
 
 // The thumb, its left edge at [left], for [view] of [total] pixels, [at] from 0 (top) to 1 (end), on the pixel grid

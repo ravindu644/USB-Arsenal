@@ -21,6 +21,8 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.Interaction
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -70,7 +72,9 @@ fun Modifier.lcdClickable(
  */
 private fun Modifier.pressOnDown(interaction: MutableInteractionSource) = pointerInput(interaction) {
     awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        // A down the scroll has taken never clicks, so it never looks pressed either
+        val down = awaitFirstDown(pass = PointerEventPass.Initial)
+        if (down.type == PointerType.Mouse && !currentEvent.buttons.isPrimaryPressed) return@awaitEachGesture
         val press = PressInteraction.Press(down.position)
         interaction.tryEmit(press)
         var end: Interaction = PressInteraction.Cancel(press)
@@ -126,26 +130,36 @@ fun InteractionSource.collectIsPressedHeld(): State<Boolean> {
     val held = remember { mutableStateOf(false) }
     LaunchedEffect(this) {
         val presses = mutableListOf<PressInteraction.Press>()
+        val echoes = mutableListOf<PressInteraction.Press>()
         var since = 0L
+        var endedAt = 0L
         var letGo: Job? = null
         interactions.collect { i ->
             when (i) {
                 is PressInteraction.Press -> {
+                    val now = SystemClock.uptimeMillis()
+                    // clickable's own press for a touch pressOnDown already showed: in a scrolling
+                    // screen it is sent from a coroutine as the finger lifts, after ours has let go,
+                    // and holding it again would keep the key down 80ms past the lift
+                    if (!held.value && now - endedAt < FRAME_MS) {
+                        echoes += i
+                        return@collect
+                    }
                     presses += i
                     letGo?.cancel()
-                    // Timed from the touch, not from clickable's own press, which in a scrolling
-                    // screen arrives only as the finger lifts and would hold the look 80ms past it
-                    if (!held.value) since = SystemClock.uptimeMillis()
+                    // Timed from the touch, not from a later press within it
+                    if (!held.value) since = now
                     held.value = true
                 }
-                is PressInteraction.Release -> presses -= i.press
-                is PressInteraction.Cancel -> presses -= i.press
+                is PressInteraction.Release -> if (!echoes.remove(i.press)) presses -= i.press
+                is PressInteraction.Cancel -> if (!echoes.remove(i.press)) presses -= i.press
             }
             if (presses.isEmpty() && held.value) {
                 letGo?.cancel()
                 letGo = launch {
                     delay(2 * FRAME_MS - (SystemClock.uptimeMillis() - since))
                     held.value = false
+                    endedAt = SystemClock.uptimeMillis()
                 }
             }
         }
