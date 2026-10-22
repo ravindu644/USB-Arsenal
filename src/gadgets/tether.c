@@ -1226,6 +1226,12 @@ int ua_cmd_tether(int argc, char **argv) {
       }
       break;
     case 'd':
+      /* Handed to the DHCP server as is, so it is checked here like the
+       * profile's tether_dns */
+      if (!ua_valid_dns(optarg)) {
+        ua_usage_error("tether", "--dns takes IPv4 addresses, comma-separated");
+        return UA_EXIT_USAGE;
+      }
       t.dns = optarg;
       break;
     case 'f':

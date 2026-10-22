@@ -495,3 +495,5 @@ Tick a box only when the item is merged and verified as described in its phase.
 - 2026-10-22: `tether start --ncm` overrides a profile's `tether_function rndis` (NCM still
   falls back to RNDIS where it is missing or unsafe), and `status --json` gives the link's
   `tx_bytes` and `rx_bytes`, so the app's Tether shows traffic without a root read of its own.
+- 2026-10-22: `tether --dns` is checked like the profile's `tether_dns` (IPv4 addresses,
+  comma-separated) before it reaches the DHCP server; it was passed through unchecked.

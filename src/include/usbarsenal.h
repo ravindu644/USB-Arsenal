@@ -166,6 +166,8 @@ struct ua_config {
 void ua_config_defaults(struct ua_config *c);
 int ua_config_load(const char *path, struct ua_config *c);
 void ua_config_active(struct ua_config *c);
+/* One or more IPv4 addresses, comma-separated: tether_dns and tether --dns */
+int ua_valid_dns(const char *v);
 int ua_cmd_identity(int argc, char **argv);
 void ua_help_identity(void);
 
