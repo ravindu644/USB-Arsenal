@@ -22,9 +22,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -56,9 +61,11 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.usbarsenal.app.lcd.FRAME_MS
+import com.usbarsenal.app.lcd.Haptics
 import com.usbarsenal.app.lcd.Inverted
 import com.usbarsenal.app.lcd.Lcd
 import com.usbarsenal.app.lcd.LcdType
@@ -74,16 +81,30 @@ import kotlinx.coroutines.delay
 
 // The parts of lcd.css the screens share, each named after its class there
 
-// .lcd.phone: the gutters, 22dp from the top, and the system bars kept clear
+/*
+ * .lcd.phone: the gutters, 22dp from the top, and the system bars kept clear. A [bottomBar]
+ * sits outside the gutters, flush to the screen edges, and keeps clear of the navigation bar
+ * itself so its ground reaches under it.
+ */
 @Composable
-fun Screen(content: @Composable ColumnScope.() -> Unit) = Column(
+fun Screen(bottomBar: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) = Column(
+    // The keyboard pushes the bar and the content up; the bar's own navigation-bar padding then gives way
     Modifier
         .fillMaxSize()
-        .safeDrawingPadding()
-        .padding(start = Lcd.gutter, end = Lcd.gutter, top = Lcd.topInset, bottom = Lcd.gutter),
-    verticalArrangement = Arrangement.spacedBy(Lcd.section),
-    content = content,
-)
+        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+        .imePadding(),
+) {
+    Column(
+        Modifier
+            .weight(1f)
+            .fillMaxWidth()
+            .then(if (bottomBar == null) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)) else Modifier)
+            .padding(start = Lcd.gutter, end = Lcd.gutter, top = Lcd.topInset, bottom = if (bottomBar == null) Lcd.gutter else Lcd.section),
+        verticalArrangement = Arrangement.spacedBy(Lcd.section),
+        content = content,
+    )
+    bottomBar?.invoke()
+}
 
 /*
  * Silkscreen is a menu face and always uppercase; VT323 keeps its case. Only the first [typed]
@@ -99,11 +120,12 @@ fun Text(
     cursor: Boolean = false,
     typed: Int = Int.MAX_VALUE,
     cursorSpace: Boolean = false,
+    maxLines: Int = Int.MAX_VALUE,
 ) {
     val shown = if (style.fontFamily == LcdType.data.fontFamily) text else text.uppercase()
     val ink = LocalLcd.current.ink
     if (!cursor && !cursorSpace && typed >= shown.length) {
-        BasicText(shown, modifier, style.copy(color = ink))
+        BasicText(shown, modifier, style.copy(color = ink), maxLines = maxLines, overflow = TextOverflow.Clip)
         return
     }
     // 4dp gap plus the 10x16 block, as .blk's margin and size
@@ -116,6 +138,7 @@ fun Text(
         },
         modifier,
         style.copy(color = ink),
+        maxLines = maxLines,
         inlineContent = mapOf("cursor" to InlineTextContent(box) { if (cursor) Cursor(Modifier.padding(start = 4.dp)) }),
     )
 }
@@ -156,17 +179,27 @@ private suspend fun PointerInputScope.swallowTouches() {
 }
 
 /*
- * The LCD redraw: a new screen paints over the old one in four bands, top to bottom, one per
- * 40ms frame; going [back] paints from the bottom up. The old screen stays alive underneath
- * until the last band, so nothing in it restarts. Reduced motion cuts.
+ * The LCD redraw: a new screen paints over the old one in [frames] bands, top to bottom, one
+ * per 40ms frame; going [back] paints from the bottom up. The old screen stays alive underneath
+ * until the last band, so nothing in it restarts. Reduced motion cuts. Screens use 4 bands, the
+ * bottom bar 2.
  */
 @Composable
-fun <T> Redraw(target: T, back: Boolean, content: @Composable (T) -> Unit) {
-    val spec = stepSpec<Float>(4)
+fun <T> Redraw(
+    target: T,
+    back: Boolean,
+    modifier: Modifier = Modifier,
+    frames: Int = 4,
+    contentAlignment: Alignment = Alignment.TopStart,
+    content: @Composable (T) -> Unit,
+) {
+    val spec = stepSpec<Float>(frames)
     val ground = LocalLcd.current.ground
     AnimatedContent(
         target,
-        transitionSpec = { EnterTransition.None togetherWith ExitTransition.KeepUntilTransitionsFinished },
+        // No size animation: a shorter state simply cuts in
+        transitionSpec = { (EnterTransition.None togetherWith ExitTransition.KeepUntilTransitionsFinished) using null },
+        contentAlignment = contentAlignment,
         label = "redraw",
     ) { screen ->
         val painted by transition.animateFloat({ spec }, label = "bands") { if (it == EnterExitState.PreEnter) 0f else 1f }
@@ -174,7 +207,7 @@ fun <T> Redraw(target: T, back: Boolean, content: @Composable (T) -> Unit) {
         // The screen going away stays drawn under the bands, but no touch reaches it
         val leaving = transition.targetState == EnterExitState.PostExit
         Box(
-            Modifier.fillMaxSize().then(if (leaving) Modifier.pointerInput(Unit) { swallowTouches() } else Modifier).drawWithContent {
+            modifier.then(if (leaving) Modifier.pointerInput(Unit) { swallowTouches() } else Modifier).drawWithContent {
                 val h = size.height * painted
                 clipRect(top = if (fromBottom) size.height - h else 0f, bottom = if (fromBottom) size.height else h) {
                     drawRect(ground)
@@ -198,7 +231,15 @@ fun Cursor(modifier: Modifier = Modifier) {
  * cannot take focus.
  */
 @Composable
-fun Key(label: String, modifier: Modifier = Modifier, primary: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+fun Key(
+    label: String,
+    modifier: Modifier = Modifier,
+    primary: Boolean = false,
+    enabled: Boolean = true,
+    // VirtualKey, unless DESIGN.md's haptics table names another effect for what the key does
+    haptic: Haptics.() -> Unit = { keyPress() },
+    onClick: () -> Unit,
+) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val haptics = LocalHaptics.current
@@ -212,7 +253,7 @@ fun Key(label: String, modifier: Modifier = Modifier, primary: Boolean = false, 
                 if (enabled && !pressed) drawRect(c.ink, topLeft = Offset(depth.toPx(), depth.toPx()), size = size)
             }
             .lcdClickable(interaction, outline = true, role = Role.Button, enabled = enabled) {
-                haptics.keyPress()
+                haptics.haptic()
                 onClick()
             }
             .background(if (filled) c.ink else c.ground)
@@ -221,7 +262,7 @@ fun Key(label: String, modifier: Modifier = Modifier, primary: Boolean = false, 
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        if (filled) Inverted { Text(label, LcdType.labelStrong) } else Text(label, LcdType.labelStrong)
+        Inverted(filled) { Text(label, LcdType.labelStrong) }
     }
 }
 
@@ -393,7 +434,7 @@ fun Terminal(lines: List<String>, modifier: Modifier = Modifier) = Inverted {
                         Text(line.removePrefix(glyph.orEmpty()), LcdType.data, cursor = newest)
                     }
                 }
-                if (newest) Inverted(body) else body()
+                Inverted(newest, body)
             }
         }
     }

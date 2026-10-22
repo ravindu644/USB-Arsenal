@@ -27,10 +27,11 @@ const val FRAME_MS = 40
 // Values jump between whole positions instead of easing through them
 fun StepEasing(frames: Int) = Easing { t -> floor(t * frames) / frames }
 
-// Compose scales finite animations by the system setting only, so the in-app switch is applied here: a cut
+// Compose scales finite animations by the system setting only, so the in-app switch is applied here: a cut.
+// [steps] positions over [frames] frames; one a frame unless a motion holds each step longer (the tray)
 @Composable
-fun <T> stepSpec(frames: Int): FiniteAnimationSpec<T> =
-    if (LocalReducedMotion.current) snap() else tween(frames * FRAME_MS, easing = StepEasing(frames))
+fun <T> stepSpec(frames: Int, steps: Int = frames): FiniteAnimationSpec<T> =
+    if (LocalReducedMotion.current) snap() else tween(frames * FRAME_MS, easing = StepEasing(steps))
 
 val LocalReducedMotion = compositionLocalOf { false }
 

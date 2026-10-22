@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
@@ -116,7 +117,7 @@ fun App() {
         back = to < step
         step = to
     }
-    Redraw(step, back) {
+    Redraw(step, back, Modifier.fillMaxSize()) {
         when (it) {
             Step.WELCOME -> Welcome { go(Step.ROOT) }
             Step.ROOT -> RootScreen(back = { go(Step.WELCOME) }) { go(Step.CHECK) }

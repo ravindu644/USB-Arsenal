@@ -34,15 +34,19 @@ fun Modifier.lcdClickable(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ): Modifier = composed {
-    val haptics = LocalHaptics.current
-    val inputMode = LocalInputModeManager.current
     val focused by interaction.collectIsFocusedAsState()
     val ink = LocalLcd.current.ink
     this
-        // A move made with keys ticks; focus that follows a touch does not
-        .onFocusChanged { if (it.isFocused && inputMode.inputMode == InputMode.Keyboard) haptics.tick() }
+        .focusTick()
         .then(if (outline && focused) Modifier.focusOutline(ink) else Modifier)
         .clickable(interaction, indication = null, enabled = enabled, role = role, onClick = onClick)
+}
+
+// A move made with keys ticks (SegmentTick); focus that follows a touch does not
+fun Modifier.focusTick(): Modifier = composed {
+    val haptics = LocalHaptics.current
+    val inputMode = LocalInputModeManager.current
+    onFocusChanged { if (it.isFocused && inputMode.inputMode == InputMode.Keyboard) haptics.tick() }
 }
 
 // BUTTON_L1 and BUTTON_R1 step a segmented control or the LUN strip while focus is inside it

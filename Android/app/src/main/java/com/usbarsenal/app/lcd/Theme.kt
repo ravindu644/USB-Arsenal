@@ -76,9 +76,15 @@ data class LcdColors(val ground: Color, val ink: Color) {
 
 val LocalLcd = staticCompositionLocalOf { LcdColors(Lcd.Backlight, Lcd.Ink) }
 
+/*
+ * [on] swaps the two colours for [content]; off leaves them. The composition is the same either
+ * way, so an element that inverts when focused keeps its focus while it does.
+ */
 @Composable
-fun Inverted(content: @Composable () -> Unit) =
-    CompositionLocalProvider(LocalLcd provides LocalLcd.current.inverted(), content = content)
+fun Inverted(on: Boolean = true, content: @Composable () -> Unit) {
+    val colors = LocalLcd.current
+    CompositionLocalProvider(LocalLcd provides if (on) colors.inverted() else colors, content = content)
+}
 
 // The in-app motion and haptics switches, kept across launches
 class Switches(context: Context) {
