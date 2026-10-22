@@ -40,7 +40,7 @@ usb-arsenal stop      # everything off, the port back to its owner
 | `version`, `udc`, `udc_state` | the binary's version, the controller, its state (`configured`, `not attached`, ...) |
 | `bound` | `1` while our gadget holds the controller, `0` when it is with its owner |
 | `storage` | one object per LUN: `lun`, `file`, `mode` (`cdrom`, `dvd`, `disk`, `rw`), `access` (`ro`, `rw`); an ejected LUN has empty strings |
-| `hid` | one object per node: `function` (`keyboard`, `mouse`), `node` (`/dev/hidgN`, empty until it appears), `interval` (the poll interval exponent it runs with, `-1` where the kernel has no control for it) |
+| `hid` | one object per node: `function` (`keyboard`, `mouse`), `node` (`/dev/hidgN`, empty until it appears), `interval` (the poll interval exponent it runs with: `0` for the kernel's default, 1 ms; `-1` where the kernel has no control for it) |
 | `tether` | `null`, or `function` (`ncm`, `rndis`), `iface`, `running` (the network side is up), `address`, `ipv6`, `upstream`, `gateway` (`1` in gateway mode), `gateway_container`, `gateway_iface`, `gateway_waiting` (the container is not running yet), `tx_bytes` and `rx_bytes` (what the phone's end of the link has sent and received, `-1` when unread) |
 
 `stop` is safe at any time, any number of times. It is also the recovery path: if a
