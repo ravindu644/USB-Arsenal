@@ -308,15 +308,16 @@ Screen anatomy, top to bottom:
    (200px for a shell).
 4. **Bottom keys**, a two-column grid of `key`s, or Home's bottom bar.
 
-When the window is too short for a screen (landscape, split screen, a large font), the screen
+In landscape the content keeps clear of the cutout and the navigation bar, while Home's bottom
+bar still runs edge to edge, its content inset. When the window is too short for a screen (landscape, split screen, a large font), the screen
 scrolls as one page: the top bar and title scroll away with the content, and the bottom keys
 stay pinned above the navigation bar, as a sheet's do. A tall window shows the screen exactly
 as drawn, with no scroll. Home's Log and Settings keys belong to the content (they sit under
 the rows), so they scroll with it.
 
 ### Scrollbar (`.scrollbar`)
-Anything that scrolls shows a 4px ink thumb, 8px in from the screen's right edge, in the gutter
-outside a row's bleed; inside a terminal it is amber. Its length is the share of the content in
+Anything that scrolls shows a 4px ink thumb, 4px from the screen's right edge, in the gutter
+clear of a row's or a rule's 10px bleed; inside a terminal it is amber. Its length is the share of the content in
 view (24px at least), it is drawn on the pixel grid, and it shows only while there is more to
 scroll. It never moves on its own, so reduced motion leaves it as is.
 

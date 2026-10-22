@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -46,7 +45,6 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.runtime.DisposableEffect
@@ -339,8 +337,7 @@ fun Alert(label: String, fix: String, onClick: () -> Unit, modifier: Modifier = 
 /*
  * .card: a big way into a screen, in the drive panel's look: an inverted 40dp face with the
  * name and `>`, over a body with the sprite and one line. The whole card is one key. It
- * inverts while focused or held, and a tap keeps it inverted for 2 frames before the screen
- * changes, so even a quick tap is seen to land.
+ * inverts while focused or pressed; the screen change waits for its release to be drawn.
  */
 @Composable
 fun Card(label: String, line: String, icon: Sprite, onOpen: () -> Unit, modifier: Modifier = Modifier) {
@@ -348,22 +345,13 @@ fun Card(label: String, line: String, icon: Sprite, onOpen: () -> Unit, modifier
     val focused by interaction.collectIsFocusedAsState()
     val pressed by interaction.collectIsPressedAsState()
     val haptics = LocalHaptics.current
-    val reduced = LocalReducedMotion.current
-    var opening by remember { mutableStateOf(false) }
-    val open by rememberUpdatedState(onOpen)
-    LaunchedEffect(opening) {
-        if (!opening) return@LaunchedEffect
-        if (!reduced) delay(2L * FRAME_MS)
-        opening = false
-        open()
-    }
-    val lit = focused || pressed || opening
+    val lit = focused || pressed
     Box(
         modifier
             .fillMaxWidth()
             .lcdClickable(interaction, outline = false, role = Role.Button) {
                 haptics.keyPress()
-                opening = true
+                onOpen()
             },
     ) {
         Inverted(lit) {
@@ -564,7 +552,8 @@ fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier = Modifier) 
                 .fillMaxWidth()
                 .background(LocalLcd.current.ground)
                 .drawBehind { drawRect(rule, size = Size(size.width, Lcd.pixel.toPx())) }
-                .windowInsetsPadding(WindowInsets.navigationBars)
+                // Its content keeps clear of the navigation bar and a landscape cutout; its rule does not
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
                 .padding(start = Lcd.gutter, end = Lcd.gutter, top = 14.dp, bottom = Lcd.gutter),
             verticalArrangement = Arrangement.spacedBy(Lcd.section),
         ) {

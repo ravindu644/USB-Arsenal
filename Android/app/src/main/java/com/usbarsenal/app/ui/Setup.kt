@@ -28,6 +28,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.Job
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
@@ -120,11 +123,21 @@ fun App() {
     // The installed version when Install was opened to update it
     var update by rememberSaveable { mutableStateOf<String?>(null) }
     val focusManager = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
+    var showing by remember { mutableStateOf<Job?>(null) }
     fun show(next: List<Step>, goingBack: Boolean) {
+        // One at a time: a second tap in the gap below would stack a screen twice
+        if (showing?.isActive == true) return
         // Focus leaves with the old screen, so a key press during the redraw cannot reach it
         focusManager.clearFocus()
-        back = goingBack
-        stack = next
+        // The key that asked has just lifted: draw that frame first. Composing the next screen
+        // takes a frame of 50 to 100ms, and in the same frame it held the key down that long
+        showing = scope.launch {
+            withFrameNanos {}
+            withFrameNanos {}
+            back = goingBack
+            stack = next
+        }
     }
     fun push(s: Step) = show(stack + s, false)
     fun pop() = show(stack.dropLast(1), true)

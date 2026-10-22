@@ -18,8 +18,8 @@ body{margin:0}
 /* 68px at the bottom = 20px gutter + 48px left clear for Android's navigation bar */
 .phone{width:390px;height:844px;padding-bottom:68px}
 .lcd :focus-visible{outline:2px dashed currentColor;outline-offset:3px}
-/* What scrolls shows a 4px thumb 8px in from the edge, in the gutter; height and top come from the scroll */
-.scrollbar{position:absolute;right:8px;width:4px;min-height:24px;background:currentColor;pointer-events:none}
+/* What scrolls shows a 4px thumb 4px from the edge, clear of a row's 10px bleed; height and top come from the scroll */
+.scrollbar{position:absolute;right:4px;width:4px;min-height:24px;background:currentColor;pointer-events:none}
 
 /* Type: Silkscreen for menus, VT323 for paths and data (keeps case), Jersey 10 for big words */
 .s{font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase}

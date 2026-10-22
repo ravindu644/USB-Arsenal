@@ -17,6 +17,16 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.interaction.Interaction
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.isPrimaryPressed
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.foundation.interaction.PressInteraction
 
 /*
  * Focusable and pressable from touch, Enter and D-pad center, all handled by clickable.
@@ -39,7 +49,36 @@ fun Modifier.lcdClickable(
     this
         .focusTick()
         .then(if (outline && focused) Modifier.focusOutline(ink) else Modifier)
+        .then(if (enabled) Modifier.pressOnDown(interaction) else Modifier)
         .clickable(interaction, indication = null, enabled = enabled, role = role, onClick = onClick)
+}
+
+/*
+ * The pressed look the moment a finger lands. Inside a scrolling screen clickable reports a
+ * press only once the scroll has stopped waiting for touch slop (AbstractClickableNode's
+ * delayPressInteraction, with no flag to turn it off in foundation 1.12), so a quick tap pressed
+ * nothing until it lifted. This reports its own press on the down, watching without consuming,
+ * and cancels it when the scroll takes the pointer; the click itself stays clickable's.
+ */
+private fun Modifier.pressOnDown(interaction: MutableInteractionSource) = pointerInput(interaction) {
+    awaitEachGesture {
+        // A down the scroll has taken never clicks, so it never looks pressed either
+        val down = awaitFirstDown(pass = PointerEventPass.Initial)
+        if (down.type == PointerType.Mouse && !currentEvent.buttons.isPrimaryPressed) return@awaitEachGesture
+        val press = PressInteraction.Press(down.position)
+        interaction.tryEmit(press)
+        var end: Interaction = PressInteraction.Cancel(press)
+        while (true) {
+            val change = awaitPointerEvent(PointerEventPass.Final).changes.firstOrNull { it.id == down.id } ?: break
+            if (change.changedToUpIgnoreConsumed()) {
+                end = PressInteraction.Release(press)
+                break
+            }
+            // A scroll consumes the moves it takes; the press was not one
+            if (change.isConsumed && change.positionChanged()) break
+        }
+        interaction.tryEmit(end)
+    }
 }
 
 // A move made with keys ticks (SegmentTick); focus that follows a touch does not
