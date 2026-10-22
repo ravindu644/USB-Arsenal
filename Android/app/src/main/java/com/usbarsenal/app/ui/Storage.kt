@@ -1,6 +1,9 @@
 package com.usbarsenal.app.ui
 
 import androidx.activity.compose.BackHandler
+import com.usbarsenal.app.lcd.LocalLcd
+import com.usbarsenal.app.lcd.Inverted
+import androidx.compose.foundation.background
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -64,10 +68,17 @@ private val MODE_LABELS = listOf("auto", "cd", "dvd", "disk", "rw")
 // "5.8G", "412M": binary units, as the files list and the drive show sizes
 fun sizeText(bytes: Long): String = if (bytes >= GIB) "%.1fG".format(Locale.ROOT, bytes.toDouble() / GIB) else "${bytes / MIB}M"
 
-// A warning only for a consequence (DESIGN.md): a CD-ROM past its limit, and a disk the host can write
-fun storageWarning(mode: String, bytes: Long?): String? = when {
-    mode == "cdrom" && bytes != null && bytes > CDROM_MAX -> "cd-rom stops at 2.36G. the host reads a truncated disc"
-    else -> null
+// A warning only for a consequence (DESIGN.md): a CD-ROM past its limit
+fun storageWarning(mode: String, bytes: Long?): String? =
+    "over 2.36G: the host reads a truncated disc".takeIf { mode == "cdrom" && bytes != null && bytes > CDROM_MAX }
+
+// What the host gets in each mode, so the wrong one is not picked: a dead or truncated drive
+fun modeHint(mode: String): String = when (mode) {
+    "auto" -> "disk if it has a partition table, else cd"
+    "cdrom" -> "read-only cd-rom, up to 2.36G"
+    "dvd" -> "read-only, 2048-byte sectors, any size"
+    "disk" -> "read-only disk"
+    else -> "writable disk, the host can change it"
 }
 
 // The Create sheet's size, in bytes; null for anything that is not a whole number above 0
@@ -111,11 +122,14 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
     var creating by rememberSaveable { mutableStateOf(false) }
     val shake = rememberShake()
     val fault = Gadget.fault?.takeIf { it.where == Fn.STORAGE }
+    // Which part the last command came from: its fault shakes and sits under that part
+    var fromDrive by remember { mutableStateOf(false) }
     LaunchedEffect(fault) { if (fault != null) shake.fire() }
 
     // Remembered only once it serves, so a refused image is not offered again at the next start
     fun serve(p: String, m: String) {
         val at = lun
+        fromDrive = false
         Gadget.run(Fn.STORAGE, "storage", "start", "--lun", "$at", "--mode", m, p) { if (it) Picks.set(context, Pick(at, m, p)) }
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -137,12 +151,15 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                 image = name?.let { DriveImage(it, file?.bytes?.let(::sizeText).orEmpty(), served?.mode ?: mode, served?.access ?: if (mode == "rw") "rw" else "ro") },
                 serving = served != null,
                 ejected = false,
+                modifier = if (fromDrive) Modifier.shake(shake) else Modifier,
                 onEject = {
                     val at = lun
+                    fromDrive = true
                     if (served == null) Picks.drop(context, at)
                     else Gadget.run(Fn.STORAGE, "storage", "eject", "--lun", "$at") { if (it) Picks.drop(context, at) }
                 },
             )
+            if (fromDrive) fault?.let { Fault(it.message, onLog = openLog) }
             if (path == null && files?.isEmpty() == true) {
                 // Nothing loaded and nothing to load: Pin asks for an image
                 Box(Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
@@ -152,7 +169,7 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                     }
                 }
                 Text("No image loaded", LcdType.labelStrong, Modifier.align(Alignment.CenterHorizontally))
-                fault?.let { Fault(it.message, onLog = openLog) }
+                if (!fromDrive) fault?.let { Fault(it.message, onLog = openLog) }
                 Box(Modifier.weight(1f))
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -160,9 +177,17 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                     Segs(MODE_LABELS, MODES.indexOf(mode).coerceAtLeast(0), { i ->
                         val m = MODES[i]
                         if (path != null) serve(path, m) else nextMode = m
-                    }, Modifier.shake(shake))
-                    fault?.let { Fault(it.message, onLog = openLog) }
-                    storageWarning(mode, file?.bytes)?.let { Warn(it) }
+                    }, if (fromDrive) Modifier else Modifier.shake(shake))
+                    if (!fromDrive) fault?.let { Fault(it.message, onLog = openLog) }
+                    // One line whatever the mode, so FILES never moves: the hint, or the warning in its place
+                    val warning = storageWarning(mode, file?.bytes)
+                    Inverted(warning != null) {
+                        Text(
+                            warning ?: modeHint(mode), LcdType.data,
+                            Modifier.bleed(10.dp).fillMaxWidth().background(LocalLcd.current.ground).padding(horizontal = 10.dp, vertical = 8.dp),
+                            maxLines = 1,
+                        )
+                    }
                 }
                 Column(Modifier.weight(1f).bleed(10.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     FilesHeader(IMAGES)

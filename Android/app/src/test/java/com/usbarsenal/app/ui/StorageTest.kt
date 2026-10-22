@@ -18,9 +18,16 @@ class StorageTest {
         // rw needs none: the segment and the drive's tag already say it
         assertNull(storageWarning("rw", 1L shl 30))
         // Over the CD-ROM limit only matters in cdrom mode; auto picks dvd for it
-        assertEquals("cd-rom stops at 2.36G. the host reads a truncated disc", storageWarning("cdrom", 5L shl 30))
+        assertEquals("over 2.36G: the host reads a truncated disc", storageWarning("cdrom", 5L shl 30))
         assertNull(storageWarning("cdrom", 1L shl 30))
         assertNull(storageWarning("auto", 5L shl 30))
+    }
+
+    // Each hint shares one line with the warning, so none may be longer than it
+    @Test
+    fun hintsFitTheLine() {
+        val line = storageWarning("cdrom", 5L shl 30)!!.length
+        listOf("auto", "cdrom", "dvd", "disk", "rw").forEach { assert(modeHint(it).length <= line) { it } }
     }
 
     @Test
