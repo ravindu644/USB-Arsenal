@@ -46,6 +46,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -100,7 +102,10 @@ fun Screen(bottomBar: (@Composable () -> Unit)? = null, content: @Composable Col
             .weight(1f)
             .fillMaxWidth()
             .then(if (bottomBar == null) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)) else Modifier)
-            .padding(start = Lcd.gutter, end = Lcd.gutter, top = Lcd.topInset, bottom = if (bottomBar == null) Lcd.gutter else Lcd.section),
+            .padding(start = Lcd.gutter, end = Lcd.gutter, top = Lcd.topInset, bottom = if (bottomBar == null) Lcd.gutter else Lcd.section)
+            // Behind an open sheet nothing takes focus: a key pressed there would act unseen
+            .focusProperties { onEnter = { if (SheetsOpen.count > 0) cancelFocusChange() } }
+            .focusGroup(),
         verticalArrangement = Arrangement.spacedBy(Lcd.section),
         content = content,
     )

@@ -42,6 +42,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.focusGroup
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.focus.focusProperties
@@ -373,6 +376,14 @@ fun ChoiceSheet(open: Boolean, title: String, options: List<String>, chosen: Str
     }
 
 /*
+ * How many sheets are open. Screen keeps focus out of its content while any is: after a touch
+ * nothing holds focus, and the first key would otherwise land on a control behind the scrim.
+ */
+object SheetsOpen {
+    var count by mutableIntStateOf(0)
+}
+
+/*
  * .sheet and .scrim: a short task over the screen. The screen behind is dithered, so it reads
  * as unavailable, and takes no touch; the sheet rises from the bottom in 4 frames (the scrim
  * on the first) and Back or [onDismiss] plays it in reverse. Its ground reaches under the
@@ -380,6 +391,11 @@ fun ChoiceSheet(open: Boolean, title: String, options: List<String>, chosen: Str
  */
 @Composable
 fun Sheet(open: Boolean, onDismiss: () -> Unit, entry: FocusRequester? = null, content: @Composable ColumnScope.() -> Unit) {
+    // While it is open, Screen lets no focus into the screen behind (see SheetsOpen)
+    DisposableEffect(open) {
+        if (open) SheetsOpen.count++
+        onDispose { if (open) SheetsOpen.count-- }
+    }
     val state = remember { MutableTransitionState(false) }
     state.targetState = open
     if (!state.currentState && !state.targetState) return
@@ -390,12 +406,13 @@ fun Sheet(open: Boolean, onDismiss: () -> Unit, entry: FocusRequester? = null, c
     val ink = LocalLcd.current.ink
     // Keys and pads work the sheet alone: focus moves into it as it opens and cannot leave for
     // the screen behind the scrim, where Enter would press something unseen. It lands on
-    // [entry], a key, so no field raises the keyboard unasked; without one, on the first control
+    // [entry], a key, so no field raises the keyboard unasked. After a touch no key can take
+    // focus, so the sheet itself holds it, and the next key steps to its first control
     val group = remember { FocusRequester() }
     LaunchedEffect(open) {
         if (open) {
             withFrameMillis {}
-            runCatching { (entry ?: group).requestFocus() }
+            runCatching { if (entry?.requestFocus(FocusDirection.Enter) != true) group.requestFocus() }
         }
     }
     Box(Modifier.fillMaxSize()) {
@@ -415,7 +432,7 @@ fun Sheet(open: Boolean, onDismiss: () -> Unit, entry: FocusRequester? = null, c
                 .padding(Lcd.gutter)
                 .focusRequester(group)
                 .focusProperties { onExit = { if (open) cancelFocusChange() } }
-                .focusGroup(),
+                .focusable(),
             verticalArrangement = Arrangement.spacedBy(Lcd.section),
             content = content,
         )
