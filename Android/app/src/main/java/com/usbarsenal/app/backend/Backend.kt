@@ -110,7 +110,9 @@ data class Capabilities(
 // An ejected LUN has an empty file, mode and access
 data class Lun(val lun: Int, val file: String, val mode: String, val access: String)
 
-data class HidNode(val function: String, val node: String)
+// [interval] is the poll interval exponent the function runs with, -1 where the kernel has no
+// control for it (stock f_hid keeps 1 ms) or the backend is older
+data class HidNode(val function: String, val node: String, val interval: Int = -1)
 
 data class Tether(
     val function: String,
@@ -161,7 +163,7 @@ fun parseStatus(json: String): GadgetStatus = with(JSONObject(json)) {
         storage = getJSONArray("storage").objects().map {
             Lun(it.getInt("lun"), it.getString("file"), it.getString("mode"), it.getString("access"))
         },
-        hid = getJSONArray("hid").objects().map { HidNode(it.getString("function"), it.getString("node")) },
+        hid = getJSONArray("hid").objects().map { HidNode(it.getString("function"), it.getString("node"), it.optInt("interval", -1)) },
         tether = if (isNull("tether")) null else getJSONObject("tether").run {
             Tether(
                 function = getString("function"),

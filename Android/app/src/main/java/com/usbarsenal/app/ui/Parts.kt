@@ -46,6 +46,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.usbarsenal.app.lcd.SpriteIcon
+import com.usbarsenal.app.lcd.Sprite
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.draw.drawBehind
@@ -247,6 +252,10 @@ fun Key(
     enabled: Boolean = true,
     // VirtualKey, unless DESIGN.md's haptics table names another effect for what the key does
     haptic: Haptics.() -> Unit = { keyPress() },
+    // Keys in a grid of many sit closer to their label; [icon] draws in place of it (arrows)
+    padding: Dp = 14.dp,
+    icon: Sprite? = null,
+    minHeight: Dp = Lcd.touch,
     onClick: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -267,11 +276,12 @@ fun Key(
             }
             .background(if (filled) c.ink else c.ground)
             .then(if (enabled) Modifier.border(Lcd.pixel, c.ink) else Modifier.dashedRect(c.ink, -Lcd.pixel))
-            .heightIn(min = Lcd.touch)
-            .padding(horizontal = 14.dp),
+            .heightIn(min = minHeight)
+            .padding(horizontal = padding)
+            .semantics { if (icon != null) contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Inverted(filled) { Text(label, LcdType.labelStrong) }
+        Inverted(filled) { if (icon != null) SpriteIcon(icon, 2.dp) else Text(label, LcdType.labelStrong, maxLines = 1) }
     }
 }
 

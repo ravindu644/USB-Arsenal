@@ -80,6 +80,7 @@ fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings
     LaunchedEffect(Unit) {
         Picks.load(context)
         TetherSetup.load(context)
+        HidSetup.load(context)
     }
     val picks = Picks.all
     val status = Gadget.status

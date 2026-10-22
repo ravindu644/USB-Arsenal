@@ -42,6 +42,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.runtime.DisposableEffect
@@ -331,6 +332,63 @@ fun Alert(label: String, fix: String, onClick: () -> Unit, modifier: Modifier = 
         Text(label, LcdType.labelStrong, Modifier.weight(1f))
         Text(fix, LcdType.data)
     }
+
+/*
+ * .card: a big way into a screen, in the drive panel's look: an inverted 40dp face with the
+ * name and `>`, over a body with the sprite and one line. The whole card is one key. It
+ * inverts while focused or held, and a tap keeps it inverted for 2 frames before the screen
+ * changes, so even a quick tap is seen to land.
+ */
+@Composable
+fun Card(label: String, line: String, icon: Sprite, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    val pressed by interaction.collectIsPressedAsState()
+    val haptics = LocalHaptics.current
+    val reduced = LocalReducedMotion.current
+    var opening by remember { mutableStateOf(false) }
+    val open by rememberUpdatedState(onOpen)
+    LaunchedEffect(opening) {
+        if (!opening) return@LaunchedEffect
+        if (!reduced) delay(2L * FRAME_MS)
+        opening = false
+        open()
+    }
+    val lit = focused || pressed || opening
+    Box(
+        modifier
+            .fillMaxWidth()
+            .lcdClickable(interaction, outline = false, role = Role.Button) {
+                haptics.keyPress()
+                opening = true
+            },
+    ) {
+        Inverted(lit) {
+            val c = LocalLcd.current
+            Column(Modifier.fillMaxWidth().background(c.ground).border(Lcd.pixel, c.ink).padding(Lcd.pixel)) {
+                // The face is the inverse of the card, whichever way the card is lit
+                Inverted {
+                    Row(
+                        Modifier.fillMaxWidth().height(40.dp).background(LocalLcd.current.ground).padding(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(label, LcdType.labelStrong)
+                        Text(">", LcdType.labelStrong)
+                    }
+                }
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 84.dp).padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SpriteIcon(icon, 4.dp)
+                    Text(line, LcdType.data)
+                }
+            }
+        }
+    }
+}
 
 /*
  * a.kv: a key-value row that opens something (Identity, Source, Fonts). It reaches 10dp past
