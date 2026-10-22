@@ -45,6 +45,21 @@ suspend fun readProfile(): Map<String, String> {
     return (keys + listOfNotNull(profile?.let { "profile" to it })).toMap()
 }
 
+// Whether Droidspaces is installed, and its running containers by name, which tether --gateway
+// takes; [running] is null when they could not be read, which is not the same as none
+data class Droidspaces(val installed: Boolean, val running: List<String>?)
+
+suspend fun readDroidspaces(): Droidspaces {
+    val r = Root.read("d=$DROIDSPACES; [ -x \$d ] || exit 3; \$d show --json")
+    if (r.code == 3) return Droidspaces(false, null)
+    return Droidspaces(true, if (r.ok) runCatching { parseContainers(r.out.joinToString("\n")) }.getOrNull() else null)
+}
+
+const val DROIDSPACES = "/data/local/Droidspaces/bin/droidspaces"
+
+fun parseContainers(json: String): List<String> =
+    JSONObject(json).optJSONArray("running")?.let { a -> (0 until a.length()).map { a.getJSONObject(it).getString("name") } }.orEmpty()
+
 suspend fun readStatus(): Result<GadgetStatus> = Root.read("$READ status --json").json(::parseStatus)
 
 // What su -v prints, as it prints it: "3.3.0:KernelSU" on the a166p

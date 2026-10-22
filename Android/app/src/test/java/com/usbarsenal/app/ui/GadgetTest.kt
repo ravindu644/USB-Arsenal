@@ -6,6 +6,7 @@ import com.usbarsenal.app.backend.HidNode
 import com.usbarsenal.app.backend.Lun
 import com.usbarsenal.app.backend.Probe
 import com.usbarsenal.app.backend.Tether
+import com.usbarsenal.app.backend.parseContainers
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -32,15 +33,13 @@ class GadgetTest {
     @Test
     fun offBusyAndMissing() {
         val idle = live.copy(bound = false, storage = emptyList(), hid = emptyList(), tether = null)
-        assertEquals("off" to "pick an image to start", rowLines(Fn.STORAGE, idle, caps(), null))
-        assertEquals("off" to "Win11.iso", rowLines(Fn.STORAGE, idle, caps(), null, "/sdcard/USB-Arsenal/Win11.iso"))
-        // NCM is a caveat on this kernel, so a start would bring up RNDIS
-        assertEquals("off" to "rndis · 192.168.42.129/24", rowLines(Fn.TETHER, idle, caps(), null))
+        // Off, a row says what the function does: its switch already says off
+        assertEquals("ISOs and disk images" to "as drives for the host", rowLines(Fn.STORAGE, idle, caps(), null))
+        assertEquals("this phone's internet" to "for the host, over USB", rowLines(Fn.TETHER, idle, caps(), null))
+        assertEquals("a keyboard and a mouse" to "for the host", rowLines(Fn.HID, idle, caps(), null))
         assertEquals("starting" to "hid start", rowLines(Fn.HID, idle, caps(), Busy(Fn.HID, "hid start", stopping = false)))
         // A path that ends in "stop" is still a start
         assertEquals("starting", rowLines(Fn.STORAGE, idle, caps(), Busy(Fn.STORAGE, "storage start /sdcard/backstop", stopping = false)).first)
-        // The profile's function and address, where it sets them
-        assertEquals("off" to "rndis · 10.0.0.1/24", rowLines(Fn.TETHER, idle, caps(), null, profile = mapOf("tether_function" to "rndis", "tether_address" to "10.0.0.1/24")))
         assertEquals("no hid in this kernel" to "CONFIG_USB_CONFIGFS_F_HID", rowLines(Fn.HID, idle, caps(Probe.MISSING), null))
     }
 
@@ -50,6 +49,12 @@ class GadgetTest {
         assertEquals("192.168.42.130", hostOf("192.168.42.129/24"))
         assertEquals("192.168.42.253", hostOf("192.168.42.254/24"))
         assertEquals(null, hostOf(""))
+        // As parse_address: no prefix is a /24; the network, the broadcast and leading zeros are not hosts
+        assertEquals("10.42.0.2", hostOf("10.42.0.1"))
+        assertEquals(null, hostOf("10.42.0.0/24"))
+        assertEquals(null, hostOf("10.42.0.255/24"))
+        assertEquals(null, hostOf("10.42.0.01/24"))
+        assertEquals(null, hostOf("10.42.0.1/31"))
         val gateway = live.copy(tether = live.tether!!.copy(address = "", gateway = true, gatewayContainer = "OpenWrt"))
         assertEquals("ncm usb0" to "gateway OpenWrt", rowLines(Fn.TETHER, gateway, caps(), null))
     }
@@ -61,16 +66,33 @@ class GadgetTest {
         assertEquals(listOf("tether", "start", "--rndis"), tetherArgs(TetherPlan(function = "rndis"), "rndis"))
         assertEquals(
             listOf("tether", "start", "--ncm", "--gateway", "OpenWrt", "--gateway-iface", "usb0"),
-            tetherArgs(TetherPlan(gateway = true, container = " OpenWrt ", iface = ""), "ncm"),
+            tetherArgs(TetherPlan(gateway = true, container = " OpenWrt ", address = "10.0.0.1/24"), "ncm"),
         )
+        assertEquals(
+            listOf("tether", "start", "--ncm", "--address", "10.42.0.1/24", "--dns", "9.9.9.9", "--upstream", "wlan0"),
+            tetherArgs(TetherPlan(address = "10.42.0.1/24", dns = "9.9.9.9", upstream = " wlan0"), "ncm"),
+        )
+        assertEquals(listOf("tether", "start", "--ncm", "--no-net"), tetherArgs(TetherPlan(net = false, address = "10.42.0.1/24"), "ncm"))
+        // A setup the backend would refuse cannot be started
+        assertEquals(false, TetherPlan(address = "10.42.0.1/33").ready())
+        assertEquals(false, TetherPlan(dns = "1.1.1.1; reboot").ready())
+        assertEquals(false, TetherPlan(gateway = true).ready())
+        assertEquals(true, TetherPlan(dns = "1.1.1.1, 8.8.8.8").ready())
+        // --no-net sends no address, so a half-typed one left behind cannot hold the start
+        assertEquals(true, TetherPlan(net = false, address = "10.42.0.").ready())
         // NCM picked on a kernel that cannot run it still starts RNDIS
         assertEquals("rndis", tetherFunction(TetherPlan(function = "ncm"), emptyMap(), caps()))
         assertEquals("ncm", tetherFunction(TetherPlan(), emptyMap(), caps().copy(ncm = Probe.OK)))
         assertEquals("rndis", tetherFunction(TetherPlan(), mapOf("tether_function" to "rndis"), caps().copy(ncm = Probe.OK)))
         // A kernel with NCM alone (no RNDIS past GKI 5.10) starts NCM whatever was picked
         assertEquals("ncm", tetherFunction(TetherPlan(function = "rndis"), emptyMap(), caps().copy(ncm = Probe.OK, rndis = Probe.MISSING)))
-        val idle = live.copy(bound = false, tether = null)
-        assertEquals("off" to "rndis · gateway OpenWrt", rowLines(Fn.TETHER, idle, caps(), null, tether = TetherPlan(gateway = true)))
+    }
+
+    @Test
+    fun droidspacesContainers() {
+        val json = """{"total":4,"running":[{"name":"Ubuntu 24.04","pid":10203},{"name":"OpenWrt","pid":4575}]}"""
+        assertEquals(listOf("Ubuntu 24.04", "OpenWrt"), parseContainers(json))
+        assertEquals(emptyList<String>(), parseContainers("""{"total":2,"running":[]}"""))
     }
 
     // L1 and R1 skip a ghosted option, and stop at the ends

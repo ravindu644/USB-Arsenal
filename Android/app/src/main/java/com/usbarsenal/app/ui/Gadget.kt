@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.usbarsenal.app.backend.Backend
@@ -62,6 +63,13 @@ object Gadget {
 
     // The installer's verdict on the backend, as Home last read it; null until it has
     var backend by mutableStateOf<Backend?>(null)
+
+    // What each function was last started with from here. Its setup now giving another start
+    // is what the rebind bar offers to apply. Kept for the process: a function the app did not
+    // start (the CLI, an earlier process) has none, and its changes wait for Home's switch.
+    // [rebinding] keeps the bar replugging across its stop and its start
+    val started = mutableStateMapOf<Fn, List<String>>()
+    var rebinding by mutableStateOf<Fn?>(null)
     var fault by mutableStateOf<Fault?>(null)
     val cli = mutableStateListOf<String>()
 
@@ -109,24 +117,53 @@ object Gadget {
     }
 }
 
-// Start or stop a function with what its screen set up: Home's row and the screen's title share it
+// The start a function's setup gives now
+fun setupArgs(fn: Fn): List<String> = when (fn) {
+    Fn.STORAGE -> startArgs(Picks.all)
+    Fn.TETHER -> tetherArgs(TetherSetup.plan, tetherFunction(TetherSetup.plan, Gadget.profile, Gadget.caps))
+    Fn.HID -> listOf("hid", "start")
+}
+
+// Whether what runs is not what the screen now sets up: the start that ran is compared, so an
+// edit made back again, or made while a start ran, is judged by what actually started
+fun pending(fn: Fn) = Gadget.status.isOn(fn) && Gadget.started[fn]?.let { it != setupArgs(fn) } == true
+
+// Start a function with what its screen set up, or stop it
 fun flip(fn: Fn, on: Boolean, onDone: (Boolean) -> Unit = {}) {
-    val verb = if (on) "start" else "stop"
-    when (fn) {
-        Fn.STORAGE -> if (on) Gadget.run(fn, *startArgs(Picks.all).toTypedArray(), onDone = onDone) else Gadget.run(fn, "storage", "stop", onDone = onDone)
-        Fn.TETHER -> if (on) {
-            Gadget.run(fn, *tetherArgs(TetherSetup.plan, tetherFunction(TetherSetup.plan, Gadget.profile, Gadget.caps)).toTypedArray(), onDone = onDone)
-        } else {
-            Gadget.run(fn, "tether", "stop", onDone = onDone)
-        }
-        Fn.HID -> Gadget.run(fn, "hid", verb, onDone = onDone)
+    val args = if (on) setupArgs(fn) else listOf(fn.name.lowercase(), "stop")
+    Gadget.run(fn, *args.toTypedArray()) { ok ->
+        if (ok && on) Gadget.started[fn] = args
+        if (ok && !on) Gadget.started.remove(fn)
+        onDone(ok)
     }
 }
 
-// Whether a start has anything to start: storage needs a pick, a gateway needs its container
+// Stop [fn] and start it again with its setup: one replug, and what runs is what was set
+fun rebind(fn: Fn) {
+    Gadget.rebinding = fn
+    Gadget.run(fn, fn.name.lowercase(), "stop") { ok ->
+        if (ok) flip(fn, true) { Gadget.rebinding = null } else Gadget.rebinding = null
+    }
+}
+
+// A function screen's bottom bar: the rebind key while its setup waits, Replugging while the
+// rebind runs, and nothing otherwise. It is held as Home's switches are
+@Composable
+fun rebindBar(fn: Fn): (@Composable () -> Unit)? {
+    val busy = Gadget.busy
+    val port = when {
+        Gadget.rebinding == fn -> Port.Replugging("usb-arsenal ${busy?.typed ?: "${fn.name.lowercase()} start"}")
+        pending(fn) -> Port.Pending
+        else -> return null
+    }
+    val can = busy == null && !Gadget.backend.holds() && startable(fn)
+    return { BottomBar(port, onStopAll = {}, onRebind = if (can) ({ rebind(fn) }) else null) }
+}
+
+// Whether a start has anything to start: storage needs a pick, tether a setup the backend takes
 fun startable(fn: Fn) = when (fn) {
     Fn.STORAGE -> Picks.all.isNotEmpty()
-    Fn.TETHER -> !TetherSetup.plan.gateway || TetherSetup.plan.container.isNotBlank()
+    Fn.TETHER -> TetherSetup.plan.ready()
     Fn.HID -> true
 }
 
@@ -134,14 +171,6 @@ fun startable(fn: Fn) = when (fn) {
 // than an update
 fun Backend?.holds() = this == null || (state != BackendState.READY && state != BackendState.UPDATE_AVAILABLE)
 
-// The switch on a function's title, held as Home's are and dead where the kernel lacks the
-// function. A command running does not disable it, which would take its focus: Gadget.run
-// refuses a second one
-@Composable
-fun FnSwitch(fn: Fn, modifier: Modifier = Modifier, onFlip: () -> Unit = {}) {
-    val on = Gadget.status.isOn(fn)
-    Dip(on, { onFlip(); flip(fn, it) }, fn.label, modifier, enabled = !Gadget.backend.holds() && Gadget.caps.has(fn) && (on || startable(fn)))
-}
 
 // Whether the kernel has the function at all; null caps (not read yet) counts as yes
 fun Capabilities?.has(fn: Fn) = this == null || when (fn) {
@@ -157,19 +186,10 @@ fun GadgetStatus?.isOn(fn: Fn) = this != null && when (fn) {
 }
 
 /*
- * A row's two status lines: live facts while on, what a start would give while off, why
- * while the kernel lacks the function, and the command while it runs. [pick] is Storage's
- * first remembered image, if any.
+ * A row's two status lines: live facts while on, what the function does while off (the
+ * switch already says off), why while the kernel lacks it, and the command while it runs.
  */
-fun rowLines(
-    fn: Fn,
-    status: GadgetStatus?,
-    caps: Capabilities?,
-    busy: Busy?,
-    pick: String? = null,
-    profile: Map<String, String> = emptyMap(),
-    tether: TetherPlan = TetherPlan(),
-): Pair<String, String> {
+fun rowLines(fn: Fn, status: GadgetStatus?, caps: Capabilities?, busy: Busy?): Pair<String, String> {
     if (!caps.has(fn)) {
         return when (fn) {
             Fn.STORAGE -> "no mass storage in this kernel" to "CONFIG_USB_CONFIGFS_MASS_STORAGE"
@@ -184,14 +204,12 @@ fun rowLines(
             val luns = status!!.storage.filter { it.file.isNotEmpty() }.map { "LUN${it.lun} ${it.file.substringAfterLast('/')} · ${it.mode}" }
             luns[0] to luns.drop(1).joinToString("  ")
         } else {
-            "off" to (pick?.substringAfterLast('/') ?: "pick an image to start")
+            "ISOs and disk images" to "as drives for the host"
         }
         Fn.TETHER -> {
             val t = status?.tether
             if (t == null) {
-                // What a start would bring up: Tether's setup, and the profile's address
-                val function = tetherFunction(tether, profile, caps)
-                "off" to "$function · " + if (tether.gateway) "gateway ${tether.container}" else profile["tether_address"] ?: DEFAULT_ADDRESS
+                "this phone's internet" to "for the host, over USB"
             } else {
                 val ip = t.address.substringBefore('/')
                 val line1 = hostOf(t.address)?.let { "${t.function} $ip → .${it.substringAfterLast('.')}" } ?: "${t.function} ${t.iface}"
@@ -208,7 +226,7 @@ fun rowLines(
             val node = { f: String -> status!!.hid.firstOrNull { it.function == f }?.node.orEmpty() }
             "keyboard ${node("keyboard")}" to "mouse ${node("mouse")}"
         } else {
-            "off" to "keyboard and 5-button mouse"
+            "a keyboard and a mouse" to "for the host"
         }
     }
 }
@@ -246,8 +264,29 @@ object Picks {
     private fun prefs(context: Context) = context.getSharedPreferences("storage", Context.MODE_PRIVATE)
 }
 
-// What Tether sets up for the next start; the function is null until picked there
-data class TetherPlan(val function: String? = null, val gateway: Boolean = false, val container: String = "OpenWrt", val iface: String = "usb0")
+/*
+ * What Tether sets up for the next start: every option `tether start` takes. The function is
+ * null until picked there; an empty address, DNS or upstream leaves it to the profile, or to
+ * the backend's default; [net] false is --no-net.
+ */
+data class TetherPlan(
+    val function: String? = null,
+    val gateway: Boolean = false,
+    val container: String = "",
+    val iface: String = "usb0",
+    val address: String = "",
+    val dns: String = "",
+    val upstream: String = "",
+    val net: Boolean = true,
+) {
+    // Whether the backend takes it as it stands, so a start cannot fail on the setup itself
+    // (--no-net sends none of the network fields, so they cannot stop it)
+    fun ready() = when {
+        gateway -> container.isNotBlank() && validIface(iface)
+        !net -> true
+        else -> (address.isBlank() || validAddress(address)) && (dns.isBlank() || validDns(dns)) && (upstream.isBlank() || validIface(upstream))
+    }
+}
 
 const val DEFAULT_ADDRESS = "192.168.42.129/24"
 
@@ -265,16 +304,25 @@ object TetherSetup {
             p.getBoolean("gateway", false),
             p.getString("container", null) ?: plan.container,
             p.getString("iface", null) ?: plan.iface,
+            p.getString("address", null).orEmpty(),
+            p.getString("dns", null).orEmpty(),
+            p.getString("upstream", null).orEmpty(),
+            p.getBoolean("net", true),
         )
     }
 
     fun set(context: Context, next: TetherPlan) {
+        if (next == plan) return
         plan = next
         prefs(context).edit {
             putString("function", next.function)
             putBoolean("gateway", next.gateway)
             putString("container", next.container)
             putString("iface", next.iface)
+            putString("address", next.address)
+            putString("dns", next.dns)
+            putString("upstream", next.upstream)
+            putBoolean("net", next.net)
         }
     }
 
@@ -299,10 +347,41 @@ fun tetherFunction(plan: TetherPlan, profile: Map<String, String>, caps: Capabil
 }
 
 // `tether start` for the setup, naming the function every time: without --ncm, a profile that
-// says RNDIS would win over Tether's pick
-fun tetherArgs(plan: TetherPlan, function: String): List<String> =
-    listOf("tether", "start", if (function == "rndis") "--rndis" else "--ncm") +
-        (if (plan.gateway) listOf("--gateway", plan.container.trim(), "--gateway-iface", plan.iface.trim().ifEmpty { "usb0" }) else emptyList())
+// says RNDIS would win over Tether's pick. A gateway takes no address, DNS or upstream: the
+// container serves its end of the cable
+fun tetherArgs(plan: TetherPlan, function: String): List<String> {
+    val args = mutableListOf("tether", "start", if (function == "rndis") "--rndis" else "--ncm")
+    fun opt(name: String, value: String) {
+        if (value.isNotBlank()) args += listOf(name, value.trim())
+    }
+    when {
+        plan.gateway -> {
+            args += listOf("--gateway", plan.container.trim())
+            opt("--gateway-iface", plan.iface)
+        }
+        !plan.net -> args += "--no-net"
+        else -> {
+            opt("--address", plan.address)
+            opt("--dns", plan.dns)
+            opt("--upstream", plan.upstream)
+        }
+    }
+    return args
+}
+
+private val OCTET = Regex("0|[1-9][0-9]?|1[0-9]{2}|2[0-4][0-9]|25[0-5]")
+
+// An IPv4 address as inet_pton reads it: four decimal octets, no leading zeros
+fun validIp(s: String) = s.split('.').let { p -> p.size == 4 && p.all { OCTET.matches(it) } }
+
+// As tether.c's parse_address: a host address with a /8 to /30 prefix (24 when left out)
+fun validAddress(cidr: String) = hostOf(cidr.trim()) != null
+
+// As config.c's ua_valid_dns: IPv4 addresses, comma-separated
+fun validDns(s: String) = s.split(',').filter { it.isNotEmpty() }.let { p -> p.isNotEmpty() && p.all { validIp(it.trim()) } }
+
+// An interface name the kernel takes: 1 to 15 characters, no slash or space
+fun validIface(s: String) = s.trim().length in 1..15 && s.trim().none { it == '/' || it.isWhitespace() }
 
 // `storage start` for every pick in one command: one replug however many LUNs
 fun startArgs(picks: List<Pick>): List<String> =
@@ -321,11 +400,16 @@ fun decodePicks(text: String): List<Pick> = text.lines().mapNotNull { line ->
  * or the one before when the next is the broadcast. Null for no address (gateway, --no-net).
  */
 fun hostOf(cidr: String): String? {
-    val ip = cidr.substringBefore('/').split('.').mapNotNull { it.toIntOrNull() }.takeIf { it.size == 4 } ?: return null
-    val prefix = cidr.substringAfter('/', "").toIntOrNull()?.takeIf { it in 8..30 } ?: return null
-    val n = ip.fold(0L) { a, b -> a * 256 + b }
+    val addr = cidr.substringBefore('/')
+    if (!validIp(addr)) return null
+    // No prefix is a /24, as parse_address takes it
+    val prefix = (if ('/' in cidr) cidr.substringAfter('/').toIntOrNull() else 24)?.takeIf { it in 8..30 } ?: return null
+    val n = addr.split('.').fold(0L) { a, b -> a * 256 + b.toLong() }
     val mask = (0xffffffffL shl (32 - prefix)) and 0xffffffffL
-    val bcast = (n and mask) or (mask.inv() and 0xffffffffL)
+    val net = n and mask
+    val bcast = net or (mask.inv() and 0xffffffffL)
+    // The phone cannot be the network or the broadcast, and the host's offer cannot be the network
     val offer = if (n + 1 < bcast) n + 1 else n - 1
+    if (n == net || n == bcast || offer == net) return null
     return (3 downTo 0).joinToString(".") { "${(offer shr (8 * it)) and 0xff}" }
 }

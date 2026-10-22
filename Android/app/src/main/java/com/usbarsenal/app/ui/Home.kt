@@ -14,6 +14,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.usbarsenal.app.lcd.LocalLcd
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
@@ -99,7 +102,7 @@ fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings
     val barShake = rememberShake()
     val wholeFault = Gadget.fault?.takeIf { it.where == null }
     LaunchedEffect(wholeFault) { if (wholeFault != null) barShake.fire() }
-    Screen(bottomBar = { BottomBar(port, { Gadget.run(null, "stop") }, Modifier.shake(barShake)) }) {
+    Screen(bottomBar = { BottomBar(port, { Gadget.run(null, "stop") { if (it) Gadget.started.clear() } }, Modifier.shake(barShake)) }) {
         Top {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Pin(2.dp)
@@ -108,12 +111,13 @@ fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings
             Text("v${BuildConfig.VERSION_NAME}", LcdType.data)
         }
         Text(if (up == 0) "idle" else "$up up", LcdType.hero)
-        Column(Modifier.bleed(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        val ink = LocalLcd.current.ink
+        Column(Modifier.bleed(10.dp)) {
             Fn.entries.forEachIndexed { i, fn ->
                 val shake = rememberShake()
                 val fault = Gadget.fault?.takeIf { it.where == fn }
                 LaunchedEffect(fault) { if (fault != null) shake.fire() }
-                val (l1, l2) = rowLines(fn, status, caps, busy, picks.firstOrNull()?.path, Gadget.profile, TetherSetup.plan)
+                val (l1, l2) = rowLines(fn, status, caps, busy)
                 val on = status.isOn(fn)
                 FunctionRow(
                     icon = when (fn) {
@@ -127,7 +131,12 @@ fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings
                     on = on,
                     onToggle = { flip(fn, it) },
                     onOpen = open(fn),
-                    modifier = Modifier.drawnFrom(i, shown).shake(shake).then(if (i == 0) Modifier.focusRequester(first) else Modifier),
+                    modifier = Modifier
+                        .drawnFrom(i, shown)
+                        // A rule over every row but the first; inside drawnFrom, so it comes in with its row
+                        .then(if (i > 0) Modifier.drawWithContent { drawContent(); drawRect(ink, size = Size(size.width, Lcd.pixel.toPx())) } else Modifier)
+                        .shake(shake)
+                        .then(if (i == 0) Modifier.focusRequester(first) else Modifier),
                     available = caps.has(fn),
                     // Storage starts from its picks; with none there is nothing to serve
                     enabled = !held && (on || startable(fn)),

@@ -90,11 +90,10 @@ fun modeHint(mode: String): String = when (mode) {
 fun createBytes(size: String, gb: Boolean): Long? = size.trim().toLongOrNull()?.takeIf { it > 0 }?.times(if (gb) GIB else MIB)
 
 /*
- * Storage: a drive per LUN. The strip picks the LUN, the drive shows what it serves, the mode
- * segments say how the host sees it, and the files in /sdcard/USB-Arsenal load into it.
- * The title's switch is Home's: off, picks and modes only build the setup it starts, every
- * LUN in one start; on, a pick or a mode goes live at once (swapped in place, or a replug on a
- * type change). Every pick is remembered.
+ * Storage: a drive per LUN. The strip picks the LUN, the drive shows what is picked for it
+ * (its LED, whether that LUN is live), the mode segments say how the host will see it, and
+ * the files in /sdcard/USB-Arsenal load into it. It only builds the setup Home's switch
+ * starts, every LUN in one start; a change while storage runs waits for the rebind bar.
  */
 @Composable
 fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
@@ -102,6 +101,7 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
     PollStatus()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val live = Gadget.status?.storage.orEmpty().filter { it.file.isNotEmpty() }
     LaunchedEffect(Unit) { Picks.load(context) }
     var dir by remember { mutableStateOf(IMAGES) }
     var files by remember { mutableStateOf<List<ImageFile>?>(null) }
@@ -112,36 +112,24 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
         files = listImages(dir)
         free = freeBytes()
     }
-    val live = Gadget.status?.storage.orEmpty().filter { it.file.isNotEmpty() }
     val picks = Picks.all
     var lun by rememberSaveable { mutableIntStateOf(0) }
     // Every LUN that serves or has a pick, and the one being added
     val count = ((live.map { it.lun } + picks.map { it.lun } + lun).max() + 1).coerceAtMost(8)
     val served = live.firstOrNull { it.lun == lun }
     val pick = picks.firstOrNull { it.lun == lun }
-    val path = served?.file ?: pick?.path
+    val path = pick?.path
     val name = path?.substringAfterLast('/')
     val file = files?.firstOrNull { it.path == path }
     // Before anything is picked, the mode is the one the next pick will take
     var nextMode by rememberSaveable { mutableStateOf("auto") }
-    val mode = pick?.mode ?: served?.mode ?: nextMode
+    val mode = pick?.mode ?: nextMode
     var creating by rememberSaveable { mutableStateOf(false) }
     val shake = rememberShake()
     val fault = Gadget.fault?.takeIf { it.where == Fn.STORAGE }
-    // Which part the last command came from: its fault shakes and sits under that part
-    var from by remember { mutableStateOf(From.MODE) }
-    val on = Gadget.status.isOn(Fn.STORAGE)
     LaunchedEffect(fault) { if (fault != null) shake.fire() }
 
-    // Off, a pick only joins the setup the switch starts. On, it goes live at once, swapped
-    // into its drive like a disc, and is remembered only once it serves, so a refused image is
-    // not offered again at the next start
-    fun serve(p: String, m: String) {
-        val at = lun
-        from = From.MODE
-        if (!on) return Picks.set(context, Pick(at, m, p))
-        Gadget.run(Fn.STORAGE, "storage", "start", "--lun", "$at", "--mode", m, p) { if (it) Picks.set(context, Pick(at, m, p)) }
-    }
+    fun serve(p: String, m: String) = Picks.set(context, Pick(lun, m, p))
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             scope.launch {
@@ -152,25 +140,18 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
     }
 
     Box(Modifier.fillMaxSize()) {
-        Screen {
+        Screen(bottomBar = rebindBar(Fn.STORAGE)) {
             Top { BackKey() }
-            Title("Storage") { FnSwitch(Fn.STORAGE, if (from == From.TITLE) Modifier.shake(shake) else Modifier) { from = From.TITLE } }
-            if (from == From.TITLE) fault?.let { Fault(it.message, onLog = openLog) }
+            Title("Storage")
+            fault?.let { Fault(it.message, onLog = openLog, modifier = Modifier.shake(shake)) }
             LunStrip(count, lun, { lun = it }, { lun = count })
             Drive(
                 lun,
-                image = name?.let { DriveImage(it, file?.bytes?.let(::sizeText).orEmpty(), served?.mode ?: mode, served?.access ?: if (mode == "rw") "rw" else "ro") },
+                image = name?.let { DriveImage(it, file?.bytes?.let(::sizeText).orEmpty(), mode, if (mode == "rw") "rw" else "ro") },
                 serving = served != null,
                 ejected = false,
-                modifier = if (from == From.DRIVE) Modifier.shake(shake) else Modifier,
-                onEject = {
-                    val at = lun
-                    from = From.DRIVE
-                    if (served == null) Picks.drop(context, at)
-                    else Gadget.run(Fn.STORAGE, "storage", "eject", "--lun", "$at") { if (it) Picks.drop(context, at) }
-                },
+                onEject = { Picks.drop(context, lun) },
             )
-            if (from == From.DRIVE) fault?.let { Fault(it.message, onLog = openLog) }
             if (path == null && files?.isEmpty() == true) {
                 // Nothing loaded and nothing to load: Pin asks for an image
                 Box(Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
@@ -180,7 +161,6 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                     }
                 }
                 Text("No image loaded", LcdType.labelStrong, Modifier.align(Alignment.CenterHorizontally))
-                if (from == From.MODE) fault?.let { Fault(it.message, onLog = openLog) }
                 Box(Modifier.weight(1f))
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -188,8 +168,7 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                     Segs(MODE_LABELS, MODES.indexOf(mode).coerceAtLeast(0), { i ->
                         val m = MODES[i]
                         if (path != null) serve(path, m) else nextMode = m
-                    }, if (from == From.MODE) Modifier.shake(shake) else Modifier)
-                    if (from == From.MODE) fault?.let { Fault(it.message, onLog = openLog) }
+                    })
                     // One line whatever the mode, so FILES never moves: the hint, or the warning in its place
                     val warning = storageWarning(mode, file?.bytes)
                     Inverted(warning != null) {
@@ -203,9 +182,8 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                 Column(Modifier.weight(1f).bleed(10.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     FilesHeader(IMAGES)
                     files.orEmpty().forEach { f ->
-                        // A file another LUN serves or holds is tagged with it and cannot be picked
-                        val other = (live.filter { it.lun != lun }.map { it.lun to it.file } + picks.filter { it.lun != lun }.map { it.lun to it.path })
-                            .firstOrNull { it.second == f.path }?.first
+                        // A file another LUN holds is tagged with it and cannot be picked
+                        val other = picks.firstOrNull { it.lun != lun && it.path == f.path }?.lun
                         FileRow(f.name, sizeText(f.bytes), other?.let { "lun$it" }, selected = f.path == path, onPick = { serve(f.path, mode) })
                     }
                 }
@@ -222,9 +200,6 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
         }
     }
 }
-
-// Where on Storage a command came from
-private enum class From { TITLE, DRIVE, MODE }
 
 /*
  * Create: a new image in the folder, served read-write on this LUN once it exists. Sparse is
