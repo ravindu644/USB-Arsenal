@@ -300,10 +300,20 @@ void ua_status_hid(const struct ua_gadget *g, int json) {
     if (find_node(g, fns[i].func, node, sizeof(node)) < 0)
       node[0] = '\0';
     if (json) {
+      /* The poll interval the function runs with; -1 where the kernel has no
+       * control for it (stock f_hid), so a client shows what the host gets */
+      char dir[PATH_MAX], p[PATH_MAX + 16], v[16] = "";
+      long interval = -1;
+      if (ua_gadget_func_dir(g, fns[i].func, dir, sizeof(dir)) == 0) {
+        snprintf(p, sizeof(p), "%s/interval", dir);
+        if (read_file(p, v, sizeof(v)) > 0)
+          interval = strtol(v, NULL, 10);
+      }
       int first = 1;
       printf("%s{", sep++ ? "," : "");
       ua_json_str("function", fns[i].label, &first);
       ua_json_str("node", node, &first);
+      ua_json_int("interval", interval, &first);
       printf("}");
     } else {
       printf("HID:        %-8s %s\n", fns[i].label,
