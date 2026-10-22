@@ -104,6 +104,12 @@ object Gadget {
     // Commands outlive the screen that started them, as the install does
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    // After an identity command, so every screen shows the profile now in force
+    fun reloadProfile() {
+        // A read that fails keeps what was known, rather than showing Built-in for it
+        scope.launch { readProfile().takeIf { it.isNotEmpty() }?.let { profile = it } }
+    }
+
     // A status that cannot be read is not shown: claiming a gadget is still bound would be worse
     suspend fun refresh() {
         status = readStatus().getOrNull()
@@ -265,21 +271,27 @@ private fun applyNote(fn: Fn) = when (fn) {
 @Composable
 fun UnappliedSheet(fn: Fn, back: () -> Unit) {
     val context = LocalContext.current
+    NotAppliedSheet(pending(fn) && Gadget.applying != fn, applyNote(fn), canApply(fn), { discard(context, fn) }, { apply(fn) }, back)
+}
+
+// The sheet itself, for anything whose change waits on the gadget: Identity's profile too
+@Composable
+fun NotAppliedSheet(pending: Boolean, note: String, canApply: Boolean, onDiscard: () -> Unit, onApply: () -> Unit, back: () -> Unit) {
     var asking by rememberSaveable { mutableStateOf(false) }
     val discardKey = remember { FocusRequester() }
-    BackHandler(enabled = pending(fn) && Gadget.applying != fn) { asking = true }
+    BackHandler(enabled = pending) { asking = true }
     Sheet(asking, onDismiss = { asking = false }, entry = discardKey) {
         Title("Not applied")
-        Note(applyNote(fn))
+        Note(note)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Lcd.tight)) {
             Key("Discard", Modifier.weight(1f).focusRequester(discardKey)) {
                 asking = false
-                discard(context, fn)
+                onDiscard()
                 back()
             }
-            Key("Apply", Modifier.weight(1f), primary = true, enabled = canApply(fn)) {
+            Key("Apply", Modifier.weight(1f), primary = true, enabled = canApply) {
                 asking = false
-                apply(fn)
+                onApply()
                 back()
             }
         }
@@ -514,6 +526,28 @@ fun validDns(s: String) = s.split(',').filter { it.isNotEmpty() }.let { p -> p.i
 
 // An interface name the kernel takes: 1 to 15 characters, no slash or space
 fun validIface(s: String) = s.trim().length in 1..15 && s.trim().none { it == '/' || it.isWhitespace() }
+
+/*
+ * Identity's pick: the profile the screen has chosen, a canonical path, or null for the built-in
+ * defaults; and whether the running profile's file was edited since it was set. Not stored: the
+ * backend's link is what persists, and [chosen] starts at it.
+ */
+object IdentitySetup {
+    var chosen by mutableStateOf<String?>(null)
+    var edited by mutableStateOf(false)
+
+    // The running profile's file as it was before an edit made while bound, for Discard
+    var undo: Pair<String, String>? = null
+}
+
+// The profile `identity show` says is in force; null for the built-in defaults
+fun activeProfile(profile: Map<String, String>): String? = profile["profile"]?.takeIf { it.isNotEmpty() && it != "built-in defaults" }
+
+// The name Settings shows for it: the file's, without .conf
+fun profileName(profile: Map<String, String>) = activeProfile(profile)?.substringAfterLast('/')?.removeSuffix(".conf") ?: "Built-in"
+
+// A pick waits only while the host sees the gadget: otherwise it is set at once, with no replug
+fun identityPending(bound: Boolean, chosen: String?, active: String?, edited: Boolean) = bound && (chosen != active || edited)
 
 const val DEFAULT_INTERVAL = 4
 

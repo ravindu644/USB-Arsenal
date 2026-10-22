@@ -183,6 +183,8 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                         )
                     }
                 }
+                // The drive and its mode above, the folder to load from below
+                Rule()
                 Column(Modifier.weight(1f).bleed(10.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     FilesHeader(IMAGES)
                     files.orEmpty().forEach { f ->

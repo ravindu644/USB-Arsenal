@@ -3,6 +3,7 @@ package com.usbarsenal.app.ui
 import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -23,7 +24,6 @@ import androidx.core.net.toUri
 import com.usbarsenal.app.BuildConfig
 import com.usbarsenal.app.backend.Backend
 import com.usbarsenal.app.backend.BackendState
-import com.usbarsenal.app.backend.MODULE
 import com.usbarsenal.app.backend.RootResult
 import com.usbarsenal.app.backend.backendState
 import com.usbarsenal.app.backend.daemonMode
@@ -39,28 +39,18 @@ import kotlinx.coroutines.withContext
 
 private const val SOURCE = "github.com/ravindu644/USB-Arsenal"
 
-private fun stateWords(b: BackendState) = when (b) {
-    BackendState.READY -> "ready"
-    BackendState.UPDATE_AVAILABLE -> "update available"
-    BackendState.NOT_INSTALLED -> "not installed"
-    BackendState.MODULE_MISSING -> "module missing"
-    BackendState.CORRUPTED -> "broken"
-    BackendState.NO_ROOT -> "no root"
-}
-
-// "1d6b:0104 · pixel": the IDs the host sees, and the profile they come from
-// Nothing when identity show could not be read: the row shows only what the backend said
-private fun identityWords(p: Map<String, String>): String {
-    val vid = p["id_vendor"] ?: return ""
-    val pid = p["id_product"] ?: return ""
-    val name = p["profile"]?.takeIf { it != "built-in defaults" }?.substringAfterLast('/')?.removeSuffix(".conf") ?: "built-in"
-    return "${vid.removePrefix("0x")}:${pid.removePrefix("0x")} · $name"
+// A section after the first: a rule, then its heading
+@Composable
+private fun Section(label: String) {
+    Rule(Modifier.padding(vertical = 10.dp))
+    Group(label)
 }
 
 /*
- * Settings: the app's own switches (motion, haptics), the identity the host sees, the backend
- * (its state, daemon mode and the PATH link, both read at the next boot, and Reinstall), and
- * what the app is. Daemon mode and the PATH link are Droidspaces' switches, done the same way.
+ * Settings, in sections parted by rules: App (motion, haptics), Identity (the profile in force,
+ * opening Identity), Backend (daemon mode and the PATH link, both read at the next boot, and
+ * Reinstall), Credits (the fonts) and About. Daemon mode and the PATH link are Droidspaces'
+ * switches, done the same way.
  */
 @Composable
 fun SettingsScreen(back: () -> Unit, openIdentity: (() -> Unit)?, openFonts: () -> Unit, fix: (Backend) -> Unit) {
@@ -71,6 +61,8 @@ fun SettingsScreen(back: () -> Unit, openIdentity: (() -> Unit)?, openFonts: () 
     var backend by remember { mutableStateOf<Backend?>(null) }
     var daemon by remember { mutableStateOf<Boolean?>(null) }
     var linked by remember { mutableStateOf<Boolean?>(null) }
+    // Either switch changed on this visit: it takes effect at the next boot, which is worth saying
+    var changed by remember { mutableStateOf(false) }
     // A switch whose write failed shakes, and stderr's last line sits under it
     var fault by remember { mutableStateOf<String?>(null) }
     val shake = rememberShake()
@@ -79,12 +71,13 @@ fun SettingsScreen(back: () -> Unit, openIdentity: (() -> Unit)?, openFonts: () 
         backend = backendState(context)
         daemon = daemonMode()
         linked = pathLinked()
-        Gadget.profile = readProfile()
+        readProfile().takeIf { it.isNotEmpty() }?.let { Gadget.profile = it }
     }
     fun write(r: RootResult, done: () -> Unit) {
         fault = null
         if (r.ok) {
             done()
+            changed = true
         } else {
             fault = r.err.lastOrNull() ?: "[-] Failed (exit ${r.code})"
             shake.fire()
@@ -94,14 +87,15 @@ fun SettingsScreen(back: () -> Unit, openIdentity: (() -> Unit)?, openFonts: () 
     Screen {
         Top { BackKey() }
         Title("Settings")
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Group("App")
             Kv("Motion") { Dip(switches.motion, { switches.motion = it }, "Motion") }
             Kv("Haptics") { Dip(switches.haptics, { switches.haptics = it }, "Haptics") }
-            LinkRow("Identity", identityWords(Gadget.profile), openIdentity)
 
-            Group("Backend")
-            Kv("State", fact = true) { Text(backend?.let { stateWords(it.state) } ?: "", LcdType.data) }
-            Kv("Where", fact = true) { Marquee(MODULE, LcdType.data, Modifier.weight(1f), end = true) }
+            Section("Identity")
+            LinkRow(profileName(Gadget.profile), "", openIdentity)
+
+            Section("Backend")
             // Both write a file the boot module reads; a switch that cannot be read is dead
             Column(Modifier.shake(shake)) {
                 Kv("Daemon mode") {
@@ -113,18 +107,19 @@ fun SettingsScreen(back: () -> Unit, openIdentity: (() -> Unit)?, openFonts: () 
                 }
             }
             fault?.let { Fault(it, onLog = null) }
-            Note("both apply from the next boot")
+            if (changed) Warn("both apply from the next boot")
             Key("Reinstall", Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp), enabled = backend != null) {
                 backend?.let(fix)
             }
 
-            Group("About")
+            Section("Credits")
+            LinkRow("Fonts", "SIL OFL 1.1", openFonts)
+
+            Section("About")
             Kv("App", fact = true) { Text(BuildConfig.VERSION_NAME, LcdType.data) }
             LinkRow("Source", SOURCE, onClick = {
                 context.startActivity(Intent(Intent.ACTION_VIEW, "https://$SOURCE".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             })
-            Kv("Licence", fact = true) { Text("GPL-3.0-or-later", LcdType.data) }
-            LinkRow("Fonts", "SIL OFL 1.1", openFonts)
         }
     }
 }

@@ -138,6 +138,8 @@ body{margin:0}
 /* Bottom sheet. The screen behind is shaded with dither, never a grey */
 .scrim{position:absolute;inset:0;z-index:5;background-image:repeating-conic-gradient(var(--ink) 0 25%,transparent 0 50%);background-size:4px 4px}
 /* A choice: a.kv opens a sheet of these rows, the chosen one .on; with none, one .ghost line */
+/* A rule between a screen's sections, as between Home's rows: 2px of ink across the bleed */
+.rule{height:2px;margin:0 -10px;background:var(--ink)}
 /* A card: the drive panel's face and body, one key into a screen; lit while held */
 .card{all:unset;box-sizing:border-box;display:flex;flex-direction:column;border:2px solid var(--ink);cursor:pointer}
 .card .face{justify-content:space-between;padding:0 12px;font-weight:700}

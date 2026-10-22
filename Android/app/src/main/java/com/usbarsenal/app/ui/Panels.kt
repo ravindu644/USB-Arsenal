@@ -125,12 +125,13 @@ fun Drive(lun: Int, image: DriveImage?, serving: Boolean, ejected: Boolean, onEj
 
 // FILES and the folder the list reads
 @Composable
-fun FilesHeader(path: String, modifier: Modifier = Modifier) = Row(
+fun FilesHeader(path: String, modifier: Modifier = Modifier, label: String = "Files") = Row(
     modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 4.dp),
-    horizontalArrangement = Arrangement.SpaceBetween,
+    horizontalArrangement = Arrangement.spacedBy(Lcd.tight),
 ) {
-    Text("Files", LcdType.labelStrong)
-    Text(path, LcdType.data)
+    Text(label, LcdType.labelStrong)
+    // A path longer than the room left slides; it never wraps under the label
+    Marquee(path, LcdType.data, Modifier.weight(1f), end = true)
 }
 
 /*

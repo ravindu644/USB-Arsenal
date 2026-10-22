@@ -507,3 +507,9 @@ Tick a box only when the item is merged and verified as described in its phase.
   applies as `hid start --interval 5`.
 - 2026-10-23: `status --json` gives each HID function's `interval`, or `-1` on a stock f_hid
   with no control for it, so the app shows the period the host really gets.
+- 2026-10-23: the app's Identity (E7): profiles in `/sdcard/USB-Arsenal/Profiles` made with
+  `identity generate` and edited in place through a rename, picked with `identity set`/`unset`
+  (at once off the bus, through the Not applied sheet while bound), and Settings regrouped
+  into sections parted by rules. Verified on the a166p: a created profile is what
+  `identity show` reports, and an apply while bound moves the PC's `lsusb` from
+  `18d1:4ee7` to `1d6b:0104`.
