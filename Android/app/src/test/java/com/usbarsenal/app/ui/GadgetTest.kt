@@ -54,6 +54,15 @@ class GadgetTest {
         assertEquals("ncm usb0" to "gateway OpenWrt", rowLines(Fn.TETHER, gateway, caps(), null))
     }
 
+    // L1 and R1 skip a ghosted option, and stop at the ends
+    @Test
+    fun shoulderSkipsGhosted() {
+        val noNcm = { i: Int -> i != 0 }
+        assertEquals(null, nextEnabled(1, -1, 2, noNcm))
+        assertEquals(2, nextEnabled(0, 1, 3) { it != 1 })
+        assertEquals(null, nextEnabled(2, 1, 3) { true })
+    }
+
     @Test
     fun picksStartInOneCommand() {
         val picks = listOf(Pick(1, "rw", "/sdcard/USB-Arsenal/pen drive.img"), Pick(0, "auto", "/sdcard/USB-Arsenal/a.iso"))

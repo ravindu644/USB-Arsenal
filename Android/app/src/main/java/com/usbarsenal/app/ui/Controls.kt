@@ -138,11 +138,13 @@ fun Segs(
     modifier: Modifier = Modifier,
     cell: Dp? = null,
     steps: Int = options.size,
+    // An option the kernel cannot honour: ghosted, never picked or focused, skipped by L1 and R1
+    enabled: (Int) -> Boolean = { true },
 ) {
     val ink = LocalLcd.current.ink
     val haptics = LocalHaptics.current
     fun pick(i: Int) {
-        if (i == selected || i !in options.indices) return
+        if (i == selected || i !in options.indices || !enabled(i)) return
         haptics.tick()
         onSelect(i)
     }
@@ -152,35 +154,40 @@ fun Segs(
             .border(Lcd.pixel, ink)
             .padding(Lcd.pixel)
             .selectableGroup()
-            .shoulderStep { if (selected + it in 0 until steps) pick(selected + it) },
+            .shoulderStep { d -> nextEnabled(selected, d, steps, enabled)?.let(::pick) },
     ) {
         options.forEachIndexed { i, label ->
             if (i > 0) Box(Modifier.width(Lcd.pixel).fillMaxHeight().background(ink))
-            Seg(label, i == selected, if (cell != null) Modifier.width(cell) else Modifier.weight(1f)) { pick(i) }
+            Seg(label, i == selected, enabled(i), if (cell != null) Modifier.width(cell) else Modifier.weight(1f)) { pick(i) }
         }
     }
 }
 
 @Composable
-private fun Seg(label: String, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun Seg(label: String, on: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val body = @Composable {
+        val ground = LocalLcd.current.ground
         Box(
-            Modifier.fillMaxWidth().heightIn(min = Lcd.touch).background(LocalLcd.current.ground).padding(horizontal = 4.dp),
+            Modifier.fillMaxWidth().heightIn(min = Lcd.touch).background(ground).padding(horizontal = 4.dp),
             contentAlignment = Alignment.Center,
-        ) { Text(label, LcdType.labelStrong, maxLines = 1) }
+        ) { Text(label, LcdType.labelStrong, if (enabled) Modifier else Modifier.ghost(ground), maxLines = 1) }
     }
     // Drawn above its neighbours while focused, so the next cell's ground does not cover the dashed cursor
     Box(
         modifier
             .zIndex(if (focused) 1f else 0f)
-            .lcdClickable(interaction, outline = on, role = Role.RadioButton, onClick = onClick)
+            .lcdClickable(interaction, outline = on, role = Role.RadioButton, enabled = enabled, onClick = onClick)
             .semantics { selected = on },
     ) {
         Inverted(on || focused, body)
     }
 }
+
+// The next option a shoulder key lands on from [from], stepping by [d] past the ghosted ones
+fun nextEnabled(from: Int, d: Int, steps: Int, enabled: (Int) -> Boolean): Int? =
+    generateSequence(from + d) { it + d }.takeWhile { it in 0 until steps }.firstOrNull(enabled)
 
 // .luns: 0 to 7, then + to add one while there are fewer than eight. L1 and R1 never land on +
 @Composable
@@ -268,7 +275,8 @@ fun FunctionRow(
                 },
                 verticalArrangement = Arrangement.spacedBy(Lcd.lines),
             ) {
-                Text(label, LcdType.labelStrong)
+                // The > says the row opens a screen; the switch is only its quick way on and off
+                Text(if (onOpen != null) "$label >" else label, LcdType.labelStrong)
                 Marquee(line1, LcdType.data, Modifier.fillMaxWidth())
                 Marquee(line2, LcdType.data, Modifier.fillMaxWidth())
             }

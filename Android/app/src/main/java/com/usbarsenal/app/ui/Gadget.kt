@@ -1,6 +1,8 @@
 package com.usbarsenal.app.ui
 
 import android.content.Context
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -100,6 +102,26 @@ object Gadget {
             onDone(r.ok)
         }
     }
+}
+
+// Start or stop a function with what its screen set up: Home's row and the screen's title share it
+fun flip(fn: Fn, on: Boolean, onDone: (Boolean) -> Unit = {}) {
+    val verb = if (on) "start" else "stop"
+    when (fn) {
+        Fn.STORAGE -> if (on) Gadget.run(fn, *startArgs(Picks.all).toTypedArray(), onDone = onDone) else Gadget.run(fn, "storage", "stop", onDone = onDone)
+        Fn.TETHER -> Gadget.run(fn, "tether", verb, onDone = onDone)
+        Fn.HID -> Gadget.run(fn, "hid", verb, onDone = onDone)
+    }
+}
+
+// Whether a start has anything to start: storage needs a pick
+fun startable(fn: Fn) = fn != Fn.STORAGE || Picks.all.isNotEmpty()
+
+// The switch on a function's title: held while a command runs, dead where the kernel lacks it
+@Composable
+fun FnSwitch(fn: Fn, modifier: Modifier = Modifier, onFlip: () -> Unit = {}) {
+    val on = Gadget.status.isOn(fn)
+    Dip(on, { onFlip(); flip(fn, it) }, fn.label, modifier, enabled = Gadget.busy == null && Gadget.caps.has(fn) && (on || startable(fn)))
 }
 
 // Whether the kernel has the function at all; null caps (not read yet) counts as yes
