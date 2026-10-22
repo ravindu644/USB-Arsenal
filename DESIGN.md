@@ -308,15 +308,16 @@ Screen anatomy, top to bottom:
    (200px for a shell).
 4. **Bottom keys**, a two-column grid of `key`s, or Home's bottom bar.
 
-When the window is too short for a screen (landscape, split screen, a large font), the screen
+In landscape the content keeps clear of the cutout and the navigation bar, while Home's bottom
+bar still runs edge to edge, its content inset. When the window is too short for a screen (landscape, split screen, a large font), the screen
 scrolls as one page: the top bar and title scroll away with the content, and the bottom keys
 stay pinned above the navigation bar, as a sheet's do. A tall window shows the screen exactly
 as drawn, with no scroll. Home's Log and Settings keys belong to the content (they sit under
 the rows), so they scroll with it.
 
 ### Scrollbar (`.scrollbar`)
-Anything that scrolls shows a 4px ink thumb, 8px in from the screen's right edge, in the gutter
-outside a row's bleed; inside a terminal it is amber. Its length is the share of the content in
+Anything that scrolls shows a 4px ink thumb, 4px from the screen's right edge, in the gutter
+clear of a row's or a rule's 10px bleed; inside a terminal it is amber. Its length is the share of the content in
 view (24px at least), it is drawn on the pixel grid, and it shows only while there is more to
 scroll. It never moves on its own, so reduced motion leaves it as is.
 
@@ -582,7 +583,7 @@ Interaction motion:
 | --- | --- | --- |
 | Screen change | 4 (160ms) | The LCD redraw: the new screen paints in four horizontal bands, top to bottom. Back paints bottom to top. The old screen stays drawn underneath but takes no touch, and focus leaves it |
 | Typing | 2 per 3 characters | Whatever a person would type (titles, shell commands) types 3 characters every 2 frames, with the cursor at its end. A title types on each time its screen is drawn; the cursor's place is kept so it never re-wraps |
-| Key press | 1 | Down 4px into its shadow on press, back on release |
+| Key press | 1 | Down 4px into its shadow on press, back on release, held 2 frames at least so a quick tap always shows it (a pressed row or card likewise) |
 | DIP switch | 1 | The knob snaps to the other side. No slide |
 | Focus cursor | 0 | Inversion moves to the focused element on the next frame |
 | Rows typing on | 1 per row | On first entry to a list, rows appear one per frame, six at most, then the rest at once |

@@ -17,6 +17,17 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.Role
+import android.os.SystemClock
+import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /*
  * Focusable and pressable from touch, Enter and D-pad center, all handled by clickable.
@@ -69,4 +80,39 @@ fun Modifier.backKeys(dispatcher: OnBackPressedDispatcher?) = onPreviewKeyEvent 
     if (dispatcher == null || (it.key != Key.Escape && it.key != Key.Back)) return@onPreviewKeyEvent false
     if (it.type == KeyEventType.KeyUp) dispatcher.onBackPressed()
     true
+}
+
+/*
+ * Pressed, held for two frames at least. In a scrolling screen Compose holds a touch's press
+ * back until it knows the touch is not a scroll, so a quick tap reports its press and release
+ * together as it lifts, and the pressed look would never draw. Held, every tap shows it.
+ */
+@Composable
+fun InteractionSource.collectIsPressedHeld(): State<Boolean> {
+    val held = remember { mutableStateOf(false) }
+    LaunchedEffect(this) {
+        val presses = mutableListOf<PressInteraction.Press>()
+        var since = 0L
+        var letGo: Job? = null
+        interactions.collect { i ->
+            when (i) {
+                is PressInteraction.Press -> {
+                    presses += i
+                    letGo?.cancel()
+                    held.value = true
+                    since = SystemClock.uptimeMillis()
+                }
+                is PressInteraction.Release -> presses -= i.press
+                is PressInteraction.Cancel -> presses -= i.press
+            }
+            if (presses.isEmpty() && held.value) {
+                letGo?.cancel()
+                letGo = launch {
+                    delay(2 * FRAME_MS - (SystemClock.uptimeMillis() - since))
+                    held.value = false
+                }
+            }
+        }
+    }
+    return held
 }

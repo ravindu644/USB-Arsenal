@@ -13,7 +13,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import com.usbarsenal.app.lcd.collectIsPressedHeld
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -268,7 +267,7 @@ fun FunctionRow(
 ) {
     val open = remember { MutableInteractionSource() }
     val focused by open.collectIsFocusedAsState()
-    val pressed by open.collectIsPressedAsState()
+    val pressed by open.collectIsPressedHeld()
     val haptics = LocalHaptics.current
     val body = @Composable {
         val ground = LocalLcd.current.ground
@@ -346,7 +345,7 @@ fun Alert(label: String, fix: String, onClick: () -> Unit, modifier: Modifier = 
 fun Card(label: String, line: String, icon: Sprite, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectIsPressedHeld()
     val haptics = LocalHaptics.current
     val reduced = LocalReducedMotion.current
     var opening by remember { mutableStateOf(false) }
@@ -401,7 +400,7 @@ fun Card(label: String, line: String, icon: Sprite, onOpen: () -> Unit, modifier
 fun LinkRow(label: String, value: String, onClick: (() -> Unit)?, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectIsPressedHeld()
     val haptics = LocalHaptics.current
     Box(
         modifier.bleed(10.dp).lcdClickable(interaction, outline = false, role = Role.Button, enabled = onClick != null) {
@@ -564,7 +563,8 @@ fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier = Modifier) 
                 .fillMaxWidth()
                 .background(LocalLcd.current.ground)
                 .drawBehind { drawRect(rule, size = Size(size.width, Lcd.pixel.toPx())) }
-                .windowInsetsPadding(WindowInsets.navigationBars)
+                // Its content keeps clear of the navigation bar and a landscape cutout; its rule does not
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
                 .padding(start = Lcd.gutter, end = Lcd.gutter, top = 14.dp, bottom = Lcd.gutter),
             verticalArrangement = Arrangement.spacedBy(Lcd.section),
         ) {

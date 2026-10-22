@@ -11,7 +11,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import com.usbarsenal.app.lcd.collectIsPressedHeld
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -135,7 +135,7 @@ fun Screen(
     // The keyboard pushes the bar and the content up; the bar's own navigation-bar padding then gives way
     Modifier
         .fillMaxSize()
-        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
         // A sheet pads for the keyboard itself; the screen behind its scrim stays put
         .then(if (SheetsOpen.count == 0) Modifier.imePadding() else Modifier),
 ) {
@@ -143,6 +143,8 @@ fun Screen(
         Modifier
             .weight(1f)
             .fillMaxWidth()
+            // The sides here, not on the whole screen: the bottom bar's rule and ground reach the edges
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
             .then(if (bottomBar == null) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)) else Modifier)
             .padding(bottom = if (bottomBar == null) Lcd.gutter else Lcd.section)
             // Behind an open sheet nothing takes focus: a key pressed there would act unseen
@@ -213,8 +215,8 @@ private fun ScreenBody(modifier: Modifier, scroll: Boolean, content: @Composable
 
 /*
  * verticalScroll with the LCD's scrollbar: a 4dp ink thumb, as long as the share of the content
- * in view, there only while there is more to scroll. It sits 8dp in from the screen's edge, in
- * the gutter outside a row's bleed; [inset] is how far the view's right edge is from the screen's.
+ * in view, there only while there is more to scroll. It sits 8dp to 4dp from the screen's edge,
+ * clear of a row's or a rule's 10dp bleed; [inset] is how far the view's right edge is from the screen's.
  */
 fun Modifier.lcdScroll(state: ScrollState, inset: Dp = Lcd.gutter) = composed {
     val ink = LocalLcd.current.ink
@@ -222,7 +224,7 @@ fun Modifier.lcdScroll(state: ScrollState, inset: Dp = Lcd.gutter) = composed {
         drawContent()
         val max = state.maxValue
         if (max in 1 until Int.MAX_VALUE) {
-            thumb(ink, size.width + inset.toPx() - 12.dp.toPx(), size.height, size.height + max, state.value.toFloat() / max)
+            thumb(ink, size.width + inset.toPx() - 8.dp.toPx(), size.height, size.height + max, state.value.toFloat() / max)
         }
     }.verticalScroll(state)
 }
@@ -382,7 +384,7 @@ fun Key(
     onClick: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectIsPressedHeld()
     val haptics = LocalHaptics.current
     val c = LocalLcd.current
     val filled = primary && enabled
