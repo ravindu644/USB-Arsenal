@@ -7,16 +7,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -87,7 +85,7 @@ fun SettingsScreen(back: () -> Unit, openIdentity: (() -> Unit)?, openFonts: () 
     Screen {
         Top { BackKey() }
         Title("Settings")
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Group("App")
             Kv("Motion") { Dip(switches.motion, { switches.motion = it }, "Motion") }
             Kv("Haptics") { Dip(switches.haptics, { switches.haptics = it }, "Haptics") }
@@ -147,6 +145,6 @@ fun FontsScreen(back: () -> Unit) {
         Column {
             for (face in listOf("Jersey 10", "Silkscreen", "VT323")) Kv(face, fact = true) { Text("OFL 1.1", LcdType.data) }
         }
-        Terminal(text, Modifier.weight(1f), live = false)
+        Terminal(text, Modifier.fill(min = 240.dp), live = false)
     }
 }

@@ -304,8 +304,21 @@ Screen anatomy, top to bottom:
 1. **Top bar**, 44px: `< BACK` on function screens; Pin, `USB ARSENAL` and the version on Home.
    Nothing on the right unless it is a fact found nowhere else on the screen.
 2. **Title** in `display-title` (`display-hero` on Home).
-3. **Content.** Lists that scroll take `flex:1` so the keys never leave the screen.
+3. **Content.** A terminal or a shell takes the free height (`flex:1`), and never less than 240px
+   (200px for a shell).
 4. **Bottom keys**, a two-column grid of `key`s, or Home's bottom bar.
+
+When the window is too short for a screen (landscape, split screen, a large font), the screen
+scrolls as one page: the top bar and title scroll away with the content, and the bottom keys
+stay pinned above the navigation bar, as a sheet's do. A tall window shows the screen exactly
+as drawn, with no scroll. Home's Log and Settings keys belong to the content (they sit under
+the rows), so they scroll with it.
+
+### Scrollbar (`.scrollbar`)
+Anything that scrolls shows a 4px ink thumb, 8px in from the screen's right edge, in the gutter
+outside a row's bleed; inside a terminal it is amber. Its length is the share of the content in
+view (24px at least), it is drawn on the pixel grid, and it shows only while there is more to
+scroll. It never moves on its own, so reduced motion leaves it as is.
 
 Rules:
 - **Everything sits on the gutter.** Rows bleed 10px past it and pad 10px back, so their text

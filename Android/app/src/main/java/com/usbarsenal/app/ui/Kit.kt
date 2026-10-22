@@ -54,7 +54,7 @@ internal fun KitBasics() = Column(verticalArrangement = Arrangement.spacedBy(Lcd
 
 // D1: the key, the primary key, a disabled key
 @Composable
-internal fun KitKeys(focus: FocusRequester = remember { FocusRequester() }) = Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Lcd.tight)) {
+internal fun KitKeys(focus: FocusRequester = remember { FocusRequester() }) = KeyRow {
     Key("Key", Modifier.weight(1f).focusRequester(focus)) {}
     Key("Primary", Modifier.weight(1f), primary = true) {}
     Key("Off", Modifier.weight(1f), enabled = false) {}

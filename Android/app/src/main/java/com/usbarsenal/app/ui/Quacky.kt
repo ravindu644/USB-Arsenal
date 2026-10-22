@@ -22,7 +22,8 @@ fun QuackyScreen(back: () -> Unit) {
     Screen {
         Top { BackKey() }
         Title("Quacky")
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+        // Centred in what the window leaves; a short window scrolls to it
+        Box(Modifier.fill(min = 200.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Bottom) {
                     SpriteIcon(Sprites.Duck, 8.dp)

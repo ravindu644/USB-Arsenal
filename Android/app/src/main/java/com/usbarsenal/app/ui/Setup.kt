@@ -15,19 +15,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -202,21 +199,22 @@ private suspend fun <T> atLeast(ms: Long, block: suspend () -> T): T {
 
 // Welcome's parts come on one per frame, top to bottom, as DESIGN.md's rows typing on
 @Composable
-private fun Welcome(next: () -> Unit) = Screen {
+private fun Welcome(next: () -> Unit) {
     val shown = rememberTyped(5, 1)
     fun Modifier.from(i: Int) = drawnFrom(i, shown)
-    Top {
-        Spacer(Modifier.weight(1f))
-        Text("v${BuildConfig.VERSION_NAME}", LcdType.data, Modifier.from(0))
+    Screen(footer = { Key("Get started", Modifier.fillMaxWidth().from(4).focusRequester(focusOn(Unit)), primary = true, onClick = next) }) {
+        Top {
+            Spacer(Modifier.weight(1f))
+            Text("v${BuildConfig.VERSION_NAME}", LcdType.data, Modifier.from(0))
+        }
+        Pin(8.dp, Modifier.from(1))
+        Text("USB\nArsenal", LcdType.hero, Modifier.from(2))
+        Column(Modifier.from(3)) {
+            Feature(Sprites.Storage, "boot an iso or share a disk")
+            Feature(Sprites.Tether, "network over the usb cable")
+            Feature(Sprites.Hid, "keyboard and mouse on the host")
+        }
     }
-    Pin(8.dp, Modifier.from(1))
-    Text("USB\nArsenal", LcdType.hero, Modifier.from(2))
-    Column(Modifier.from(3)) {
-        Feature(Sprites.Storage, "boot an iso or share a disk")
-        Feature(Sprites.Tether, "network over the usb cable")
-        Feature(Sprites.Hid, "keyboard and mouse on the host")
-    }
-    Key("Get started", Modifier.weight(1f).wrapContentHeight(Alignment.Bottom).fillMaxWidth().from(4).focusRequester(focusOn(Unit)), primary = true, onClick = next)
 }
 
 @Composable
@@ -271,20 +269,23 @@ private fun RootScreen(back: () -> Unit, next: () -> Unit) {
     LaunchedEffect(done) { if (done && result.isFailure && !(had && attempt == 0)) haptics.reject() }
     BackHandler { if (done) back() }
     val focus = focusOn(done)
-    Screen {
+    Screen(
+        footer = {
+            when {
+                // Next is there from the start, dashed until su has answered, so nothing pops in
+                !done -> Key("Next", Modifier.fillMaxWidth(), primary = true, enabled = false) {}
+                result.isSuccess -> Key("Next", Modifier.fillMaxWidth().focusRequester(focus), primary = true, onClick = next)
+                else -> Key("Retry", Modifier.fillMaxWidth().focusRequester(focus), primary = true) { attempt++ }
+            }
+        },
+    ) {
         Top { if (done) BackKey() }
         Title("Root")
-        Shell("su", if (!done) Led.BUSY else if (result.isSuccess) Led.ON else Led.OFF, session.shownAt(step), Modifier.weight(1f))
-        when {
-            // Next is there from the start, dashed until su has answered, so nothing pops in
-            !done -> Key("Next", Modifier.fillMaxWidth(), primary = true, enabled = false) {}
-            result.isSuccess -> Key("Next", Modifier.fillMaxWidth().focusRequester(focus), primary = true, onClick = next)
-            else -> {
-                Warn("nothing can reach the usb controller")
-                // Without root there is no asking su which manager it is
-                Text("allow USB Arsenal in your root manager, then retry", LcdType.data)
-                Key("Retry", Modifier.fillMaxWidth().focusRequester(focus), primary = true) { attempt++ }
-            }
+        Shell("su", if (!done) Led.BUSY else if (result.isSuccess) Led.ON else Led.OFF, session.shownAt(step), Modifier.fill(min = 200.dp))
+        if (done && result.isFailure) {
+            Warn("nothing can reach the usb controller")
+            // Without root there is no asking su which manager it is
+            Text("allow USB Arsenal in your root manager, then retry", LcdType.data)
         }
     }
 }
@@ -363,13 +364,31 @@ private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
     // A probe that is still running finishes first; it is quick and its root shell is ours
     BackHandler { if (settled) back() }
     val focus = focusOn(settled)
-    Screen {
+    Screen(
+        footer = {
+            KeyRow {
+                val canNext = settled && caps?.requirementsMet == true
+                Key(
+                    "Recheck",
+                    Modifier.weight(1f).then(if (settled && !canNext) Modifier.focusRequester(focus) else Modifier),
+                    enabled = settled,
+                ) { run++ }
+                Key(
+                    "Next",
+                    Modifier.weight(1f).then(if (canNext) Modifier.focusRequester(focus) else Modifier),
+                    primary = true,
+                    enabled = canNext,
+                    onClick = next,
+                )
+            }
+        },
+    ) {
         Top { if (settled) BackKey() }
         Title("Check")
         if (settled) result.exceptionOrNull()?.let { Warn(it.message ?: "check failed") }
         if (blocked) Warn("usb arsenal cannot run on this kernel")
-        // ponytail: nothing in the list takes focus, so keys cannot scroll it; F2/F3 settle it if 1.3x font overflows
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+        // ponytail: nothing in the list takes focus, so keys cannot scroll a short window to its last rows; F3 settles it
+        Column {
             if (result == null || caps != null) {
                 Group("Must have")
                 mustHave.forEachIndexed { i, row -> ProbeLine(row, caps.takeIf { i < shown }) }
@@ -380,21 +399,6 @@ private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
                     functions.forEachIndexed { i, row -> ProbeLine(row, caps.takeIf { mustHave.size + i < shown }) }
                 }
             }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Lcd.tight)) {
-            val canNext = settled && caps?.requirementsMet == true
-            Key(
-                "Recheck",
-                Modifier.weight(1f).then(if (settled && !canNext) Modifier.focusRequester(focus) else Modifier),
-                enabled = settled,
-            ) { run++ }
-            Key(
-                "Next",
-                Modifier.weight(1f).then(if (canNext) Modifier.focusRequester(focus) else Modifier),
-                primary = true,
-                enabled = canNext,
-                onClick = next,
-            )
         }
     }
 }
@@ -485,30 +489,33 @@ private fun InstallScreen(update: String?, back: () -> Unit, home: () -> Unit) {
         else -> Led.OFF
     }
 
-    Screen {
-        Top { if (phase == Phase.BEFORE || (phase == Phase.FAILED && finished)) BackKey() }
-        Title("Backend")
-        Shell("sh", led, session.shownAt(step), Modifier.weight(1f))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Lcd.tight)) {
-            val key = Modifier.weight(1f).focusRequester(focus)
-            when {
-                phase == Phase.DONE && finished -> Key("Home", key, primary = true, onClick = home)
-                phase == Phase.FAILED && finished -> {
-                    Key("Copy log", Modifier.weight(1f)) {
-                        context.getSystemService(ClipboardManager::class.java)
-                            .setPrimaryClip(ClipData.newPlainText("install log", log.joinToString("\n")))
+    Screen(
+        footer = {
+            KeyRow {
+                val key = Modifier.weight(1f).focusRequester(focus)
+                when {
+                    phase == Phase.DONE && finished -> Key("Home", key, primary = true, onClick = home)
+                    phase == Phase.FAILED && finished -> {
+                        Key("Copy log", Modifier.weight(1f)) {
+                            context.getSystemService(ClipboardManager::class.java)
+                                .setPrimaryClip(ClipData.newPlainText("install log", log.joinToString("\n")))
+                        }
+                        Key("Retry", key, primary = true) {
+                            watching = true
+                            Setup.retries++
+                            Setup.enter()
+                        }
                     }
-                    Key("Retry", key, primary = true) {
+                    else -> Key(if (update != null) "Update" else "Install", key, primary = true, enabled = phase == Phase.BEFORE) {
                         watching = true
-                        Setup.retries++
                         Setup.enter()
                     }
                 }
-                else -> Key(if (update != null) "Update" else "Install", key, primary = true, enabled = phase == Phase.BEFORE) {
-                    watching = true
-                    Setup.enter()
-                }
             }
-        }
+        },
+    ) {
+        Top { if (phase == Phase.BEFORE || (phase == Phase.FAILED && finished)) BackKey() }
+        Title("Backend")
+        Shell("sh", led, session.shownAt(step), Modifier.fill(min = 200.dp))
     }
 }

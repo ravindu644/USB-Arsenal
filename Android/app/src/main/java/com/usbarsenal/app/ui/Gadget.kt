@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.compose.runtime.remember
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.FocusRequester
-import com.usbarsenal.app.lcd.Lcd
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.activity.compose.BackHandler
