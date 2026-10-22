@@ -88,8 +88,11 @@ Both are in kernel code that a plain configfs or sysfs write reaches. Details ar
 ## Testing on a device
 
 - **Run `adb devices` first, every time.** If no line ends in `device`, stop and say so.
-- **ADB drops while the gadget holds the port.** Run each test as one background
-  `nohup` script that logs to a file, and read the file afterwards.
+- **ADB drops while the gadget holds the port, wireless ADB too:** taking the port sets
+  `sys.usb.config none`, which stops `adbd` (seen on the a166p), and handing it back restarts
+  it. Run each test as one background `nohup` script that ends in `usb-arsenal stop` and logs
+  to a file (`screencap` and `input tap` work from it), and read the file afterwards over USB
+  ADB, which is back once Android holds the port again.
 - **Check `dmesg` after every step**, not only at the end. The warnings come before the
   panic.
 - **After a panic, read `/proc/last_kmsg` and `/sys/fs/pstore/*` before anything else,**
@@ -256,7 +259,7 @@ name.
 - **Never patch the live SELinux policy** (`ksud sepolicy patch`, `magiskpolicy --live`): root
   detectors watch for it. `sepolicy.rule` loads at boot; when the module had none before an
   install, the install says to reboot.
-- **Test over wireless ADB.** Binding the gadget takes the USB port from Android, so USB ADB
-  drops the moment a test works.
+- **Test over wireless ADB** while nothing is bound; a test that binds the gadget runs as the
+  background script above, since `adbd` stops for as long as the gadget holds the port.
 - **Test haptics on more than one phone:** one with rich haptics, one midrange, and once with
   touch feedback switched off.

@@ -9,7 +9,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,12 +26,11 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
@@ -40,6 +38,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.usbarsenal.app.BuildConfig
+import com.usbarsenal.app.backend.BackendState
 import com.usbarsenal.app.backend.Capabilities
 import com.usbarsenal.app.backend.Probe
 import com.usbarsenal.app.backend.RootInfo
@@ -56,14 +55,15 @@ import com.usbarsenal.app.lcd.Pin
 import com.usbarsenal.app.lcd.Sprite
 import com.usbarsenal.app.lcd.SpriteIcon
 import com.usbarsenal.app.lcd.Sprites
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.io.File
 
+// Every screen; App keeps them as a back stack
 private enum class Step { WELCOME, ROOT, CHECK, INSTALL, HOME }
 
 // TYPING: Install was pressed and the command is typing; the installer starts when it has
@@ -86,6 +86,14 @@ private object Setup {
     // The install belongs to no screen: leaving one, or the activity going, never stops it
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    // A new visit to Install after one that finished starts from the prompt again
+    fun fresh() {
+        if (phase == Phase.DONE || phase == Phase.FAILED) {
+            log.clear()
+            phase = Phase.BEFORE
+        }
+    }
+
     // Install pressed: the command starts typing
     fun enter() {
         log.clear()
@@ -103,30 +111,53 @@ private object Setup {
 
 /*
  * First launch walks Welcome, Root, Check and Install, then Home; once an install has
- * finished, launches open Home. Every screen change is the LCD redraw.
+ * finished, launches open Home. Screens stack: Back pops one, painting bottom up, and Back on
+ * the last one leaves the app. Every screen change is the LCD redraw.
  */
 @Composable
 fun App() {
     val prefs = LocalContext.current.getSharedPreferences("setup", Context.MODE_PRIVATE)
-    var step by rememberSaveable { mutableStateOf(if (prefs.getBoolean("done", false)) Step.HOME else Step.WELCOME) }
+    var stack by rememberSaveable { mutableStateOf(listOf(if (prefs.getBoolean("done", false)) Step.HOME else Step.WELCOME)) }
     var back by remember { mutableStateOf(false) }
+    // The installed version when Install was opened to update it
+    var update by rememberSaveable { mutableStateOf<String?>(null) }
     val focusManager = LocalFocusManager.current
-    fun go(to: Step) {
+    fun show(next: List<Step>, goingBack: Boolean) {
         // Focus leaves with the old screen, so a key press during the redraw cannot reach it
         focusManager.clearFocus()
-        back = to < step
-        step = to
+        back = goingBack
+        stack = next
     }
-    Redraw(step, back, Modifier.fillMaxSize()) {
+    fun push(s: Step) = show(stack + s, false)
+    fun pop() = show(stack.dropLast(1), true)
+    val home = {
+        prefs.edit { putBoolean("done", true) }
+        show(listOf(Step.HOME), false)
+    }
+    val setup = stack.first() != Step.HOME
+    Redraw(stack.last(), back, Modifier.fillMaxSize()) {
         when (it) {
-            Step.WELCOME -> Welcome { go(Step.ROOT) }
-            Step.ROOT -> RootScreen(back = { go(Step.WELCOME) }) { go(Step.CHECK) }
-            Step.CHECK -> CheckScreen(back = { go(Step.ROOT) }) { go(Step.INSTALL) }
-            Step.INSTALL -> InstallScreen(update = null, back = { go(Step.CHECK) }) {
-                prefs.edit { putBoolean("done", true) }
-                go(Step.HOME)
-            }
-            Step.HOME -> Kit()
+            Step.WELCOME -> Welcome { push(Step.ROOT) }
+            // Opened from Home, Root goes back there once granted; in setup it leads on to Check
+            Step.ROOT -> RootScreen(back = ::pop) { if (setup) push(Step.CHECK) else pop() }
+            Step.CHECK -> CheckScreen(back = ::pop) { push(Step.INSTALL) }
+            Step.INSTALL -> InstallScreen(update = update, back = ::pop, home = home)
+            Step.HOME -> HomeScreen(
+                open = null,
+                openLog = null,
+                openSettings = null,
+                fix = { b ->
+                    if (b.state == BackendState.NO_ROOT) {
+                        // Root was refused since: ask su again, not the answer setup kept
+                        Setup.root = null
+                        push(Step.ROOT)
+                    } else {
+                        update = b.installed.takeIf { b.state == BackendState.UPDATE_AVAILABLE }
+                        Setup.fresh()
+                        push(Step.INSTALL)
+                    }
+                },
+            )
         }
     }
 }
@@ -149,7 +180,7 @@ private suspend fun <T> atLeast(ms: Long, block: suspend () -> T): T {
 @Composable
 private fun Welcome(next: () -> Unit) = Screen {
     val shown = rememberTyped(5, 1)
-    fun Modifier.from(i: Int) = drawWithContent { if (i < shown) drawContent() }
+    fun Modifier.from(i: Int) = drawnFrom(i, shown)
     Top {
         Spacer(Modifier.weight(1f))
         Text("v${BuildConfig.VERSION_NAME}", LcdType.data, Modifier.from(0))
@@ -292,6 +323,7 @@ private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
         }
         val rows = r.getOrNull()?.let { if (it.requirementsMet) mustHave.size + functions.size else mustHave.size } ?: 0
         Setup.check = r
+        r.getOrNull()?.let { Gadget.caps = it }
         for (i in 1..rows) {
             delay(4L * FRAME_MS)
             shown = i

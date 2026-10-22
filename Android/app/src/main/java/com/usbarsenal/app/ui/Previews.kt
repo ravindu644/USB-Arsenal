@@ -10,7 +10,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import com.usbarsenal.app.lcd.Lcd
 import com.usbarsenal.app.lcd.LcdTheme
 import com.usbarsenal.app.lcd.Switches
@@ -48,9 +47,9 @@ private fun RowsPreview() = Board { KitRows() }
 @Preview(name = "D5 Bottom bar", widthDp = 390, heightDp = 844)
 @Composable
 private fun BottomBarPreview() = Board {
-    BottomBar(Port.Bound("11201000.usb0")) {}
-    BottomBar(Port.Replugging("usb-arsenal storage start")) {}
-    BottomBar(Port.Android) {}
+    BottomBar(Port.Bound("11201000.usb0"), onStopAll = {})
+    BottomBar(Port.Replugging("usb-arsenal storage start"), onStopAll = {})
+    BottomBar(Port.Android, onStopAll = {})
 }
 
 @Preview(name = "D6 Drive, warning, files", widthDp = 390, heightDp = 844)

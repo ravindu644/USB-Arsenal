@@ -18,6 +18,9 @@ import java.util.concurrent.TimeUnit
 
 const val TIMED_OUT = -1
 
+// How long a gadget change may take before its shell is killed: a replug waits up to 10s on Android
+const val CHANGE_TIMEOUT_MS = 30_000L
+
 // What a shell returns for a command it cannot find
 const val NO_ROOT = 127
 
@@ -47,7 +50,7 @@ class RootExec(private val launch: (String) -> Process) {
 
     suspend fun read(cmd: String, timeoutMs: Long = 15_000) = run(cmd, timeoutMs)
 
-    suspend fun change(cmd: String, timeoutMs: Long = 30_000) = lane.withLock { run(cmd, timeoutMs) }
+    suspend fun change(cmd: String, timeoutMs: Long = CHANGE_TIMEOUT_MS) = lane.withLock { run(cmd, timeoutMs) }
 
     private suspend fun run(cmd: String, timeoutMs: Long): RootResult = withContext(Dispatchers.IO) {
         // No su at all is how KernelSU says no: it hides su from apps it has not granted root

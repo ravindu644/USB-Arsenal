@@ -11,9 +11,22 @@ val Root = RootExec { ProcessBuilder("su", "--mount-master", "-c", it).start() }
 const val WORKSPACE = "/data/local/USB-Arsenal"
 const val UA = "$WORKSPACE/bin/usb-arsenal"
 
-// Setup checks with the binary it is about to install; UA_NO_PROXY keeps an older daemon from answering for it
-suspend fun readCheck(binary: String = UA): Result<Capabilities> =
-    Root.read("UA_NO_PROXY=1 ${shellQuote(binary)} check --json").json(::parseCheck)
+/*
+ * Setup checks with the binary it is about to install; UA_NO_PROXY keeps an older daemon from
+ * answering for it. check probes by creating functions in configfs, so once the gadget may be
+ * live it goes through the change lane ([onLane]) and never races a command.
+ */
+suspend fun readCheck(binary: String = UA, onLane: Boolean = false): Result<Capabilities> {
+    val cmd = "UA_NO_PROXY=1 ${shellQuote(binary)} check --json"
+    return (if (onLane) Root.change(cmd) else Root.read(cmd)).json(::parseCheck)
+}
+
+// identity show's key column: "  tether_function  ncm"; a derived value reads "(derived)"
+suspend fun readProfile(): Map<String, String> = Root.read("$UA identity show").out
+    .filter { it.startsWith("  ") }
+    .mapNotNull { line -> line.trim().split(Regex("\\s+"), limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
+    .filter { it.second != "(derived)" }
+    .toMap()
 
 suspend fun readStatus(): Result<GadgetStatus> = Root.read("$UA status --json").json(::parseStatus)
 

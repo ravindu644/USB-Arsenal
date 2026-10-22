@@ -1,8 +1,6 @@
 package com.usbarsenal.app.ui
 
 import android.annotation.SuppressLint
-import android.os.SystemClock
-import android.util.Log
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,28 +9,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
-import com.usbarsenal.app.backend.Root
-import com.usbarsenal.app.backend.readStatus
 import com.usbarsenal.app.lcd.Dither
-import com.usbarsenal.app.lcd.FRAME_MS
 import com.usbarsenal.app.lcd.Lcd
 import com.usbarsenal.app.lcd.LcdType
-import com.usbarsenal.app.lcd.LocalHaptics
 import com.usbarsenal.app.lcd.LocalLcd
 import com.usbarsenal.app.lcd.LocalReducedMotion
 import com.usbarsenal.app.lcd.Pin
@@ -40,41 +30,9 @@ import com.usbarsenal.app.lcd.SpriteIcon
 import com.usbarsenal.app.lcd.Sprites
 import com.usbarsenal.app.lcd.dither
 import com.usbarsenal.app.lcd.ghost
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
-/*
- * ponytail: the component kit, live, standing in for Home until E1 replaces it. Each section
- * is one box of section D, and the previews (Previews.kt) show the same sections. The strings
- * are the reference boards' sample data.
- */
-@Composable
-fun Kit() {
-    var port by remember { mutableStateOf<Port>(Port.Bound("11201000.usb0")) }
-    Screen(bottomBar = { BottomBar(port) { port = Port.Android } }) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Lcd.tight)) {
-            Pin(2.dp)
-            Text("USB Arsenal", LcdType.labelStrong)
-        }
-        Title("Kit")
-        // Initial focus, from an effect, as every screen has it: the first key here
-        val first = remember { FocusRequester() }
-        LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Lcd.section)) {
-            KitBasics()
-            KitKeys(first)
-            KitSegs()
-            KitDip()
-            KitRows()
-            KitPort(port) { port = it }
-            KitDrive()
-            KitTerminal()
-            KitChain()
-            KitFault()
-            KitBackend()
-        }
-    }
-}
+// The component kit: one section per box of section D, shown by Previews.kt. The strings are
+// the reference boards' sample data
 
 // Section A: sprites, dither, the three faces
 @Composable
@@ -209,37 +167,4 @@ internal fun KitFault() = Column(verticalArrangement = Arrangement.spacedBy(Lcd.
         fault = "[-] Daemon 16035 did not stop"
     }
     fault?.let { Fault(it, onLog = { fault = null }) }
-}
-
-// The backend probes and the bind haptic, until Home (E1) and the bind screen (E2) drive them
-@Composable
-private fun KitBackend() = Column(verticalArrangement = Arrangement.spacedBy(Lcd.tight)) {
-    val haptics = LocalHaptics.current
-    val scope = rememberCoroutineScope()
-    var binds by remember { mutableIntStateOf(0) }
-    var lines by remember { mutableStateOf(listOf<String>()) }
-    fun log(line: String) {
-        Log.i("UA", line)
-        lines = (lines + line).takeLast(3)
-    }
-    LaunchedEffect(binds) {
-        if (binds == 0) return@LaunchedEffect
-        for (i in 0..2) {
-            haptics.bindClimb(i)
-            delay(3L * FRAME_MS)
-        }
-        haptics.bindPlug()
-    }
-    Key("Bind haptic", Modifier.fillMaxWidth()) { binds++ }
-    Key("Status json", Modifier.fillMaxWidth()) { scope.launch { log(readStatus().toString()) } }
-    Key("Hung change + read", Modifier.fillMaxWidth()) {
-        scope.launch {
-            val start = SystemClock.uptimeMillis()
-            launch { log("change: ${Root.change("sleep 60", timeoutMs = 3_000)}") }
-            delay(200)
-            val read = Root.read("echo read")
-            log("read ${read.out} after ${SystemClock.uptimeMillis() - start}ms")
-        }
-    }
-    for (line in lines) Text(line, LcdType.data)
 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,7 +35,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
@@ -48,6 +48,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.usbarsenal.app.lcd.Dither
 import com.usbarsenal.app.lcd.FRAME_MS
 import com.usbarsenal.app.lcd.Haptics
@@ -66,9 +67,9 @@ import com.usbarsenal.app.lcd.ghost
 import com.usbarsenal.app.lcd.lcdClickable
 import com.usbarsenal.app.lcd.loop
 import com.usbarsenal.app.lcd.shoulderStep
-import kotlinx.coroutines.delay
 import kotlin.math.floor
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 // The controls of the function screens, each named after its class in lcd.css
 
@@ -229,9 +230,12 @@ fun FunctionRow(
     line2: String,
     on: Boolean,
     onToggle: (Boolean) -> Unit,
-    onOpen: () -> Unit,
+    // null while the function's screen does not exist yet: the row cannot be opened
+    onOpen: (() -> Unit)?,
     modifier: Modifier = Modifier,
     available: Boolean = true,
+    // false holds the switch where it is (a command running, the backend needing attention)
+    enabled: Boolean = available,
 ) {
     val open = remember { MutableInteractionSource() }
     val focused by open.collectIsFocusedAsState()
@@ -248,9 +252,9 @@ fun FunctionRow(
                 SpriteIcon(icon, 2.dp, if (available) Modifier else Modifier.ghost(ground))
             }
             Column(
-                Modifier.weight(1f).lcdClickable(open, outline = false, role = Role.Button) {
+                Modifier.weight(1f).lcdClickable(open, outline = false, role = Role.Button, enabled = onOpen != null) {
                     haptics.keyPress()
-                    onOpen()
+                    onOpen?.invoke()
                 },
                 verticalArrangement = Arrangement.spacedBy(Lcd.lines),
             ) {
@@ -258,11 +262,49 @@ fun FunctionRow(
                 Marquee(line1, LcdType.data, Modifier.fillMaxWidth())
                 Marquee(line2, LcdType.data, Modifier.fillMaxWidth())
             }
-            Dip(on, onToggle, label, enabled = available)
+            Dip(on, onToggle, label, enabled = available && enabled)
         }
     }
     Box(modifier) { Inverted(focused || pressed, body) }
 }
+
+/*
+ * An inverted line that is a key: the attention key and the fault line. Null [onClick] leaves it
+ * a line nobody can press.
+ */
+@Composable
+private fun InvertedKey(
+    onClick: (() -> Unit)?,
+    modifier: Modifier,
+    alignment: Alignment.Vertical,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val haptics = LocalHaptics.current
+    Box(
+        modifier.fillMaxWidth().lcdClickable(interaction, outline = true, role = Role.Button, enabled = onClick != null) {
+            haptics.keyPress()
+            onClick?.invoke()
+        },
+    ) {
+        Inverted {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = Lcd.touch).background(LocalLcd.current.ground).padding(horizontal = 10.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = alignment,
+                content = content,
+            )
+        }
+    }
+}
+
+// .alert: Home's one line about the backend: the state on the left, the fix on the right; it opens the fix
+@Composable
+fun Alert(label: String, fix: String, onClick: () -> Unit, modifier: Modifier = Modifier) =
+    InvertedKey(onClick, modifier, Alignment.CenterVertically) {
+        Text(label, LcdType.labelStrong, Modifier.weight(1f))
+        Text(fix, LcdType.data)
+    }
 
 // Who holds the port, as the bottom bar shows it
 sealed interface Port {
@@ -279,10 +321,10 @@ sealed interface Port {
  * under the navigation bar. A new state cuts in over two bands.
  */
 @Composable
-fun BottomBar(port: Port, onStopAll: () -> Unit) = Redraw(
+fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier = Modifier) = Redraw(
     port,
     back = false,
-    modifier = Modifier.fillMaxWidth(),
+    modifier = modifier.fillMaxWidth(),
     frames = 2,
     // A shorter state paints over the bottom of the old one, where it will sit, not over its top
     contentAlignment = Alignment.BottomStart,
@@ -368,23 +410,7 @@ fun Modifier.shake(shake: Shake): Modifier = composed {
  * and a LOG tag. It is a key that opens Log, and it stays until the next action.
  */
 @Composable
-fun Fault(message: String, onLog: () -> Unit, modifier: Modifier = Modifier) {
-    val interaction = remember { MutableInteractionSource() }
-    val haptics = LocalHaptics.current
-    Box(
-        modifier.fillMaxWidth().lcdClickable(interaction, outline = true, role = Role.Button) {
-            haptics.keyPress()
-            onLog()
-        },
-    ) {
-        Inverted {
-            Row(
-                Modifier.fillMaxWidth().background(LocalLcd.current.ground).padding(horizontal = 10.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text(message, LcdType.data, Modifier.weight(1f), maxLines = 3)
-                Inverted { Text("Log", LcdType.labelStrong, Modifier.background(LocalLcd.current.ground).padding(horizontal = 6.dp)) }
-            }
-        }
-    }
+fun Fault(message: String, onLog: (() -> Unit)?, modifier: Modifier = Modifier) = InvertedKey(onLog, modifier, Alignment.Top) {
+    Text(message, LcdType.data, Modifier.weight(1f), maxLines = 3)
+    Inverted { Text("Log", LcdType.labelStrong, Modifier.background(LocalLcd.current.ground).padding(horizontal = 6.dp)) }
 }

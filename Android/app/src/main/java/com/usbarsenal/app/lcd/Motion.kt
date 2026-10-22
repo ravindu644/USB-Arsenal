@@ -18,8 +18,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.delay
 import kotlin.math.floor
+import kotlinx.coroutines.delay
 
 // Interaction motion counts in 40ms frames, like an LCD redrawing
 const val FRAME_MS = 40
