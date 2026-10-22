@@ -7,9 +7,6 @@ import androidx.compose.ui.focus.FocusRequester
 import com.usbarsenal.app.lcd.Lcd
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Arrangement
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -280,10 +277,11 @@ fun NotAppliedSheet(pending: Boolean, note: String, canApply: Boolean, onDiscard
     var asking by rememberSaveable { mutableStateOf(false) }
     val discardKey = remember { FocusRequester() }
     BackHandler(enabled = pending) { asking = true }
-    Sheet(asking, onDismiss = { asking = false }, entry = discardKey) {
-        Title("Not applied")
-        Note(note)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Lcd.tight)) {
+    Sheet(
+        asking,
+        onDismiss = { asking = false },
+        entry = discardKey,
+        footer = {
             Key("Discard", Modifier.weight(1f).focusRequester(discardKey)) {
                 asking = false
                 onDiscard()
@@ -294,7 +292,10 @@ fun NotAppliedSheet(pending: Boolean, note: String, canApply: Boolean, onDiscard
                 onApply()
                 back()
             }
-        }
+        },
+    ) {
+        Title("Not applied")
+        Note(note)
     }
 }
 

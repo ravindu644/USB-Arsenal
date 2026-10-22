@@ -180,7 +180,7 @@ fun IdentityScreen(back: () -> Unit, openLog: () -> Unit) {
         )
         ProfileSheet(
             open = sheet != null,
-            editing = sheet?.takeIf { it.isNotEmpty() }?.let { path -> profiles?.firstOrNull { it.path == path } },
+            profile = sheet?.takeIf { it.isNotEmpty() }?.let { path -> profiles?.firstOrNull { it.path == path } },
             dir = dir,
             // Null while the list is unread: a new name cannot be checked, so Create waits
             names = profiles?.map { it.name.lowercase() },
@@ -238,24 +238,42 @@ private fun ProfilePanel(p: Profile?, live: Boolean) {
     }
 }
 
+private class Opened {
+    var open = false
+    var count = 0
+    var profile: Profile? = null
+}
+
 /*
  * Create, or Edit: the Create-disk sheet's look. Name (locked when editing), product, maker,
  * serial (empty is the phone's own), the USB IDs and the power; each field says what is wrong
  * with it under it, and the key waits until nothing is.
  */
 @Composable
-private fun ProfileSheet(open: Boolean, editing: Profile?, dir: String, names: List<String>?, onDismiss: () -> Unit, onSaved: (String, Boolean, String?) -> Unit) {
+private fun ProfileSheet(open: Boolean, profile: Profile?, dir: String, names: List<String>?, onDismiss: () -> Unit, onSaved: (String, Boolean, String?) -> Unit) {
     val haptics = LocalHaptics.current
     val scope = rememberCoroutineScope()
+    /*
+     * What the sheet opened on, held until it opens again. Closing clears [profile] at once, while
+     * the sheet still slides away: without this it would show a blank Create on the way down.
+     * Plain fields, not state: they only change in a composition that [open] already triggers.
+     */
+    val opened = remember { Opened() }
+    if (open && !opened.open) {
+        opened.count++
+        opened.profile = profile
+    }
+    opened.open = open
+    val editing = opened.profile
     val start = editing ?: BUILT_IN.copy(product = "", maker = "")
     // Each time the sheet opens, from the profile it opens on
-    var name by remember(open, editing) { mutableStateOf(editing?.name ?: "") }
-    var product by remember(open, editing) { mutableStateOf(start.product) }
-    var maker by remember(open, editing) { mutableStateOf(start.maker) }
-    var vid by remember(open, editing) { mutableStateOf(start.vid) }
-    var pid by remember(open, editing) { mutableStateOf(start.pid) }
-    var power by remember(open, editing) { mutableIntStateOf(start.power) }
-    var serial by remember(open, editing) { mutableStateOf(start.serial) }
+    var name by remember(opened.count) { mutableStateOf(editing?.name ?: "") }
+    var product by remember(opened.count) { mutableStateOf(start.product) }
+    var maker by remember(opened.count) { mutableStateOf(start.maker) }
+    var vid by remember(opened.count) { mutableStateOf(start.vid) }
+    var pid by remember(opened.count) { mutableStateOf(start.pid) }
+    var power by remember(opened.count) { mutableIntStateOf(start.power) }
+    var serial by remember(opened.count) { mutableStateOf(start.serial) }
     var writing by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf<String?>(null) }
     val taken = editing == null && names != null && name.trim().lowercase() in names
@@ -281,7 +299,15 @@ private fun ProfileSheet(open: Boolean, editing: Profile?, dir: String, names: L
     }
 
     val cancelKey = remember { FocusRequester() }
-    Sheet(open, onDismiss = { if (!writing) onDismiss() }, entry = cancelKey) {
+    Sheet(
+        open,
+        onDismiss = { if (!writing) onDismiss() },
+        entry = cancelKey,
+        footer = {
+            Key("Cancel", Modifier.weight(1f).focusRequester(cancelKey), enabled = !writing, onClick = onDismiss)
+            Key(if (editing == null) "Create" else "Save", Modifier.weight(1f), primary = true, enabled = problems.isEmpty() && !writing && (editing != null || names != null)) { save() }
+        },
+    ) {
         Title(if (editing == null) "Create" else "Edit")
         Field("Name") { Input(name, { name = it }, Modifier.fillMaxWidth(), placeholder = "pixel-8", enabled = editing == null) }
         problems["name"]?.takeIf { name.isNotEmpty() }?.let { Warn(it) }
@@ -302,9 +328,5 @@ private fun ProfileSheet(open: Boolean, editing: Profile?, dir: String, names: L
         problems["ids"]?.let { Warn(it) }
         Field("Power") { Segs(POWERS.map { "$it mA" }, POWERS.indexOf(power), { power = POWERS[it] }) }
         failed?.let { Fault(it, onLog = null) }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Lcd.tight)) {
-            Key("Cancel", Modifier.weight(1f).focusRequester(cancelKey), enabled = !writing, onClick = onDismiss)
-            Key(if (editing == null) "Create" else "Save", Modifier.weight(1f), primary = true, enabled = problems.isEmpty() && !writing && (editing != null || names != null)) { save() }
-        }
     }
 }

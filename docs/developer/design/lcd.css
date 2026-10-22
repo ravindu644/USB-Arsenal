@@ -151,7 +151,9 @@ body{margin:0}
 .pad .wheel{position:absolute;top:0;right:0;bottom:0;width:44px;border-left:2px solid var(--ink);display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:6px 0;box-sizing:border-box;background:var(--lcd)}
 .choice{display:flex;align-items:center;min-height:48px;padding:6px 10px;margin:0 -10px}
 .choice.on{background:var(--ink);color:var(--lcd)}
-.sheet{position:absolute;left:0;right:0;bottom:0;z-index:6;display:flex;flex-direction:column;gap:16px;padding:20px 20px 68px;background:var(--lcd);border-top:2px solid var(--ink);box-sizing:border-box}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:6;display:flex;flex-direction:column;gap:16px;padding:20px 20px 68px;background:var(--lcd);border-top:2px solid var(--ink);box-sizing:border-box;max-height:100%}
+/* A tall sheet's body scrolls; its keys, the last child, stay put */
+.sheet>.body{flex:0 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
 
 /* Progress in whole tenths, so it steps like everything else */
 .cells{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:2px;height:28px;padding:2px;border:2px solid var(--ink);box-sizing:border-box}

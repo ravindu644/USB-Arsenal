@@ -284,9 +284,23 @@ private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, fre
     }
 
     val cancelKey = remember { FocusRequester() }
-    Sheet(open, onDismiss = { if (!writing) onDismiss() }, entry = cancelKey) {
+    val progress = written
+    // The Create key goes when writing starts; its Cancel takes the focus, so a pad can still stop dd
+    LaunchedEffect(writing) { if (writing) cancelKey.requestFocus() }
+    Sheet(
+        open,
+        onDismiss = { if (!writing) onDismiss() },
+        entry = cancelKey,
+        footer = {
+            if (progress == null) {
+                Key("Cancel", Modifier.weight(1f).focusRequester(cancelKey), onClick = onDismiss)
+                Key("Create", Modifier.weight(1f), primary = true, enabled = bytes != null && !taken && !tooBig && !badName && job?.isActive != true) { create() }
+            } else {
+                Key("Cancel", Modifier.weight(1f).focusRequester(cancelKey)) { job?.cancel() }
+            }
+        },
+    ) {
         Title("Create")
-        val progress = written
         if (progress == null) {
             Field("Name") { Input(name, { name = it }, Modifier.fillMaxWidth(), placeholder = "disk.img") }
             if (taken) Warn("name taken")
@@ -303,16 +317,11 @@ private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, fre
             if (tooBig) Warn("more than the free ${sizeText(free)}")
             Kv("Sparse") { Dip(sparse, { sparse = it }, "Sparse") }
             failed?.let { Fault(it, onLog = null) }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Lcd.tight)) {
-                Key("Cancel", Modifier.weight(1f).focusRequester(cancelKey), onClick = onDismiss)
-                Key("Create", Modifier.weight(1f), primary = true, enabled = bytes != null && !taken && !tooBig && !badName && job?.isActive != true) { create() }
-            }
         } else {
             val (done, total) = progress
             Kv(target, fact = true) { Text(sizeText(total), LcdType.data) }
             Cells((done * 10 / total).toInt())
             Text("${sizeText(done)} of ${sizeText(total)}", LcdType.data, cursor = true)
-            Key("Cancel", Modifier.fillMaxWidth()) { job?.cancel() }
         }
     }
 }
