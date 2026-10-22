@@ -50,8 +50,6 @@ fun PollStatus() {
     }
 }
 
-fun loadPicks(context: Context) = decodePicks(context.getSharedPreferences("storage", Context.MODE_PRIVATE).getString("picks", "").orEmpty())
-
 // The attention key's words for a backend that needs something: what is wrong, and the fix
 private fun attention(b: Backend): Pair<String, String>? = when (b.state) {
     BackendState.READY -> null
@@ -71,12 +69,13 @@ private fun attention(b: Backend): Pair<String, String>? = when (b.state) {
  * does not hold them).
  */
 @Composable
-fun HomeScreen(open: ((Fn) -> Unit)?, openLog: (() -> Unit)?, openSettings: (() -> Unit)?, fix: (Backend) -> Unit) {
+fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings: (() -> Unit)?, fix: (Backend) -> Unit) {
     PollStatus()
     val context = LocalContext.current
     var backend by remember { mutableStateOf<Backend?>(null) }
     LaunchedEffect(Unit) { backend = backendState(context) }
-    val picks = remember { loadPicks(context) }
+    LaunchedEffect(Unit) { Picks.load(context) }
+    val picks = Picks.all
     val status = Gadget.status
     val caps = Gadget.caps
     val busy = Gadget.busy
@@ -124,7 +123,7 @@ fun HomeScreen(open: ((Fn) -> Unit)?, openLog: (() -> Unit)?, openSettings: (() 
                     line2 = l2,
                     on = on,
                     onToggle = { flip(fn, it, picks) },
-                    onOpen = open?.let { { it(fn) } },
+                    onOpen = open(fn),
                     modifier = Modifier.drawnFrom(i, shown).shake(shake).then(if (i == 0) Modifier.focusRequester(first) else Modifier),
                     available = caps.has(fn),
                     // Storage starts from its picks; with none there is nothing to serve

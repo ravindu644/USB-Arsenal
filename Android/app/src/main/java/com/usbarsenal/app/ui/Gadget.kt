@@ -1,10 +1,12 @@
 package com.usbarsenal.app.ui
 
+import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.usbarsenal.app.backend.CHANGE_TIMEOUT_MS
+import androidx.core.content.edit
 import com.usbarsenal.app.backend.Capabilities
 import com.usbarsenal.app.backend.GadgetStatus
 import com.usbarsenal.app.backend.Probe
@@ -74,7 +76,8 @@ object Gadget {
      * Runs `usb-arsenal ARGS` for [fn] (null: the whole gadget). Its output goes to the CLI log
      * as printed; a failure leaves stderr's last line as the fault under [fn]'s row.
      */
-    fun run(fn: Fn?, vararg args: String) {
+    // [onDone] hears whether it worked; a command refused because another runs never starts
+    fun run(fn: Fn?, vararg args: String, onDone: (Boolean) -> Unit = {}) {
         if (busy != null) return
         val typed = args.joinToString(" ")
         // `stop` and `<function> stop`; never read from the typed line, whose path could end in it
@@ -94,6 +97,7 @@ object Gadget {
             }
             refresh()
             busy = null
+            onDone(r.ok)
         }
     }
 }
@@ -171,6 +175,36 @@ fun rowLines(
 
 // An image picked for a LUN, kept across launches so Home's switch can serve it again
 data class Pick(val lun: Int, val mode: String, val path: String)
+
+/*
+ * The picks, shared by Home and Storage and kept in SharedPreferences "storage". One per LUN;
+ * a pick stays when storage stops, so Home's switch brings the same drives back.
+ */
+object Picks {
+    val all = mutableStateListOf<Pick>()
+    private var loaded = false
+
+    fun load(context: Context) {
+        if (loaded) return
+        loaded = true
+        all += decodePicks(prefs(context).getString("picks", "").orEmpty())
+    }
+
+    fun set(context: Context, pick: Pick) {
+        all.removeAll { it.lun == pick.lun }
+        all += pick
+        save(context)
+    }
+
+    fun drop(context: Context, lun: Int) {
+        all.removeAll { it.lun == lun }
+        save(context)
+    }
+
+    private fun save(context: Context) = prefs(context).edit { putString("picks", encodePicks(all)) }
+
+    private fun prefs(context: Context) = context.getSharedPreferences("storage", Context.MODE_PRIVATE)
+}
 
 // `storage start` for every pick in one command: one replug however many LUNs
 fun startArgs(picks: List<Pick>): List<String> =

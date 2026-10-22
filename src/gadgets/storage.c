@@ -33,12 +33,11 @@ static const char *const mode_names[] = {"auto", "cdrom", "dvd", "disk", "rw"};
 #define LOOP_SET_BLOCK_SIZE 0x4C09
 #endif
 
-/* The loop device behind a dvd LUN, closed once the kernel holds it */
-static int loop_fd = -1;
-
 void ua_help_storage(void) {
   printf(
-      "Usage: " UA_NAME " storage <action> [options] [IMAGE]\n\n"
+      "Usage: " UA_NAME " storage <action> [options] [IMAGE]\n"
+      "       " UA_NAME " storage start [--lun N] [--mode MODE] IMAGE "
+      "[[--lun N] [--mode MODE] IMAGE ...]\n\n"
       "Present an image file or block device to the host as a USB drive.\n"
       "A bootable ISO boots on the host like a real USB stick or DVD.\n\n"
       "Actions:\n"
@@ -64,12 +63,17 @@ void ua_help_storage(void) {
       "                            write to. Never use on a mounted image.\n"
       "  -l, --lun N      LUN to use, 0-7 (default: 0). Each LUN is a\n"
       "                   separate drive on the host.\n"
+      "                   start takes up to eight IMAGEs at once, each\n"
+      "                   after its own --lun and --mode, and the host\n"
+      "                   sees all of them in one replug. An IMAGE with\n"
+      "                   no --lun takes the LUN after the one before.\n"
       "  -h, --help       Show this help\n\n"
       "Examples:\n"
       "  " UA_NAME " storage start ubuntu-24.04.iso\n"
       "  " UA_NAME " storage start --mode dvd Win11.iso\n"
       "  " UA_NAME " storage start --mode rw /data/local/tmp/pendrive.img\n"
       "  " UA_NAME " storage start --lun 1 --mode disk rescue.img\n"
+      "  " UA_NAME " storage start Win11.iso --mode rw pendrive.img\n"
       "  " UA_NAME " storage start fedora.iso     # swaps the live image\n"
       "  " UA_NAME " storage eject\n"
       "  " UA_NAME " storage stop\n\n"
@@ -329,40 +333,45 @@ static int loop_attach(int fd, const char *name, char *dev, size_t size) {
   return -1;
 }
 
-/* The image arrives open, either opened here or by a client in another
- * mount namespace and passed over the daemon socket. The kernel gets
- * /proc/self/fd/N: it follows the magic link to the real file wherever that
- * lives, so no path ever has to mean the same thing on both sides. name is
- * only for messages. */
-static int do_start(int fd, const char *name, enum mode mode, int lun) {
-  char path[64];
-  snprintf(path, sizeof(path), "/proc/self/fd/%d", fd);
-  long long size = image_size(fd);
-  if (mode == MODE_AUTO) {
-    mode = detect_mode(fd);
-    if (mode == MODE_CDROM && size > CDROM_MAX_BYTES)
-      mode = MODE_DVD;
+/* One LUN of a start: its image, open, and what the kernel will be given.
+ * loop_fd is the loop device behind a dvd LUN, closed once the kernel holds
+ * it. */
+struct load {
+  int fd, loop_fd, lun;
+  enum mode mode;
+  char name[PATH_MAX], path[64];
+};
+
+/* Everything about one image before the gadget changes: its mode, the size
+ * checks, SELinux, the loop device behind dvd. The image arrives open, either
+ * opened here or by a client in another mount namespace and passed over the
+ * daemon socket. The kernel gets /proc/self/fd/N: it follows the magic link
+ * to the real file wherever that lives, so no path ever has to mean the same
+ * thing on both sides. name is only for messages. */
+static int prepare(struct load *l, int android_gadget) {
+  snprintf(l->path, sizeof(l->path), "/proc/self/fd/%d", l->fd);
+  long long size = image_size(l->fd);
+  if (l->mode == MODE_AUTO) {
+    l->mode = detect_mode(l->fd);
+    if (l->mode == MODE_CDROM && size > CDROM_MAX_BYTES)
+      l->mode = MODE_DVD;
   }
 
-  if (mode == MODE_CDROM && size >= 0 && size < CDROM_MIN_BYTES) {
-    ua_error("%s is too small for a CD-ROM (minimum 600 KB)", name);
-    return UA_EXIT_FAIL;
+  if (l->mode == MODE_CDROM && size >= 0 && size < CDROM_MIN_BYTES) {
+    ua_error("%s is too small for a CD-ROM (minimum 600 KB)", l->name);
+    return -1;
   }
-  if (mode == MODE_CDROM && size > CDROM_MAX_BYTES)
+  if (l->mode == MODE_CDROM && size > CDROM_MAX_BYTES)
     ua_warn("%s is %.2f GB, but the kernel's CD-ROM emulation stops at 2.36 "
             "GB unless it carries the DVD patch (kernel-patches/). "
             "Otherwise the host reads a truncated disc; --mode dvd has no "
             "limit.",
-            name, (double)size / 1e9);
-
-  struct ua_gadget g;
-  if (ua_gadget_open(&g) < 0 || ua_check_requirements(&g, UA_NEED_STORAGE) < 0)
-    return UA_EXIT_FAIL;
+            l->name, (double)size / 1e9);
 
   struct stat st;
-  int have_st = fstat(fd, &st) == 0;
+  int have_st = fstat(l->fd, &st) == 0;
   if (have_st && S_ISREG(st.st_mode))
-    selinux_fix(fd, name, mode == MODE_RW, g.android_gadget);
+    selinux_fix(l->fd, l->name, l->mode == MODE_RW, android_gadget);
 
   /* A block device served as is: the kernel thread reads it under the node's
    * label, and no label is readable on every policy, so it cannot be fixed by
@@ -370,60 +379,120 @@ static int do_start(int fd, const char *name, enum mode mode, int lun) {
    * Whether to serve it at all, mounted or not, is the user's call. */
   char blabel[256];
   if (have_st && S_ISBLK(st.st_mode) &&
-      !kernel_may(fd, "blk_file", mode == MODE_RW, g.android_gadget, blabel,
+      !kernel_may(l->fd, "blk_file", l->mode == MODE_RW, android_gadget, blabel,
                   sizeof(blabel))) {
     ua_error("SELinux does not let the kernel %s %s (%s), so the host would "
              "see only read errors",
-             mode == MODE_RW ? "read and write" : "read", name, blabel);
+             l->mode == MODE_RW ? "read and write" : "read", l->name, blabel);
     ua_log("To serve it anyway, set SELinux permissive by hand first: "
            "setenforce 0");
-    return UA_EXIT_FAIL;
+    return -1;
   }
 
-  if (mode == MODE_DVD) {
+  if (l->mode == MODE_DVD) {
     char dev[32];
-    if ((loop_fd = loop_attach(fd, name, dev, sizeof(dev))) < 0)
-      return UA_EXIT_FAIL;
+    if ((l->loop_fd = loop_attach(l->fd, l->name, dev, sizeof(dev))) < 0)
+      return -1;
     /* Fail closed: an unreadable LUN looks like a dead disk on the host */
     char label[256];
-    if (!kernel_may(loop_fd, "blk_file", 0, g.android_gadget, label,
+    if (!kernel_may(l->loop_fd, "blk_file", 0, android_gadget, label,
                     sizeof(label))) {
       ua_error("SELinux does not let the kernel read loop devices (%s), so "
                "the host would see only read errors",
                label);
-      if (g.android_gadget)
+      if (android_gadget)
         ua_log("The USB Arsenal module loads the rule at boot; without it, "
                "run: ksud sepolicy patch \"allow kernel loop_device blk_file "
                "{ open read getattr ioctl }\" (Magisk: magiskpolicy --live)");
-      return UA_EXIT_FAIL;
+      return -1;
     }
-    ua_debug("%s is %s with 2048-byte blocks", name, dev);
-    snprintf(path, sizeof(path), "/proc/self/fd/%d", loop_fd);
+    ua_debug("%s is %s with 2048-byte blocks", l->name, dev);
+    snprintf(l->path, sizeof(l->path), "/proc/self/fd/%d", l->loop_fd);
   }
+  return 0;
+}
 
-  char fdir[PATH_MAX], ldir[PATH_MAX];
-  if (ua_gadget_func_dir(&g, FUNC, fdir, sizeof(fdir)) < 0 ||
-      lun_dir(fdir, lun, ldir, sizeof(ldir)) < 0)
+/* One file behind two LUNs, either of them writable: the host caches each
+ * drive on its own, so a write through one corrupts what the other shows,
+ * and two writers corrupt the file. Live LUNs this call replaces do not
+ * count. A dvd LUN's loop device is skipped; it is read-only anyway. */
+static int shared_rw(const struct load *ls, int n, const char *fdir) {
+  struct stat a, b;
+  for (int i = 0; i < n; i++) {
+    if (fstat(ls[i].fd, &a) < 0)
+      continue;
+    for (int j = 0; j < i; j++)
+      if (fstat(ls[j].fd, &b) == 0 && a.st_dev == b.st_dev &&
+          a.st_ino == b.st_ino &&
+          (ls[i].mode == MODE_RW || ls[j].mode == MODE_RW)) {
+        ua_error("%s is given for LUN %d and LUN %d; a writable LUN cannot "
+                 "share its file",
+                 ls[i].name, ls[j].lun, ls[i].lun);
+        return -1;
+      }
+    for (int lun = 0; lun < 8; lun++) {
+      char ldir[PATH_MAX], p[PATH_MAX + 8], file[PATH_MAX] = "", ro[4] = "";
+      int ours = 0;
+      for (int j = 0; j < n; j++)
+        ours |= ls[j].lun == lun;
+      if (ours || lun_dir(fdir, lun, ldir, sizeof(ldir)) < 0)
+        continue;
+      snprintf(p, sizeof(p), "%s/file", ldir);
+      if (read_file(p, file, sizeof(file)) <= 0 || is_loop(file) ||
+          stat(file, &b) < 0 || a.st_dev != b.st_dev || a.st_ino != b.st_ino)
+        continue;
+      snprintf(p, sizeof(p), "%s/ro", ldir);
+      read_file(p, ro, sizeof(ro));
+      if (ls[i].mode == MODE_RW || ro[0] == '0') {
+        ua_error("%s is already on LUN %d; a writable LUN cannot share its "
+                 "file",
+                 ls[i].name, lun);
+        return -1;
+      }
+    }
+  }
+  return 0;
+}
+
+/* Every image is prepared first, so a bad one fails before the host sees
+ * anything; then all of them load in one begin/commit, one replug however
+ * many LUNs. Other LUNs already on the bus stay as they are. */
+static int do_start(struct load *ls, int n) {
+  struct ua_gadget g;
+  if (ua_gadget_open(&g) < 0 || ua_check_requirements(&g, UA_NEED_STORAGE) < 0)
+    return UA_EXIT_FAIL;
+  for (int i = 0; i < n; i++)
+    if (prepare(&ls[i], g.android_gadget) < 0)
+      return UA_EXIT_FAIL;
+
+  char fdir[PATH_MAX], ldir[UA_MAX_FDS][PATH_MAX];
+  if (ua_gadget_func_dir(&g, FUNC, fdir, sizeof(fdir)) < 0)
+    return UA_EXIT_FAIL;
+  for (int i = 0; i < n; i++)
+    if (lun_dir(fdir, ls[i].lun, ldir[i], sizeof(ldir[i])) < 0)
+      return UA_EXIT_FAIL;
+  if (shared_rw(ls, n, fdir) < 0)
     return UA_EXIT_FAIL;
 
-  /* Already on the bus with this LUN, in the same mode: a medium change is
-   * all the host needs to see, like swapping a disc in a real drive. Disk vs
-   * CD-ROM is a different SCSI device type, which a host only reads when it
-   * enumerates, and a host lock blocks the eject; both take the rebind
-   * below, whose disconnect also clears the lock. */
-  /* dvd and disk differ in sector size, which the host also only reads
-   * when it sees a new medium, so a loaded one is swapped the same way. */
+  /* One image, already on the bus with this LUN, in the same mode: a medium
+   * change is all the host needs to see, like swapping a disc in a real
+   * drive. Disk vs CD-ROM is a different SCSI device type, which a host only
+   * reads when it enumerates, and a host lock blocks the eject; both take the
+   * rebind below, whose disconnect also clears the lock. dvd and disk differ
+   * in sector size, which the host also only reads when it sees a new
+   * medium, so a loaded one is swapped the same way. */
   char cdrom[PATH_MAX + 8], cur[PATH_MAX + 8], v[8] = "";
-  snprintf(cdrom, sizeof(cdrom), "%s/cdrom", ldir);
-  snprintf(cur, sizeof(cur), "%s/file", ldir);
-  if (ua_gadget_live(&g) && ua_gadget_has(&g, FUNC) &&
+  snprintf(cdrom, sizeof(cdrom), "%s/cdrom", ldir[0]);
+  snprintf(cur, sizeof(cur), "%s/file", ldir[0]);
+  if (n == 1 && ua_gadget_live(&g) && ua_gadget_has(&g, FUNC) &&
       read_file(cdrom, v, sizeof(v)) > 0 &&
-      (v[0] == '1') == (mode == MODE_CDROM) &&
+      (v[0] == '1') == (ls[0].mode == MODE_CDROM) &&
       (read_file(cur, cur, sizeof(cur)) <= 0 ||
-       is_loop(cur) == (mode == MODE_DVD))) {
-    int r = lun_load(ldir, path, mode, 0);
+       is_loop(cur) == (ls[0].mode == MODE_DVD))) {
+    int r = lun_load(ldir[0], ls[0].path, ls[0].mode, 0);
     if (r == 0) {
-      ua_log("LUN %d now holds %s (%s)", lun, name, mode_names[mode]);
+      ua_log("LUN %d now holds %s (%s)", ls[0].lun, ls[0].name,
+             mode_names[ls[0].mode]);
       return UA_EXIT_OK;
     }
     if (r != -EBUSY)
@@ -431,43 +500,55 @@ static int do_start(int fd, const char *name, enum mode mode, int lun) {
     ua_debug("host holds the medium lock, rebinding to release it");
   }
 
-  int existed = access(fdir, F_OK) == 0, new_lun = 0;
+  int existed = access(fdir, F_OK) == 0, made[UA_MAX_FDS] = {0}, unlinked = 0,
+      reached = 0;
   if (ua_gadget_begin(&g) < 0)
     return UA_EXIT_FAIL;
   if (ua_gadget_add(&g, FUNC, fdir, sizeof(fdir)) < 0)
     goto fail;
-  /* lun.0 comes with the function; the rest are made on demand, and only
-   * while the function is out of every config (EBUSY otherwise) */
-  if (lun > 0 && access(ldir, F_OK) != 0) {
-    ua_gadget_unlink(&g, FUNC);
-    if (mkdir(ldir, 0755) < 0) {
-      ua_error("Cannot create LUN %d: %s", lun, strerror(errno));
+  for (int i = 0; i < n; i++) {
+    /* lun.0 comes with the function; the rest are made on demand, and only
+     * while the function is out of every config (EBUSY otherwise) */
+    if (ls[i].lun > 0 && access(ldir[i], F_OK) != 0) {
+      if (!unlinked++)
+        ua_gadget_unlink(&g, FUNC);
+      if (mkdir(ldir[i], 0755) < 0) {
+        ua_error("Cannot create LUN %d: %s", ls[i].lun, strerror(errno));
+        goto fail;
+      }
+      made[i] = 1;
+    }
+    reached = i + 1;
+    int r = lun_load(ldir[i], ls[i].path, ls[i].mode, 1);
+    if (r < 0) {
+      if (r == -EBUSY)
+        ua_error("The host still holds the drive locked (EBUSY)");
       goto fail;
     }
-    new_lun = 1;
-  }
-  int r = lun_load(ldir, path, mode, 1);
-  if (r < 0) {
-    if (r == -EBUSY)
-      ua_error("The host still holds the drive locked (EBUSY)");
-    goto fail;
   }
   if (ua_gadget_commit(&g) < 0)
     return UA_EXIT_FAIL;
-  ua_log("Serving %s as a %s on LUN %d", name,
-         mode == MODE_CDROM ? "CD-ROM"
-         : mode == MODE_DVD ? "read-only disk with 2048-byte sectors"
-         : mode == MODE_RW  ? "writable disk"
-                            : "read-only disk",
-         lun);
+  for (int i = 0; i < n; i++)
+    ua_log("Serving %s as a %s on LUN %d", ls[i].name,
+           ls[i].mode == MODE_CDROM ? "CD-ROM"
+           : ls[i].mode == MODE_DVD ? "read-only disk with 2048-byte sectors"
+           : ls[i].mode == MODE_RW  ? "writable disk"
+                                    : "read-only disk",
+           ls[i].lun);
   return UA_EXIT_OK;
 
 fail:
-  /* Undo only what this call made: the other LUNs and functions stay live */
+  /* Leave nothing of this call behind: LUNs it made go, LUNs it reached
+   * that were already there come back empty, their old medium having gone
+   * out first. Other LUNs and functions stay live. */
   if (!existed)
     ua_gadget_remove(&g, FUNC);
-  else if (new_lun)
-    rmdir(ldir);
+  else
+    for (int i = reached - 1; i >= 0; i--)
+      if (made[i])
+        rmdir(ldir[i]);
+      else
+        lun_eject(ldir[i]);
   ua_gadget_commit(&g);
   return UA_EXIT_FAIL;
 }
@@ -564,16 +645,73 @@ void ua_status_storage(const struct ua_gadget *g, int json) {
   }
 }
 
-struct sargs {
+/* One IMAGE of a start: argv index, or fd when the client relay opened it */
+struct simg {
+  int lun, fd, image, mode_set;
   enum mode mode;
-  int mode_set, lun, fd;
-  const char *action;
-  int image; /* index of IMAGE in argv, 0 if none */
 };
 
+struct sargs {
+  int lun, nimg; /* lun: the last --lun, for eject */
+  const char *action;
+  struct simg img[UA_MAX_FDS];
+};
+
+/* An IMAGE takes the --lun and --mode given since the one before it; with
+ * no --lun, the LUN after that one's */
+static int add_image(struct sargs *a, int fd, int image, int *lun, int *mode,
+                     int report) {
+  if (a->nimg == UA_MAX_FDS) {
+    if (report)
+      ua_usage_error("storage", "start takes at most %d IMAGEs", UA_MAX_FDS);
+    return -1;
+  }
+  struct simg *m = &a->img[a->nimg];
+  m->lun = *lun >= 0 ? *lun : a->nimg ? a->img[a->nimg - 1].lun + 1 : 0;
+  m->mode_set = *mode >= 0;
+  m->mode = m->mode_set ? (enum mode) * mode : MODE_AUTO;
+  m->fd = fd;
+  m->image = image;
+  for (int i = 0; i < a->nimg; i++)
+    if (a->img[i].lun == m->lun) {
+      if (report)
+        ua_usage_error("storage", "LUN %d is given twice", m->lun);
+      return -1;
+    }
+  if (m->lun > 7) {
+    /* only reachable without --lun: it was checked when it was read */
+    if (report)
+      ua_usage_error("storage",
+                     "%s would take LUN 8, past the last; give it a --lun",
+                     image ? "an IMAGE" : "a descriptor");
+    return -1;
+  }
+  a->nimg++;
+  *lun = *mode = -1;
+  return 0;
+}
+
+/* A word that is not an option: the action first, then IMAGEs, which only
+ * start takes */
+static int operand(struct sargs *a, int i, char **argv, int *lun, int *mode,
+                   int report) {
+  if (!a->action[0]) {
+    a->action = argv[i];
+    return 0;
+  }
+  if (strcmp(a->action, "start")) {
+    if (report)
+      ua_usage_error("storage", "Too many arguments");
+    return -1;
+  }
+  return add_image(a, -1, i, lun, mode, report);
+}
+
 /* Shared by the command and by a client about to relay it: the client has
- * to find IMAGE to open it on its side. report=0 parses silently and leaves
- * the complaining to the daemon. Returns -1 to go on, else an exit code. */
+ * to find each IMAGE to open it on its side. report=0 parses silently and
+ * leaves the complaining to the daemon. Returns -1 to go on, else an exit
+ * code. Options are read in order ("-" in the option string), so each one
+ * applies to the IMAGE after it. */
 static int parse(int argc, char **argv, struct sargs *a, int report) {
   static const struct option opts[] = {
       {"mode", required_argument, NULL, 'm'},
@@ -582,19 +720,22 @@ static int parse(int argc, char **argv, struct sargs *a, int report) {
       {"help", no_argument, NULL, 'h'},
       {NULL, 0, NULL, 0},
   };
-  int c;
+  int c, lun = -1, mode = -1;
   char *end;
   memset(a, 0, sizeof(*a));
-  a->fd = -1;
   a->action = "";
   optind = 0;
-  while ((c = getopt_long(argc, argv, ":m:l:h", opts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "-:m:l:h", opts, NULL)) != -1) {
     switch (c) {
+    case 1: /* not an option: the action, then IMAGEs */
+      if (operand(a, optind - 1, argv, &lun, &mode, report) < 0)
+        return UA_EXIT_USAGE;
+      break;
     case 'm': {
       int found = 0;
       for (int i = 0; i < NMODES; i++)
         if (!strcmp(optarg, mode_names[i]))
-          a->mode = (enum mode)i, found = 1, a->mode_set = 1;
+          mode = i, found = 1;
       if (!found) {
         if (report)
           ua_usage_error("storage", "Unknown mode '%s'", optarg);
@@ -609,7 +750,7 @@ static int parse(int argc, char **argv, struct sargs *a, int report) {
           ua_usage_error("storage", "--lun takes a number from 0 to 7");
         return UA_EXIT_USAGE;
       }
-      a->lun = (int)v;
+      lun = a->lun = (int)v;
       break;
     }
     case 'F': {
@@ -619,7 +760,8 @@ static int parse(int argc, char **argv, struct sargs *a, int report) {
           ua_usage_error("storage", "--fd takes an open descriptor number");
         return UA_EXIT_USAGE;
       }
-      a->fd = (int)v;
+      if (add_image(a, (int)v, 0, &lun, &mode, report) < 0)
+        return UA_EXIT_USAGE;
       break;
     }
     case 'h':
@@ -637,24 +779,36 @@ static int parse(int argc, char **argv, struct sargs *a, int report) {
       return UA_EXIT_USAGE;
     }
   }
-  int nargs = argc - optind;
-  if (nargs > 0)
-    a->action = argv[optind];
-  if (!strcmp(a->action, "start")) {
-    int want = a->fd >= 0 ? 1 : 2;
-    if (nargs != want) {
+  /* getopt stops at "--"; what follows it is operands, so an IMAGE whose
+   * name starts with '-' can still be given */
+  for (; optind < argc; optind++)
+    if (operand(a, optind, argv, &lun, &mode, report) < 0)
+      return UA_EXIT_USAGE;
+  if (!a->action[0]) {
+    if (report)
+      ua_usage_error("storage", "Missing action");
+    return UA_EXIT_USAGE;
+  }
+  if (strcmp(a->action, "start"))
+    return -1;
+  if (!a->nimg) {
+    if (report)
+      ua_usage_error("storage", "start takes an IMAGE");
+    return UA_EXIT_USAGE;
+  }
+  /* Options after the last IMAGE: with one IMAGE they are its own, as they
+   * always were; with several there is no telling which they meant */
+  if (lun >= 0 || mode >= 0) {
+    if (a->nimg > 1) {
       if (report)
-        ua_usage_error("storage", "start takes exactly one IMAGE");
+        ua_usage_error("storage",
+                       "--lun and --mode go before the IMAGE they are for");
       return UA_EXIT_USAGE;
     }
-    a->image = a->fd >= 0 ? 0 : optind + 1;
-    return -1;
-  }
-  if (nargs != 1) {
-    if (report)
-      ua_usage_error("storage",
-                     nargs ? "Too many arguments" : "Missing action");
-    return UA_EXIT_USAGE;
+    if (lun >= 0)
+      a->img[0].lun = lun;
+    if (mode >= 0)
+      a->img[0].mode = (enum mode)mode, a->img[0].mode_set = 1;
   }
   return -1;
 }
@@ -663,19 +817,27 @@ static int open_image(const char *image, enum mode mode) {
   return open(image, (mode == MODE_RW ? O_RDWR : O_RDONLY) | O_CLOEXEC);
 }
 
-/* For the client relay: open IMAGE here, in the caller's namespaces and with
- * the caller's own permissions, and say where it sits in argv so the relay
- * can swap it for --fd. Returns that index, 0 when there is nothing to open,
- * -1 when the image cannot be opened (already reported). */
-int ua_storage_client_fd(int argc, char **argv, int *fd) {
+/* For the client relay: open every IMAGE here, in the caller's namespaces and
+ * with the caller's own permissions, and say where each sits in argv so the
+ * relay can swap it for --fd. Returns how many, 0 when there is nothing to
+ * open, -1 when one cannot be opened (already reported). */
+int ua_storage_client_fds(int argc, char **argv, int *fds, int *idx) {
   struct sargs a;
-  if (parse(argc, argv, &a, 0) != -1 || !a.image)
+  if (parse(argc, argv, &a, 0) != -1 || strcmp(a.action, "start"))
     return 0;
-  if ((*fd = open_image(argv[a.image], a.mode)) < 0) {
-    ua_error("%s: %s", argv[a.image], strerror(errno));
-    return -1;
+  int n = 0;
+  for (int i = 0; i < a.nimg; i++) {
+    if (!a.img[i].image)
+      continue;
+    if ((fds[n] = open_image(argv[a.img[i].image], a.img[i].mode)) < 0) {
+      ua_error("%s: %s", argv[a.img[i].image], strerror(errno));
+      while (n--)
+        close(fds[n]);
+      return -1;
+    }
+    idx[n++] = a.img[i].image;
   }
-  return a.image;
+  return n;
 }
 
 int ua_cmd_storage(int argc, char **argv) {
@@ -690,30 +852,46 @@ int ua_cmd_storage(int argc, char **argv) {
   struct ua_config cfg;
   ua_config_active(&cfg);
   safe_strncpy(inquiry, cfg.storage_inquiry, sizeof(inquiry));
-  for (int i = 0; !a.mode_set && i < NMODES; i++)
-    if (!strcmp(cfg.storage_mode, mode_names[i]))
-      a.mode = (enum mode)i;
   if (!strcmp(a.action, "start")) {
-    char name[PATH_MAX] = "";
-    int fd = a.fd;
-    if (fd >= 0) {
-      char link[64];
-      snprintf(link, sizeof(link), "/proc/self/fd/%d", fd);
-      ssize_t n = readlink(link, name, sizeof(name) - 1);
-      name[n > 0 ? n : 0] = '\0';
-    } else {
-      const char *image = argv[a.image];
-      if ((fd = open_image(image, a.mode)) < 0) {
-        ua_error("%s: %s", image, strerror(errno));
-        return UA_EXIT_FAIL;
+    struct load ls[UA_MAX_FDS];
+    int n = 0;
+    r = UA_EXIT_FAIL;
+    for (; n < a.nimg; n++) {
+      struct simg *m = &a.img[n];
+      struct load *l = &ls[n];
+      l->lun = m->lun;
+      l->loop_fd = -1;
+      l->name[0] = '\0';
+      l->mode = m->mode;
+      for (int i = 0; !m->mode_set && i < NMODES; i++)
+        if (!strcmp(cfg.storage_mode, mode_names[i]))
+          l->mode = (enum mode)i;
+      if ((l->fd = m->fd) >= 0) {
+        char link[64];
+        snprintf(link, sizeof(link), "/proc/self/fd/%d", l->fd);
+        ssize_t len = readlink(link, l->name, sizeof(l->name) - 1);
+        l->name[len > 0 ? len : 0] = '\0';
+      } else {
+        const char *image = argv[m->image];
+        if ((l->fd = open_image(image, l->mode)) < 0) {
+          ua_error("%s: %s", image, strerror(errno));
+          goto done;
+        }
+        if (!realpath(image, l->name))
+          safe_strncpy(l->name, image, sizeof(l->name));
       }
-      if (!realpath(image, name))
-        safe_strncpy(name, image, sizeof(name));
+      if (!l->name[0])
+        safe_strncpy(l->name, "image", sizeof(l->name));
     }
-    r = do_start(fd, name[0] ? name : "image", a.mode, a.lun);
-    close(fd); /* the kernel holds its own reference by now */
-    if (loop_fd >= 0)
-      close(loop_fd); /* autoclear: the loop now lives as long as the LUN */
+    r = do_start(ls, n);
+  done:
+    /* The kernel holds its own references by now; a loop is autoclear, so it
+     * lives as long as its LUN */
+    for (int i = 0; i < n; i++) {
+      close(ls[i].fd);
+      if (ls[i].loop_fd >= 0)
+        close(ls[i].loop_fd);
+    }
     return r;
   }
   if (!strcmp(a.action, "eject"))

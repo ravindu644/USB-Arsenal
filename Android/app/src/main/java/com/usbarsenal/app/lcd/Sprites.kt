@@ -169,6 +169,9 @@ object Sprites {
         ),
     )
 
+    // The empty storage screen's question, beside Pin
+    val Question = Sprite(listOf("..#####..", ".##...##.", "......##.", ".....##..", "....##...", "....##...", ".........", "....##...", "....##..."))
+
     val Spark = Sprite(listOf("...#...", ".......", "...#...", "#.###.#", "...#...", ".......", "...#..."))
 
     val Pointer = Sprite(

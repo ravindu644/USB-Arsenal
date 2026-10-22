@@ -484,3 +484,11 @@ Tick a box only when the item is merged and verified as described in its phase.
   `Running: status --json` and buried the commands that changed something. The Android app
   also reads both directly (`UA_NO_PROXY=1`). Verified on the a166p: relayed `status`,
   `identity show` and `-v status` leave the log as it was, `hid stop` is still logged.
+- 2026-10-22: `storage start` takes up to eight IMAGEs, each after its own `--lun` and
+  `--mode`, prepared first and loaded in one begin/commit, so the host re-plugs once; the
+  relay sends each IMAGE as its own fd (3, 4, ...). One IMAGE keeps the swap in place, and
+  options after a lone IMAGE still apply to it. Verified on the a166p: a 2-LUN start (rw and
+  disk) gave one pullup and a host with `sda` (rw) and `sdb` (ro) at once; `stop` handed the
+  port back; `dmesg` clean. `start` refuses one file on two LUNs when either is writable,
+  a failed start leaves no LUN of its own behind, and `--` passes an IMAGE named `-x`
+  (verified through the daemon on the a166p).

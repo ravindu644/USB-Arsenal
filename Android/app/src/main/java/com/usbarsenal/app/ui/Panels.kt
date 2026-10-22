@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -55,8 +56,8 @@ data class DriveImage(val name: String, val size: String, val kind: String, val 
 
 /*
  * .drive: a 150dp box with an inverted 40dp face (the LED, the LUN, eject) over the disc, the
- * file and `size · kind` with its access tag. Ejected or empty, the tray is out over the body
- * with a ghosted disc; it slides in 3 steps of 2 frames. The LED blinks while the host is
+ * file and `size · kind` with its access tag. Ejected or empty, the tray is out over the body:
+ * a ghosted disc on the drive's ground, sliding in 3 steps of 2 frames. The LED blinks while the host is
  * served and is hollow with no image.
  */
 @Composable
@@ -77,7 +78,8 @@ fun Drive(lun: Int, image: DriveImage?, serving: Boolean, ejected: Boolean, onEj
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Lcd.lines)) {
                     Marquee(image.name, LcdType.data, Modifier.fillMaxWidth())
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("${image.size} · ${image.kind}", LcdType.data)
+                        // A file outside the folder has no size to show here
+                        Text(listOf(image.size, image.kind).filter { it.isNotEmpty() }.joinToString(" · "), LcdType.data)
                         Tag(image.access)
                     }
                 }
@@ -90,13 +92,8 @@ fun Drive(lun: Int, image: DriveImage?, serving: Boolean, ejected: Boolean, onEj
                 .fillMaxWidth()
                 .height(106.dp)
                 .offset { IntOffset(0, tray.roundToPx()) }
-                .background(ground)
-                .drawBehind {
-                    val w = Lcd.pixel.toPx()
-                    drawRect(ink, size = Size(w, size.height))
-                    drawRect(ink, Offset(size.width - w, 0f), Size(w, size.height))
-                    drawRect(ink, Offset(0f, size.height - w), Size(size.width, w))
-                },
+                // No frame of its own: inside the drive's box a second one read as a stray rectangle
+                .background(ground),
             contentAlignment = Alignment.Center,
         ) { SpriteIcon(Sprites.Storage, 5.dp, Modifier.ghost(ground)) }
         Inverted {
@@ -229,7 +226,13 @@ fun ValueBox(label: String, value: String, modifier: Modifier = Modifier) = Colu
  * placeholder states the default.
  */
 @Composable
-fun Input(value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier, placeholder: String = "") {
+fun Input(
+    value: String,
+    onChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    keyboard: KeyboardOptions = KeyboardOptions.Default,
+) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val ink = LocalLcd.current.ink
@@ -243,6 +246,7 @@ fun Input(value: String, onChange: (String) -> Unit, modifier: Modifier = Modifi
             .border(Lcd.pixel, ink),
         textStyle = LcdType.data.copy(color = ink),
         singleLine = true,
+        keyboardOptions = keyboard,
         interactionSource = interaction,
         cursorBrush = SolidColor(ink),
         decorationBox = { field ->
