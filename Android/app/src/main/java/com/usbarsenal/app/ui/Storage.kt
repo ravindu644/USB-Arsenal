@@ -67,7 +67,6 @@ fun sizeText(bytes: Long): String = if (bytes >= GIB) "%.1fG".format(Locale.ROOT
 // A warning only for a consequence (DESIGN.md): a CD-ROM past its limit, and a disk the host can write
 fun storageWarning(mode: String, bytes: Long?): String? = when {
     mode == "cdrom" && bytes != null && bytes > CDROM_MAX -> "cd-rom stops at 2.36G. the host reads a truncated disc"
-    mode == "rw" -> "host can write to this file"
     else -> null
 }
 

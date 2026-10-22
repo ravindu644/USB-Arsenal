@@ -15,7 +15,8 @@ class StorageTest {
 
     @Test
     fun warnings() {
-        assertEquals("host can write to this file", storageWarning("rw", 1L shl 30))
+        // rw needs none: the segment and the drive's tag already say it
+        assertNull(storageWarning("rw", 1L shl 30))
         // Over the CD-ROM limit only matters in cdrom mode; auto picks dvd for it
         assertEquals("cd-rom stops at 2.36G. the host reads a truncated disc", storageWarning("cdrom", 5L shl 30))
         assertNull(storageWarning("cdrom", 1L shl 30))
