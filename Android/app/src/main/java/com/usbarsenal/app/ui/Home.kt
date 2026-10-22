@@ -102,7 +102,7 @@ fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings
     val barShake = rememberShake()
     val wholeFault = Gadget.fault?.takeIf { it.where == null }
     LaunchedEffect(wholeFault) { if (wholeFault != null) barShake.fire() }
-    Screen(bottomBar = { BottomBar(port, { Gadget.run(null, "stop") { if (it) Gadget.started.clear() } }, Modifier.shake(barShake)) }) {
+    Screen(bottomBar = { BottomBar(port, { Gadget.run(null, "stop") { if (it) Gadget.forgetStart() } }, Modifier.shake(barShake)) }) {
         Top {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Pin(2.dp)

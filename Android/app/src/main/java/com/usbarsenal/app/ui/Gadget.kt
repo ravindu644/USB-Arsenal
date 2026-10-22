@@ -1,11 +1,20 @@
 package com.usbarsenal.app.ui
 
 import android.content.Context
+import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import com.usbarsenal.app.lcd.Lcd
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.usbarsenal.app.backend.Backend
@@ -14,6 +23,7 @@ import com.usbarsenal.app.backend.CHANGE_TIMEOUT_MS
 import androidx.core.content.edit
 import com.usbarsenal.app.backend.Capabilities
 import com.usbarsenal.app.backend.GadgetStatus
+import com.usbarsenal.app.backend.Lun
 import com.usbarsenal.app.backend.Probe
 import com.usbarsenal.app.backend.Root
 import com.usbarsenal.app.backend.UA
@@ -64,12 +74,20 @@ object Gadget {
     // The installer's verdict on the backend, as Home last read it; null until it has
     var backend by mutableStateOf<Backend?>(null)
 
-    // What each function was last started with from here. Its setup now giving another start
-    // is what the rebind bar offers to apply. Kept for the process: a function the app did not
-    // start (the CLI, an earlier process) has none, and its changes wait for Home's switch.
-    // [rebinding] keeps the bar replugging across its stop and its start
-    val started = mutableStateMapOf<Fn, List<String>>()
-    var rebinding by mutableStateOf<Fn?>(null)
+    // The setup Storage and Tether were last started with from here: a screen's setup that now
+    // differs from it is what leaving the screen offers to apply, and Discard goes back to it.
+    // Setups, not command lines, so a profile change edits nothing. Kept for the process: a
+    // function the app did not start (the CLI, an earlier process) has none, and its changes
+    // wait for Home's switch. HID has no setup yet. [applying] marks an apply at work
+    var startedPicks by mutableStateOf<List<Pick>?>(null)
+    var startedPlan by mutableStateOf<TetherPlan?>(null)
+    var applying by mutableStateOf<Fn?>(null)
+
+    // We no longer know what runs: after a stop, or an apply that failed part of the way
+    fun forgetStart(fn: Fn? = null) {
+        if (fn != Fn.TETHER) startedPicks = null
+        if (fn != Fn.STORAGE) startedPlan = null
+    }
     var fault by mutableStateOf<Fault?>(null)
     val cli = mutableStateListOf<String>()
 
@@ -91,9 +109,10 @@ object Gadget {
      * Runs `usb-arsenal ARGS` for [fn] (null: the whole gadget). Its output goes to the CLI log
      * as printed; a failure leaves stderr's last line as the fault under [fn]'s row.
      */
-    // [onDone] hears whether it worked; a command refused because another runs never starts
-    fun run(fn: Fn?, vararg args: String, onDone: (Boolean) -> Unit = {}) {
-        if (busy != null) return
+    // [onDone] hears whether it worked. False when refused because another runs: it never
+    // starts, and [onDone] is never called
+    fun run(fn: Fn?, vararg args: String, onDone: (Boolean) -> Unit = {}): Boolean {
+        if (busy != null) return false
         val typed = args.joinToString(" ")
         // `stop` and `<function> stop`; never read from the typed line, whose path could end in it
         busy = Busy(fn, typed, stopping = args.firstOrNull() == "stop" || args.getOrNull(1) == "stop")
@@ -114,6 +133,7 @@ object Gadget {
             busy = null
             onDone(r.ok)
         }
+        return true
     }
 }
 
@@ -124,40 +144,130 @@ fun setupArgs(fn: Fn): List<String> = when (fn) {
     Fn.HID -> listOf("hid", "start")
 }
 
-// Whether what runs is not what the screen now sets up: the start that ran is compared, so an
-// edit made back again, or made while a start ran, is judged by what actually started
-fun pending(fn: Fn) = Gadget.status.isOn(fn) && Gadget.started[fn]?.let { it != setupArgs(fn) } == true
+// Whether what runs is not what the screen now sets up: an edit made back again is no change
+fun pending(fn: Fn) = Gadget.status.isOn(fn) && when (fn) {
+    Fn.STORAGE -> Gadget.startedPicks?.let { it != Picks.all.sortedBy { p -> p.lun } }
+    Fn.TETHER -> Gadget.startedPlan?.let { it != TetherSetup.plan }
+    Fn.HID -> null
+} == true
 
-// Start a function with what its screen set up, or stop it
+// Start a function with what its screen set up, or stop it. What started is recorded as the
+// setup it came from, taken now: an edit made while the start runs then shows as a change
 fun flip(fn: Fn, on: Boolean, onDone: (Boolean) -> Unit = {}) {
     val args = if (on) setupArgs(fn) else listOf(fn.name.lowercase(), "stop")
+    val picks = Picks.all.sortedBy { it.lun }
+    val plan = TetherSetup.plan
     Gadget.run(fn, *args.toTypedArray()) { ok ->
-        if (ok && on) Gadget.started[fn] = args
-        if (ok && !on) Gadget.started.remove(fn)
+        if (ok && on && fn == Fn.STORAGE) Gadget.startedPicks = picks
+        if (ok && on && fn == Fn.TETHER) Gadget.startedPlan = plan
+        if (ok && !on) Gadget.forgetStart(fn)
         onDone(ok)
     }
 }
 
-// Stop [fn] and start it again with its setup: one replug, and what runs is what was set
-fun rebind(fn: Fn) {
-    Gadget.rebinding = fn
-    Gadget.run(fn, fn.name.lowercase(), "stop") { ok ->
-        if (ok) flip(fn, true) { Gadget.rebinding = null } else Gadget.rebinding = null
-    }
+// Back to the setup the function was started with: what runs, so nothing waits any more
+fun discard(context: Context, fn: Fn) {
+    if (fn == Fn.STORAGE) Gadget.startedPicks?.let { Picks.replace(context, it) }
+    if (fn == Fn.TETHER) Gadget.startedPlan?.let { TetherSetup.set(context, it) }
 }
 
-// A function screen's bottom bar: the rebind key while its setup waits, Replugging while the
-// rebind runs, and nothing otherwise. It is held as Home's switches are
-@Composable
-fun rebindBar(fn: Fn): (@Composable () -> Unit)? {
-    val busy = Gadget.busy
-    val port = when {
-        Gadget.rebinding == fn -> Port.Replugging("usb-arsenal ${busy?.typed ?: "${fn.name.lowercase()} start"}")
-        pending(fn) -> Port.Pending
-        else -> return null
+/*
+ * What applying Storage's setup takes, LUN by LUN against the picks it last started with, so
+ * the host keeps every drive it can. Compared as the app gave them, not as status prints them:
+ * the same file can show under another mount, and auto's choice is not a mode. [live] only says
+ * which LUNs exist and which hold a medium.
+ * - A LUN no longer picked and still loaded is ejected in place. It stays an empty drive until
+ *   storage stops: a LUN cannot be removed without a replug.
+ * - A pick that changed, or whose LUN the host ejected itself, is loaded again. On a LUN that
+ *   exists, each gets a start of its own, since the backend swaps in place only for one image
+ *   (a new type, or a drive the host holds locked, still replugs).
+ * - Picks for LUNs that do not exist yet go in one start: one replug for all of them.
+ * With nothing picked, storage is set up to be off.
+ */
+fun storageApply(before: List<Pick>, picks: List<Pick>, live: List<Lun>): List<List<String>> {
+    if (picks.isEmpty()) return listOf(listOf("storage", "stop"))
+    val loaded = live.filter { it.file.isNotEmpty() }.map { it.lun }
+    val ejects = before.filter { b -> b.lun in loaded && picks.none { it.lun == b.lun } }.map { listOf("storage", "eject", "--lun", "${it.lun}") }
+    val (swaps, added) = picks.filter { it !in before || it.lun !in loaded }.partition { p -> live.any { it.lun == p.lun } }
+    return ejects + swaps.map { startArgs(listOf(it)) } + if (added.isEmpty()) emptyList() else listOf(startArgs(added))
+}
+
+// Bring what runs to the setup: Storage LUN by LUN, the others by a stop and a start. The
+// commands run one after another and stop at the first that fails, whose fault shows as usual
+fun apply(fn: Fn) {
+    val steps = when (fn) {
+        Fn.STORAGE -> storageApply(Gadget.startedPicks ?: return, Picks.all, Gadget.status?.storage.orEmpty())
+        else -> listOf(listOf(fn.name.lowercase(), "stop"), setupArgs(fn))
     }
-    val can = busy == null && !Gadget.backend.holds() && startable(fn)
-    return { BottomBar(port, onStopAll = {}, onRebind = if (can) ({ rebind(fn) }) else null) }
+    // The setup as it is now is what runs once every step works; one taken later would hide an
+    // edit made meanwhile
+    val picks = Picks.all.sortedBy { it.lun }
+    val plan = TetherSetup.plan
+    val on = startable(fn)
+    Gadget.applying = fn
+    fun step(i: Int) {
+        if (i == steps.size) {
+            Gadget.forgetStart(fn)
+            if (on && fn == Fn.STORAGE) Gadget.startedPicks = picks
+            if (on && fn == Fn.TETHER) Gadget.startedPlan = plan
+            Gadget.applying = null
+            return
+        }
+        val accepted = Gadget.run(fn, *steps[i].toTypedArray()) { ok ->
+            if (ok) {
+                step(i + 1)
+            } else {
+                // Part of it ran: what runs is no longer what any setup says, so nothing is
+                // offered against it until Home's switch starts it again
+                Gadget.forgetStart(fn)
+                Gadget.applying = null
+            }
+        }
+        if (!accepted) Gadget.applying = null
+    }
+    step(0)
+}
+
+// A setup that cannot start holds the apply, as Home's switches are held, except storage with
+// nothing picked: that stops it
+fun canApply(fn: Fn) = Gadget.busy == null && !Gadget.backend.holds() && (startable(fn) || fn == Fn.STORAGE)
+
+// What applying does, for the sheet that asks: the consequence on the host
+private fun applyNote(fn: Fn) = when (fn) {
+    Fn.STORAGE -> "The host still sees the drives as they were. Apply loads your changes, and may reconnect every drive; Discard puts your picks back."
+    Fn.TETHER -> "Tether still runs as it was. Apply restarts it, and the host loses its link for a moment; Discard puts your settings back."
+    Fn.HID -> "HID still runs as it was. Apply restarts it, and the host loses the keyboard and mouse for a moment."
+}
+
+/*
+ * Back with a change not applied, while the function runs: the screen would be left showing a
+ * setup that is not what runs, so it asks, and only here is a change applied. Apply leaves
+ * with it applied (Home's bar shows it replugging); Discard puts the setup back as it started.
+ * Goes in the screen's root after its own BackHandler, and before its other sheets, so theirs
+ * win while they are open.
+ */
+@Composable
+fun UnappliedSheet(fn: Fn, back: () -> Unit) {
+    val context = LocalContext.current
+    var asking by rememberSaveable { mutableStateOf(false) }
+    val discardKey = remember { FocusRequester() }
+    BackHandler(enabled = pending(fn) && Gadget.applying != fn) { asking = true }
+    Sheet(asking, onDismiss = { asking = false }, entry = discardKey) {
+        Title("Not applied")
+        Note(applyNote(fn))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Lcd.tight)) {
+            Key("Discard", Modifier.weight(1f).focusRequester(discardKey)) {
+                asking = false
+                discard(context, fn)
+                back()
+            }
+            Key("Apply", Modifier.weight(1f), primary = true, enabled = canApply(fn)) {
+                asking = false
+                apply(fn)
+                back()
+            }
+        }
+    }
 }
 
 // Whether a start has anything to start: storage needs a pick, tether a setup the backend takes
@@ -251,6 +361,12 @@ object Picks {
     fun set(context: Context, pick: Pick) {
         all.removeAll { it.lun == pick.lun }
         all += pick
+        save(context)
+    }
+
+    fun replace(context: Context, picks: List<Pick>) {
+        all.clear()
+        all += picks
         save(context)
     }
 

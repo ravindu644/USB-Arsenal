@@ -352,10 +352,17 @@ Storage, Tether and HID work one way.
   has no switch.
 - **Home's row** opens that screen (`STORAGE >`), and its DIP is the only switch. It starts the
   whole setup in one command, so every LUN comes up in one replug.
-- **A change while the function runs** waits. The screen gets a bottom bar, `Not applied` and
-  `tap to rebind`, and tapping it stops the function and starts it with the setup. While that
-  runs, the bar is the Replugging bar, inverted, with the command. The chain, the counters and
-  a drive's LED keep showing what runs.
+- **A change while the function runs** waits until Back. Back then asks, in a sheet, `Not
+  applied`, with one line saying what applying does to the host. `Discard` puts the setup back
+  as the function started; `Apply` applies it, and Home's bar shows it replugging. Either way
+  the screen is left, so it never shows a setup that is not what runs. Nothing else on the
+  screen says a change waits.
+- **Storage applies LUN by LUN,** so the host keeps every drive it can: a LUN no longer picked
+  is ejected in place, and each new image on a live LUN gets a start of its own, which swaps in
+  place when the type stays the same. A new LUN, a new type, or a drive the host holds locked
+  replugs, and with it every drive and function. Tether and HID stop and start. The chain, the
+  counters and a drive's LED keep showing what runs; the LUN strip shows the setup (and, for
+  storage the app did not start, what runs).
 
 ### Function row (`.row`)
 32px sprite, Silkscreen name with ` >` (the row opens its screen), two VT323 status lines, DIP
@@ -411,7 +418,9 @@ label (`ncm`, `masquerade`). Label left, value right. Addresses live in the key-
 below, not in the chain.
 
 ### Key-value rows (`.kv`)
-Silkscreen label left, VT323 value right, 44px tall. For settings and facts, one per line.
+Silkscreen label left, VT323 value right, 44px tall. For settings and facts, one per line. A
+row that opens something (`a.kv`: Identity, Fonts, a Choice) ends its value with ` >`, as
+Home's rows end their name.
 
 ### Input (`.inp`) and field (`.field`)
 2px ink box, VT323 text, label above in Silkscreen. A placeholder states the default
@@ -471,7 +480,7 @@ frames with `Reject`, and switches show the real state again once `status --json
 The app's own timeout reads `[-] Timed out (30s)`.
 
 ### Choice
-A choice from a list the phone has (a gateway's container). A `LinkRow` names it, `none` until
+A choice from a list the phone has (a gateway's container). A `LinkRow` names it (`Container  OpenWrt >`), `none` until
 something is chosen, and opens a sheet of rows like the files list, the chosen one inverted.
 With nothing to choose, the sheet holds one ghosted line (`No containers are running`).
 
@@ -705,7 +714,7 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | Tether chain, Tx, Rx | `status --json`: `tether`'s `iface`, `upstream`, `gateway_*`, `tx_bytes`, `rx_bytes` |
 | Gateway, container, its iface | `--gateway CONTAINER`, `--gateway-iface IFACE`; the containers are `droidspaces show --json`'s `running`, and the gateway shows only with `/data/local/Droidspaces/bin/droidspaces` installed |
 | Tether address, DNS, upstream, DHCP and NAT | `--address CIDR`, `--dns IP[,IP]`, `--upstream IFACE`, `--no-net` |
-| Rebind bar | `<function> stop`, then `<function> start` with the setup |
+| Not applied sheet, Apply | Storage: `storage eject --lun N` for a LUN no longer picked, then one `storage start` with the changed picks (`storage stop` with none); Tether and HID: `stop`, then `start` with the setup |
 | HID interval | `hid start --interval N`, period 2^(N-1)×125µs, set at start |
 | Identity fields, Save, Reset | profile keys, `identity set FILE`, `identity unset` |
 | Log tabs | command output (CLI) and `Logs/usb-arsenald.log` (Daemon) |
@@ -720,7 +729,7 @@ Every command runs through root in its own short-lived shell with a timeout (see
 so one stuck command can never freeze the screen.
 
 App-side features, done by the app itself: each function's setup (Storage's picks, every
-Tether option), the rebind bar, the `/sdcard/USB-Arsenal` file list, Create (a sparse
+Tether option), the Not applied sheet, the `/sdcard/USB-Arsenal` file list, Create (a sparse
 image, as `truncate -s` does, or a full one with progress), HID input written to `/dev/hidgN`,
 and the Motion and Haptics switches in Settings. Settings' Daemon mode writes `1` or `0` to
 `/data/local/USB-Arsenal/.daemon_mode`, which the boot module's `service.sh` reads, and System
@@ -729,8 +738,8 @@ workspace binary (Droidspaces' `DaemonModeRepository` and `SymlinkInstaller`); b
 next boot.
 
 Not shown because the backend cannot: UVC (not built), host controller or port names, lease
-countdowns, link uptime, a configfs write trace, a pending-changes queue (the rebind bar says only
-that a setup waits, not what changed).
+countdowns, link uptime, a configfs write trace, a pending-changes queue (the Not applied sheet says
+only that a setup waits, not what changed).
 
 ## Do's and Don'ts
 
@@ -775,6 +784,3 @@ Looked at and kept. Do not "fix" these without a reason the original one misses.
 - **One theme.** An LCD has one look. Both system themes get the same screen.
 - **The marquee moves text.** Only for text that does not fit, in steps, so long filenames stay
   readable without wrapping the row.
-- **The rebind bar comes and goes.** It shows only while a running function's setup differs
-  from the start that brought it up, so a screen with nothing waiting stays clear. Coming or
-  going, it moves Storage's bottom keys, as Home's bar changes height between its states.

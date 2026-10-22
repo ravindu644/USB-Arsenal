@@ -42,6 +42,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.focusGroup
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
@@ -343,6 +348,8 @@ fun LinkRow(label: String, value: String, onClick: (() -> Unit)?, modifier: Modi
         Inverted(focused || pressed) {
             Kv(label, Modifier.background(LocalLcd.current.ground).padding(horizontal = 10.dp)) {
                 Marquee(value, LcdType.data, Modifier.weight(1f), end = true)
+                // The > says the row opens something, as Home's rows do; outside the marquee, so it never slides away
+                if (onClick != null) Text(" >", LcdType.data)
             }
         }
     }
@@ -372,7 +379,7 @@ fun ChoiceSheet(open: Boolean, title: String, options: List<String>, chosen: Str
  * navigation bar.
  */
 @Composable
-fun Sheet(open: Boolean, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+fun Sheet(open: Boolean, onDismiss: () -> Unit, entry: FocusRequester? = null, content: @Composable ColumnScope.() -> Unit) {
     val state = remember { MutableTransitionState(false) }
     state.targetState = open
     if (!state.currentState && !state.targetState) return
@@ -381,6 +388,16 @@ fun Sheet(open: Boolean, onDismiss: () -> Unit, content: @Composable ColumnScope
     // The scrim's gesture outlives a recomposition; it has to call the newest onDismiss
     val dismiss by rememberUpdatedState(onDismiss)
     val ink = LocalLcd.current.ink
+    // Keys and pads work the sheet alone: focus moves into it as it opens and cannot leave for
+    // the screen behind the scrim, where Enter would press something unseen. It lands on
+    // [entry], a key, so no field raises the keyboard unasked; without one, on the first control
+    val group = remember { FocusRequester() }
+    LaunchedEffect(open) {
+        if (open) {
+            withFrameMillis {}
+            runCatching { (entry ?: group).requestFocus() }
+        }
+    }
     Box(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize().dither(Dither.D50, ink).pointerInput(Unit) { detectTapGestures { dismiss() } })
         Column(
@@ -395,7 +412,10 @@ fun Sheet(open: Boolean, onDismiss: () -> Unit, content: @Composable ColumnScope
                 .drawBehind { drawRect(ink, size = Size(size.width, Lcd.pixel.toPx())) }
                 .pointerInput(Unit) { detectTapGestures {} }
                 .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(Lcd.gutter),
+                .padding(Lcd.gutter)
+                .focusRequester(group)
+                .focusProperties { onExit = { if (open) cancelFocusChange() } }
+                .focusGroup(),
             verticalArrangement = Arrangement.spacedBy(Lcd.section),
             content = content,
         )
@@ -421,19 +441,16 @@ sealed interface Port {
     // [command] is what is running, as typed
     data class Replugging(val command: String) : Port
 
-    data object Android : Port
 
-    // A function's screen: its setup changed while it ran, and a tap rebinds it
-    data object Pending : Port
+    data object Android : Port
 }
 
 /*
  * .strip: Home's bottom bar, flush to the screen edges under a 2dp rule, its ground reaching
- * under the navigation bar. A new state cuts in over two bands. On a function's screen it is
- * the rebind bar: Pending is one key over the whole bar, then Replugging while it runs.
+ * under the navigation bar. A new state cuts in over two bands.
  */
 @Composable
-fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier = Modifier, onRebind: (() -> Unit)? = null) = Redraw(
+fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier = Modifier) = Redraw(
     port,
     back = false,
     modifier = modifier.fillMaxWidth(),
@@ -442,14 +459,10 @@ fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier = Modifier, 
     contentAlignment = Alignment.BottomStart,
 ) { shown ->
     val rule = LocalLcd.current.ink
-    val rebindKey = remember { MutableInteractionSource() }
-    val rebindFocused by rebindKey.collectIsFocusedAsState()
-    val rebindPressed by rebindKey.collectIsPressedAsState()
     val body = @Composable {
         Column(
             Modifier
                 .fillMaxWidth()
-                .then(if (shown is Port.Pending) Modifier.lcdClickable(rebindKey, outline = false, role = Role.Button, enabled = onRebind != null) { onRebind?.invoke() } else Modifier)
                 .background(LocalLcd.current.ground)
                 .drawBehind { drawRect(rule, size = Size(size.width, Lcd.pixel.toPx())) }
                 .windowInsetsPadding(WindowInsets.navigationBars)
@@ -480,20 +493,12 @@ fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier = Modifier, 
                         SpriteIcon(Sprites.PinBlink, 2.dp)
                         Text("Port with Android", LcdType.labelStrong)
                     }
-                    Port.Pending -> {
-                        Pin(2.dp)
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Lcd.lines)) {
-                            Text("Not applied", LcdType.labelStrong)
-                            Text("tap to rebind", LcdType.data)
-                        }
-                    }
                 }
             }
             if (shown is Port.Bound) Key("Stop all", Modifier.fillMaxWidth(), haptic = { gestureEnd() }, onClick = onStopAll)
         }
     }
-    // Focused or held, the rebind key inverts as rows do; replugging, the bar does
-    Inverted(shown is Port.Replugging || (shown is Port.Pending && (rebindFocused || rebindPressed)), body)
+    Inverted(shown is Port.Replugging, body)
 }
 
 /*

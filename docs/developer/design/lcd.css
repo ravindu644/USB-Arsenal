@@ -82,9 +82,6 @@ body{margin:0}
 
 /* Bottom bar: gadget state, always on Home. Inverted only while replugging */
 .strip{display:flex;flex-direction:column;gap:16px;margin:auto -20px -68px;padding:14px 20px 68px;box-sizing:border-box;border-top:2px solid var(--ink)}
-/* The rebind bar: a function screen's strip that is one key, while its setup waits */
-.strip.rebind{cursor:pointer}
-.strip.rebind:focus-visible,.strip.rebind:active{background:var(--ink);color:var(--lcd)}
 .who{display:flex;align-items:center;gap:12px;min-height:44px}
 
 /* Inputs */
