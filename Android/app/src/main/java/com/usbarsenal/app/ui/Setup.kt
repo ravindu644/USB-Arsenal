@@ -158,6 +158,9 @@ fun App() {
             push(Step.INSTALL)
         }
     }
+    // The bind moment plays over whatever screen started the bind. Kept with the process, as the
+    // count is: the activity handles a rotation itself, so it does not replay
+    var shownBinds by remember { mutableIntStateOf(Gadget.binds) }
     Redraw(stack.last(), back, Modifier.fillMaxSize()) {
         when (it) {
             Step.WELCOME -> Welcome { push(Step.ROOT) }
@@ -194,6 +197,7 @@ fun App() {
             Step.QUACKY -> QuackyScreen(back = ::pop)
         }
     }
+    if (Gadget.binds > shownBinds) BindMoment { shownBinds = Gadget.binds }
 }
 
 // Initial focus goes to the screen's primary key once it is there, from an effect, never the body

@@ -100,6 +100,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.usbarsenal.app.lcd.FRAME_MS
 import com.usbarsenal.app.lcd.Haptics
@@ -272,8 +273,20 @@ fun Text(
         BasicText(shown, modifier, style.copy(color = ink), maxLines = maxLines, overflow = TextOverflow.Clip)
         return
     }
-    // 4dp gap plus the 10x16 block, as .blk's margin and size
-    val box = with(LocalDensity.current) { Placeholder(14.dp.toSp(), 16.dp.toSp(), PlaceholderVerticalAlign.TextCenter) }
+    // 4dp gap plus the 10x16 block, as .blk's margin and size; on Jersey 10 it is .32em by .62em
+    // on the baseline, as .big .blk
+    val density = LocalDensity.current
+    val big = style.fontFamily == LcdType.hero.fontFamily
+    val block = with(density) {
+        if (big) DpSize((style.fontSize * 0.32f).toDp(), (style.fontSize * 0.62f).toDp()) else BLK
+    }
+    val box = with(density) {
+        Placeholder(
+            (block.width + 4.dp).toSp(),
+            block.height.toSp(),
+            if (big) PlaceholderVerticalAlign.AboveBaseline else PlaceholderVerticalAlign.TextCenter,
+        )
+    }
     BasicText(
         buildAnnotatedString {
             append(shown.take(typed))
@@ -283,7 +296,7 @@ fun Text(
         modifier,
         style.copy(color = ink),
         maxLines = maxLines,
-        inlineContent = mapOf("cursor" to InlineTextContent(box) { if (cursor) Cursor(Modifier.padding(start = 4.dp)) }),
+        inlineContent = mapOf("cursor" to InlineTextContent(box) { if (cursor) Cursor(Modifier.padding(start = 4.dp), block) }),
     )
 }
 
@@ -365,11 +378,14 @@ fun <T> Redraw(
     }
 }
 
+// .blk's size on menu and data text
+private val BLK = DpSize(10.dp, 16.dp)
+
 // .blk: on for half of every second; off keeps its place
 @Composable
-fun Cursor(modifier: Modifier = Modifier) {
+fun Cursor(modifier: Modifier = Modifier, size: DpSize = BLK) {
     val ink = LocalLcd.current.ink
-    Box(modifier.size(10.dp, 16.dp).then(if (cursorOn()) Modifier.background(ink) else Modifier))
+    Box(modifier.size(size).then(if (cursorOn()) Modifier.background(ink) else Modifier))
 }
 
 /*

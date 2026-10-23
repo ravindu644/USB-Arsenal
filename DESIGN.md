@@ -621,7 +621,7 @@ Ambient loops:
 | Marquee | 8s, `steps(32)`, alternate | Text that does not fit its line (`.st`). Text that fits stays still |
 | Packets | 1.2s, `steps(4)` | Tether wires |
 | Activity LED | 1.2s blink pattern | The drive face while serving |
-| Bind | 5s loop | Pin climbs into the host port, sparks, one inverted flash frame, `GADGET BOUND` |
+| Bind | 4.5s, once | The Bind board's 5s loop played once: Pin climbs into the host port in four cuts, plugs in with sparks, one inverted flash frame, then `GADGET BOUND` and the bound functions hold 1s and it cuts back. A touch or Back ends it early; reduced motion shows the plugged frame for 1s |
 
 Rules:
 - Only stepped timing. Animate position, visibility and inversion; never opacity ramps,
@@ -634,8 +634,8 @@ Rules:
   `Settings.Global.ANIMATOR_DURATION_SCALE` and watches it with a `ContentObserver`, which
   works on every API level (`ValueAnimator.registerDurationScaleChangeListener` is API 33).
 - The marquee is the only motion applied to text.
-- One playful moment at a time. The bind animation plays when the gadget first binds, not on
-  every replug.
+- One playful moment at a time. The bind animation plays each time the port goes from Android
+  to the gadget, over whatever screen started it, never on a replug.
 
 ## Haptics
 
