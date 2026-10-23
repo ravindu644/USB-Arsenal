@@ -661,7 +661,7 @@ Interaction motion:
 | Fault line | 1 | Appears with the error shake |
 | Tray | 6 (3 steps) | The drive tray slides out over the body on eject, and back in when a file is loaded, in 3 steps of 2 frames |
 | Shell session | 1 per step | A prompt appears at once and the cursor holds on it for a beat (7 frames, 280ms), then the command types at typing speed. Enter: the output types 4 characters a frame with a beat between its lines, and the next prompt comes the moment it ends. The work behind a command starts the moment it has typed. The keys appear one beat after the idle prompt |
-| Check answers | 4 per row | Check's cursors hold for at least one beat, then its rows resolve top to bottom, one every 4 frames. A probe that answers in 30ms would otherwise only flash |
+| Check answers | 4 per row | Check's cursors hold for at least one beat, then its rows resolve top to bottom, one every 4 frames. A probe that answers in 30ms would otherwise only flash. With reduced motion they all answer at once |
 
 Ambient loops:
 

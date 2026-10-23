@@ -68,6 +68,7 @@ import com.usbarsenal.app.lcd.FRAME_MS
 import com.usbarsenal.app.lcd.Lcd
 import com.usbarsenal.app.lcd.LcdType
 import com.usbarsenal.app.lcd.LocalHaptics
+import com.usbarsenal.app.lcd.LocalReducedMotion
 import com.usbarsenal.app.lcd.Pin
 import com.usbarsenal.app.lcd.Sprite
 import com.usbarsenal.app.lcd.SpriteIcon
@@ -382,6 +383,7 @@ private val functions = listOf(
 private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
     val context = LocalContext.current
     val haptics = LocalHaptics.current
+    val reduced = LocalReducedMotion.current
     var run by remember { mutableIntStateOf(0) }
     // How many probe rows show their answer. A fresh result holds its cursors for a beat, then
     // resolves top to bottom, one row every 4 frames, as if each were probed in turn
@@ -399,7 +401,8 @@ private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
         val rows = r.getOrNull()?.let { if (it.requirementsMet) mustHave.size + functions.size else mustHave.size } ?: 0
         Setup.check = r
         r.getOrNull()?.let { Gadget.caps = it }
-        for (i in 1..rows) {
+        // With reduced motion they all answer at once, as the shells type at once
+        if (!reduced) for (i in 1..rows) {
             delay(4L * FRAME_MS)
             shown = i
             haptics.tick()
