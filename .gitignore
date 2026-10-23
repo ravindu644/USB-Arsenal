@@ -13,3 +13,6 @@ compile_commands.json
 
 # OS
 .DS_Store
+
+# Signing keys never go in the repo
+*.keystore

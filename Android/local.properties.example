@@ -1,0 +1,7 @@
+## Copy to local.properties (never committed) and fill in the key's passwords. The key itself is
+## droidspaces.keystore at the repo root, also never committed. Without both, release builds are
+## signed with the debug key.
+#sdk.dir=/home/user/Android/Sdk
+KEYSTORE_PASSWORD=your_keystore_password_here
+KEY_PASSWORD=your_key_password_here
+KEY_ALIAS=droidspaces

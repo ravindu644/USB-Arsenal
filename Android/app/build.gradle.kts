@@ -1,7 +1,19 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// The signing key's passwords, as Droidspaces keeps them: local.properties (never committed),
+// then a -P property, then the environment (CI's secrets). An unset GitHub secret arrives as an
+// empty string, so a blank counts as missing
+val local = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
+}
+fun secret(name: String): String? =
+    sequenceOf(local.getProperty(name), providers.gradleProperty(name).orNull, System.getenv(name))
+        .firstOrNull { !it.isNullOrBlank() }
 
 // UA_VERSION is the only version source; versionCode matches `make bump` and module.prop
 val uaVersion = Regex("""#define\s+UA_VERSION\s+"(\d+)\.(\d+)\.(\d+)"""")
@@ -19,6 +31,37 @@ android {
         targetSdk = 37
         versionName = uaVersion.joinToString(".")
         versionCode = uaVersion[0] * 1000 + uaVersion[1] * 100 + uaVersion[2] * 10
+    }
+
+    // Droidspaces' key at the repo root, gitignored. Without it (a fork, or CI with no secrets) the
+    // release is signed with the debug key, so it still builds and installs. With it, debug builds
+    // carry it too, as in Droidspaces: one signature, so either installs over the other
+    val keystore = rootProject.file("../droidspaces.keystore")
+    val password = secret("KEYSTORE_PASSWORD")
+    val signed = keystore.exists() && !password.isNullOrEmpty()
+    signingConfigs {
+        if (signed) {
+            val alias = secret("KEY_ALIAS") ?: "droidspaces"
+            val keyPassword = secret("KEY_PASSWORD") ?: password
+            listOf(getByName("debug"), create("release")).forEach {
+                it.storeFile = keystore
+                it.storePassword = password
+                it.keyAlias = alias
+                it.keyPassword = keyPassword
+                it.enableV2Signing = true
+                it.enableV3Signing = true
+                it.enableV4Signing = true
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName(if (signed) "release" else "debug")
+        }
     }
 
     compileOptions {
