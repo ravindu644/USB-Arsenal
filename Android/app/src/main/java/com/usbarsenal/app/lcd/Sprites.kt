@@ -206,6 +206,10 @@ object Sprites {
 
     val Spark = Sprite(listOf("...#...", ".......", "...#...", "#.###.#", "...#...", ".......", "...#..."))
 
+    // The trackpad's way into full screen and back out: corners out, corners in
+    val Expand = Sprite(listOf("###...###", "#.......#", "#.......#", ".........", ".........", ".........", "#.......#", "#.......#", "###...###"))
+    val Collapse = Sprite(listOf("..#...#..", "..#...#..", "###...###", ".........", ".........", ".........", "###...###", "..#...#..", "..#...#.."))
+
     // The slider's thumb: a round dot on the pixel grid
     val Dot = Sprite(
         listOf(
