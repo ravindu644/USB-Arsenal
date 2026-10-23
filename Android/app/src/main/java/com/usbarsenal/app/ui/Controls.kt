@@ -91,6 +91,21 @@ import com.usbarsenal.app.lcd.shoulderStep
 import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import com.usbarsenal.app.lcd.focusOutline
+import com.usbarsenal.app.lcd.focusTick
 
 // The controls of the function screens, each named after its class in lcd.css
 
@@ -255,6 +270,81 @@ fun Dip(on: Boolean, onToggle: (Boolean) -> Unit, label: String, modifier: Modif
         }
     }
 }
+
+/*
+ * .slider: one value from a few dozen steps. The label, a 2dp track with a pixel dot on it, then
+ * the value. A tap or a drag puts the dot on the step under the finger, and it jumps a step at a
+ * time, never slides. D-pad Left and Right step it; at either end they move focus on instead.
+ */
+@Composable
+fun Slider(label: String, value: Int, range: IntRange, text: String, onChange: (Int) -> Unit, modifier: Modifier = Modifier) {
+    val ink = LocalLcd.current.ink
+    val haptics = LocalHaptics.current
+    // The gestures outlive a recomposition; they must step from the value as it is now
+    val current by rememberUpdatedState(value)
+    val change by rememberUpdatedState(onChange)
+    var focused by remember { mutableStateOf(false) }
+    val thumb = Lcd.pixel * Sprites.Dot.width
+    fun set(next: Int) {
+        val v = next.coerceIn(range)
+        if (v == current) return
+        haptics.tick()
+        change(v)
+    }
+    Row(
+        modifier.fillMaxWidth().heightIn(min = Lcd.touch),
+        horizontalArrangement = Arrangement.spacedBy(Lcd.tight),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, LcdType.label)
+        BoxWithConstraints(
+            Modifier
+                .weight(1f)
+                .height(Lcd.touch)
+                .then(if (focused) Modifier.focusOutline(ink) else Modifier)
+                .onFocusChanged { focused = it.isFocused }
+                .onPreviewKeyEvent { e ->
+                    val d = when (e.key) {
+                        Key.DirectionLeft -> -1
+                        Key.DirectionRight -> 1
+                        else -> return@onPreviewKeyEvent false
+                    }
+                    if (current + d !in range) return@onPreviewKeyEvent false
+                    if (e.type == KeyEventType.KeyDown) set(current + d)
+                    true
+                }
+                .shoulderStep { set(current + it) }
+                .focusTick()
+                .focusable()
+                .semantics {
+                    contentDescription = label
+                    stateDescription = text
+                    progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat(), range.last - range.first - 1)
+                    setProgress { set(it.roundToInt()); true }
+                }
+                // A tap lands on release and a drag only once it is sideways, so a scroll that
+                // starts here still scrolls. Two blocks, not one with a launched detector: a
+                // block starts on its first touch, and a launched one would miss that touch
+                .pointerInput(range) { detectTapGestures { set(at(it.x, size.width, thumb.toPx(), range)) } }
+                .pointerInput(range) {
+                    detectHorizontalDragGestures(onDragStart = { set(at(it.x, size.width, thumb.toPx(), range)) }) { c, _ ->
+                        c.consume()
+                        set(at(c.position.x, size.width, thumb.toPx(), range))
+                    }
+                },
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Box(Modifier.fillMaxWidth().height(Lcd.pixel).background(ink))
+            val share = (value - range.first).toFloat() / (range.last - range.first)
+            SpriteIcon(Sprites.Dot, Lcd.pixel, Modifier.offset(x = (maxWidth - thumb).coerceAtLeast(0.dp) * share))
+        }
+        Box(Modifier.width(52.dp), contentAlignment = Alignment.CenterEnd) { Text(text, LcdType.data) }
+    }
+}
+
+// The step under [x] on a track [width] wide, whose ends sit half a [thumb] in from its edges
+private fun at(x: Float, width: Int, thumb: Float, range: IntRange) =
+    range.first + ((x - thumb / 2) / (width - thumb).coerceAtLeast(1f) * (range.last - range.first)).roundToInt()
 
 /*
  * .row: a function on Home. Its name and two status lines open the function; the DIP switch
