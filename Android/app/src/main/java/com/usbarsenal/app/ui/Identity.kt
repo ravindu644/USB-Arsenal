@@ -279,7 +279,7 @@ private fun ProfileSheet(open: Boolean, profile: Profile?, dir: String, names: L
                 haptics.confirm()
                 onSaved(path, editing == null, before)
             } else {
-                failed = r.err.lastOrNull() ?: "[-] Failed (exit ${r.code})"
+                failed = r.why
                 haptics.reject()
             }
         }

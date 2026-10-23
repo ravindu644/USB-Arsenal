@@ -54,7 +54,7 @@ private fun Section(label: String) {
  * switches, done the same way.
  */
 @Composable
-fun SettingsScreen(back: () -> Unit, openIdentity: (() -> Unit)?, openFonts: () -> Unit, fix: (Backend) -> Unit) {
+fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> Unit, fix: (Backend) -> Unit) {
     BackHandler(onBack = back)
     val context = LocalContext.current
     val switches = LocalSwitches.current
@@ -83,7 +83,7 @@ fun SettingsScreen(back: () -> Unit, openIdentity: (() -> Unit)?, openFonts: () 
             done()
             changed = true
         } else {
-            fault = r.err.lastOrNull() ?: "[-] Failed (exit ${r.code})"
+            fault = r.why
             shake.fire()
         }
     }

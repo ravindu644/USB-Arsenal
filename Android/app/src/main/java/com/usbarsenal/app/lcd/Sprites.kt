@@ -6,7 +6,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
@@ -39,7 +38,8 @@ class Sprite(rows: List<String>) {
  * pixel boundary. The leftover is split around the sprite.
  */
 @Composable
-fun SpriteIcon(sprite: Sprite, cell: Dp, modifier: Modifier = Modifier, color: Color = LocalLcd.current.ink) {
+fun SpriteIcon(sprite: Sprite, cell: Dp, modifier: Modifier = Modifier) {
+    val color = LocalLcd.current.ink
     Canvas(modifier.size(cell * sprite.width, cell * sprite.height)) {
         val px = max(1f, floor(cell.toPx()))
         val left = floor((size.width - px * sprite.width) / 2)
@@ -52,9 +52,9 @@ fun SpriteIcon(sprite: Sprite, cell: Dp, modifier: Modifier = Modifier, color: C
 
 // Pin, eyes open. The 2.6s loop shuts them twice, as lcd.css's .shut does at 70-76% and 84-90%
 @Composable
-fun Pin(cell: Dp, modifier: Modifier = Modifier, color: Color = LocalLcd.current.ink) {
+fun Pin(cell: Dp, modifier: Modifier = Modifier) {
     val shut = loop(2600) { it in 1820 until 1976 || it in 2184 until 2340 }
-    SpriteIcon(if (shut) Sprites.PinBlink else Sprites.Pin, cell, modifier, color)
+    SpriteIcon(if (shut) Sprites.PinBlink else Sprites.Pin, cell, modifier)
 }
 
 // Bitmaps from DESIGN.md and the Pixel kit screen (docs/developer/design/screens/Kit.dc.html)

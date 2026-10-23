@@ -21,7 +21,6 @@ const val UA = "$WORKSPACE/bin/usb-arsenal"
  * workspace, and Home re-reads status every 2s, which would fill the daemon's log with
  * `Running: status --json` and bury the commands that changed something.
  */
-// Run here, never relayed to a daemon
 private const val NO_PROXY = "UA_NO_PROXY=1"
 
 private fun read() = "$NO_PROXY $UA${udcFlag(Controller.picked)}"
@@ -61,18 +60,14 @@ object Controller {
         prefs(context).edit { if (name == null) remove("udc") else putString("udc", name) }
     }
 
-    // Null when the read itself failed, which is not the same as no controller (an empty list)
-    suspend fun list(): List<Udc>? =
-        Root.read("""for u in /sys/class/udc/*; do [ -e "${'$'}u" ] && echo "${'$'}{u##*/} ${'$'}(cat "${'$'}u/state" 2>/dev/null)"; done; true""")
-            .takeIf { it.ok }?.let { parseUdcs(it.out) }
-
     /*
      * Reads the controllers and squares the pick with them: with one or none no pick is needed,
      * and a pick no longer listed (a driver gone) would fail every command, so it goes. Whether
      * the user has to pick now comes back; a failed read changes nothing and asks nothing.
      */
     suspend fun refresh(context: Context): Boolean {
-        val found = list() ?: return false
+        val found = Root.read("""for u in /sys/class/udc/*; do [ -e "${'$'}u" ] && echo "${'$'}{u##*/} ${'$'}(cat "${'$'}u/state" 2>/dev/null)"; done; true""")
+            .takeIf { it.ok }?.let { parseUdcs(it.out) } ?: return false
         udcs = found
         if (found.size <= 1 || found.none { it.name == picked }) set(context, null)
         return found.size > 1 && picked == null
@@ -81,20 +76,18 @@ object Controller {
     private fun prefs(context: Context) = context.getSharedPreferences("usb", Context.MODE_PRIVATE)
 }
 
-/*
- * Setup checks with the binary it is about to install; UA_NO_PROXY keeps an older daemon from
- * answering for it. check probes by creating functions in configfs, so once the gadget may be
- * live it goes through the change lane ([onLane]) and never races a command.
- */
-suspend fun readCheck(binary: String = UA, onLane: Boolean = false): Result<Capabilities> {
-    val cmd = "$NO_PROXY ${shellQuote(binary)}${udcFlag(Controller.picked)} check --json"
-    return (if (onLane) Root.change(cmd) else Root.read(cmd)).json(::parseCheck)
-}
+// check probes by creating functions in configfs, so once the gadget may be live it goes through
+// the change lane and never races a command
+suspend fun readCheck(): Result<Capabilities> = Root.change("${read()} check --json").json(::parseCheck)
+
+// The C side colours its [+] lines even through a pipe
+private val ANSI = Regex("\u001B\\[[0-9;]*[A-Za-z]")
+
+fun plain(line: String) = line.replace(ANSI, "")
 
 // What a shell shows of check's report: no colour (it always colours), no indent, and its marks
 // as the installer's [+] and [-], since VT323 has no check mark or cross. The blank lines that
 // part its sections stay
-private val ANSI = Regex("\u001B\\[[0-9;]*m")
 private const val REPORT_END = "@@check-json"
 
 // The report and the --json lines of one readCheckReport; a report cut short (a timeout before the
@@ -102,7 +95,7 @@ private const val REPORT_END = "@@check-json"
 fun splitCheck(out: List<String>): Pair<List<String>, List<String>> {
     val end = out.indexOf(REPORT_END)
     val report = (if (end < 0) out else out.take(end))
-        .map { it.replace(ANSI, "").trim().replace("[✓]", "[+]").replace("[✗]", "[-]") }
+        .map { plain(it).trim().replace("[✓]", "[+]").replace("[✗]", "[-]") }
         .dropWhile { it.isEmpty() }
         .dropLastWhile { it.isEmpty() }
     return report to if (end < 0) emptyList() else out.drop(end + 1)
@@ -153,19 +146,16 @@ fun parseContainers(json: String): List<String> =
 
 suspend fun readStatus(): Result<GadgetStatus> = Root.read("${read()} status --json").json(::parseStatus)
 
-// What su -v prints, as it prints it: "3.3.0:KernelSU" on the a166p
-data class RootInfo(val su: String)
-
 /*
- * A failure carries what a shell would have said. KernelSU hides su from an app it has not
+ * What su -v prints, as it prints it: "3.3.0:KernelSU" on the a166p. A failure carries what a shell would have said. KernelSU hides su from an app it has not
  * granted, so a missing su reads as sh reports it; a su that ran and refused says so on stderr.
  */
-suspend fun rootInfo(): Result<RootInfo> {
+suspend fun rootInfo(): Result<String> {
     val timeoutMs = 15_000L
     val r = Root.read("id -u; su -v", timeoutMs)
     // The uid decides: the exit code is su -v's, which a root shell without su on its PATH fails
     return when {
-        r.out.firstOrNull() == "0" -> Result.success(RootInfo(r.out.getOrNull(1).orEmpty()))
+        r.out.firstOrNull() == "0" -> Result.success(r.out.getOrNull(1).orEmpty())
         r.code == NO_ROOT && r.out.isEmpty() -> Result.failure(SecurityException("su: inaccessible or not found"))
         r.timedOut -> Result.failure(SecurityException("su: no answer in ${timeoutMs / 1000}s"))
         else -> Result.failure(SecurityException(r.err.lastOrNull() ?: "su: permission denied"))

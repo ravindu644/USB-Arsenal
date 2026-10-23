@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.usbarsenal.app.backend.Root
 import com.usbarsenal.app.backend.shellQuote
+import com.usbarsenal.app.lcd.dashes
 import com.usbarsenal.app.lcd.Dither
 import com.usbarsenal.app.lcd.FRAME_MS
 import com.usbarsenal.app.lcd.Inverted
@@ -81,7 +82,6 @@ import com.usbarsenal.app.lcd.Lcd
 import com.usbarsenal.app.lcd.LcdType
 import com.usbarsenal.app.lcd.LocalHaptics
 import com.usbarsenal.app.lcd.LocalLcd
-import com.usbarsenal.app.lcd.LocalReducedMotion
 import com.usbarsenal.app.lcd.Pin
 import com.usbarsenal.app.lcd.SpriteIcon
 import com.usbarsenal.app.lcd.Sprites
@@ -460,16 +460,7 @@ private fun Trackpad(
         ) {
             Text("^", LcdType.labelStrong)
             // The wheel's track: a dashed 6dp line, as the tether wires are drawn
-            Box(
-                Modifier.weight(1f).padding(vertical = 6.dp).width(6.dp).drawBehind {
-                    val dash = 4.dp.toPx()
-                    var y = 0f
-                    while (y < size.height) {
-                        drawRect(ink, Offset(0f, y), Size(size.width, minOf(dash, size.height - y)))
-                        y += 2 * dash
-                    }
-                },
-            )
+            Box(Modifier.weight(1f).padding(vertical = 6.dp).width(6.dp).dashes(ink))
             Text("v", LcdType.labelStrong)
         }
     }

@@ -158,7 +158,6 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                 lun,
                 image = name?.let { DriveImage(it, file?.bytes?.let(::sizeText).orEmpty(), mode, if (mode == "rw") "rw" else "ro") },
                 serving = served != null,
-                ejected = false,
                 onEject = { Picks.drop(context, lun) },
             )
             if (path == null && files?.isEmpty() == true) {
@@ -242,7 +241,7 @@ private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, fre
                     haptics.confirm()
                     onCreated(path)
                 } else {
-                    failed = r.err.lastOrNull() ?: "[-] Failed (exit ${r.code})"
+                    failed = r.why
                     haptics.reject()
                 }
                 return@launch

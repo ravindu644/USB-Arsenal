@@ -56,7 +56,6 @@ import com.usbarsenal.app.BuildConfig
 import com.usbarsenal.app.backend.Backend
 import com.usbarsenal.app.backend.BackendState
 import com.usbarsenal.app.backend.Capabilities
-import com.usbarsenal.app.backend.RootInfo
 import com.usbarsenal.app.backend.deviceArch
 import com.usbarsenal.app.backend.installBackend
 import com.usbarsenal.app.backend.readCheckReport
@@ -87,7 +86,7 @@ private enum class Phase { BEFORE, TYPING, RUNNING, DONE, FAILED }
  * recents), so Back never asks root or the kernel again. Only Retry and Recheck do.
  */
 private object Setup {
-    var root by mutableStateOf<Result<RootInfo>?>(null)
+    var root by mutableStateOf<Result<String>?>(null)
     var check by mutableStateOf<Result<Capabilities>?>(null)
     // check's own report, as its shell shows it
     var report by mutableStateOf<List<String>>(emptyList())
@@ -203,13 +202,14 @@ fun App() {
             Step.CHECK -> CheckScreen(back = ::pop) { push(Step.INSTALL) }
             Step.INSTALL -> InstallScreen(setup, update = update, back = ::pop, home = home)
             Step.HOME -> HomeScreen(
-                // A function opens once its screen exists
                 open = { fn ->
-                    when (fn) {
-                        Fn.STORAGE -> ({ push(Step.STORAGE) })
-                        Fn.TETHER -> ({ push(Step.TETHER) })
-                        Fn.HID -> ({ push(Step.HID) })
-                    }
+                    push(
+                        when (fn) {
+                            Fn.STORAGE -> Step.STORAGE
+                            Fn.TETHER -> Step.TETHER
+                            Fn.HID -> Step.HID
+                        },
+                    )
                 },
                 openLog = { push(Step.LOG) },
                 openSettings = { push(Step.SETTINGS) },
@@ -298,7 +298,7 @@ private fun RootScreen(back: () -> Unit, next: () -> Unit) {
         result?.onSuccess {
             add(ShellLine("# ", "# root access granted !"))
             add(ShellLine("# ", "id -u", listOf("0")))
-            add(ShellLine("# ", "su -v", listOf(it.su)))
+            add(ShellLine("# ", "su -v", listOf(it)))
             add(ShellLine("# "))
         }
     }

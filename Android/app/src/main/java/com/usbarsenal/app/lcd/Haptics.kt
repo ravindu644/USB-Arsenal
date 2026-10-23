@@ -19,9 +19,6 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.findViewTreeLifecycleOwner
 
-// Device tiers for the rich effects, from DESIGN.md's Haptics section
-enum class HapticTier { T1, T2, T3, T4 }
-
 /*
  * One function per event in DESIGN.md's event map. Simple events go through Compose, which
  * falls back by itself on older devices; the bind sequence goes through the tier.
@@ -35,14 +32,24 @@ class Haptics(private val view: View, private val feedback: HapticFeedback, priv
         vibrator.areAllPrimitivesSupported(PRIMITIVE_THUD)
     ) PRIMITIVE_THUD else PRIMITIVE_CLICK
 
-    // Chosen once. One unsupported primitive silences a whole composition, so T2 checks every one it plays
-    val tier: HapticTier = when {
-        vibrator == null -> HapticTier.T4
+    /*
+     * The plug-in thud for this device's tier in DESIGN.md's Haptics section, chosen once. One
+     * unsupported primitive silences a whole composition, so T2 checks every one it plays. Null is
+     * T4, the view's own feedback.
+     */
+    private val plug: VibrationEffect? = when {
+        vibrator == null -> null
+        // T1. An envelope must start and end at zero intensity, with control points at least 20ms apart
         Build.VERSION.SDK_INT >= 36 && vibrator.areEnvelopeEffectsSupported() &&
-            vibrator.areAllPrimitivesSupported(PRIMITIVE_TICK) -> HapticTier.T1
-        Build.VERSION.SDK_INT >= 30 && vibrator.areAllPrimitivesSupported(PRIMITIVE_TICK, thud) -> HapticTier.T2
-        Build.VERSION.SDK_INT >= 29 -> HapticTier.T3
-        else -> HapticTier.T4
+            vibrator.areAllPrimitivesSupported(PRIMITIVE_TICK) -> VibrationEffect.BasicEnvelopeBuilder()
+            .setInitialSharpness(0.2f)
+            .addControlPoint(1f, 0.2f, 20)
+            .addControlPoint(0f, 0.2f, 60)
+            .build()
+        Build.VERSION.SDK_INT >= 30 && vibrator.areAllPrimitivesSupported(PRIMITIVE_TICK, thud) ->
+            VibrationEffect.startComposition().addPrimitive(thud, 1f).compose()
+        Build.VERSION.SDK_INT >= 29 -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
+        else -> null
     }
 
     // The in-app switch, the system touch feedback setting, and never from the background
@@ -76,24 +83,10 @@ class Haptics(private val view: View, private val feedback: HapticFeedback, priv
     // The thud on the frame Pin plugs in
     fun bindPlug() {
         if (!allowed()) return
-        val v = vibrator
-        when {
-            // An envelope must start and end at zero intensity, with control points at least 20ms apart
-            v != null && tier == HapticTier.T1 && Build.VERSION.SDK_INT >= 36 -> v.play(
-                VibrationEffect.BasicEnvelopeBuilder()
-                    .setInitialSharpness(0.2f)
-                    .addControlPoint(1f, 0.2f, 20)
-                    .addControlPoint(0f, 0.2f, 60)
-                    .build(),
-            )
-            v != null && tier == HapticTier.T2 && Build.VERSION.SDK_INT >= 30 ->
-                v.play(VibrationEffect.startComposition().addPrimitive(thud, 1f).compose())
-            v != null && tier == HapticTier.T3 && Build.VERSION.SDK_INT >= 29 ->
-                v.play(VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK))
-            else -> view.performHapticFeedback(
-                if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.CONTEXT_CLICK,
-            )
-        }
+        if (vibrator != null && plug != null) vibrator.play(plug)
+        else view.performHapticFeedback(
+            if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.CONTEXT_CLICK,
+        )
     }
 }
 

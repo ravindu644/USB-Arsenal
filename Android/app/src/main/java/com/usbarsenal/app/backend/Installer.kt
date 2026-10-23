@@ -60,12 +60,7 @@ private suspend fun assetMd5(context: Context): String? {
     val arch = deviceArch() ?: return null
     return withContext(Dispatchers.IO) {
         runCatching {
-            context.assets.open("binaries/usb-arsenal-$arch").use { input ->
-                val md = MessageDigest.getInstance("MD5")
-                val buf = ByteArray(8192)
-                while (true) md.update(buf, 0, input.read(buf).takeIf { it > 0 } ?: break)
-                md.digest().joinToString("") { "%02x".format(it) }
-            }
+            context.assets.open("binaries/usb-arsenal-$arch").use { MessageDigest.getInstance("MD5").digest(it.readBytes()).toHexString() }
         }.getOrNull()
     }
 }

@@ -88,3 +88,12 @@ fun Modifier.dashedRect(ink: Color, outset: Dp) = drawWithCache {
         )
     }
 }
+
+// .wire's dashes, 4dp on and 4dp off, along the long side of the element and as thick as its short one
+fun Modifier.dashes(ink: Color) = drawWithCache {
+    val dash = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
+    val across = size.width > size.height
+    val end = if (across) Offset(size.width, size.height / 2) else Offset(size.width / 2, size.height)
+    val start = if (across) Offset(0f, size.height / 2) else Offset(size.width / 2, 0f)
+    onDrawBehind { drawLine(ink, start, end, if (across) size.height else size.width, pathEffect = dash) }
+}

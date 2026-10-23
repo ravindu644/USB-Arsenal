@@ -29,6 +29,9 @@ const val NO_ROOT = 127
 data class RootResult(val code: Int, val out: List<String>, val err: List<String>) {
     val ok get() = code == 0
     val timedOut get() = code == TIMED_OUT
+
+    // What a failed change shows: the backend's last word, or its exit code when it said nothing
+    val why get() = err.lastOrNull() ?: "[-] Failed (exit $code)"
 }
 
 /*

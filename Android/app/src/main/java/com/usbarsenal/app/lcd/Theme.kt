@@ -13,7 +13,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
@@ -25,14 +24,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.usbarsenal.app.R
+import kotlin.properties.ReadWriteProperty
+import kotlin.reflect.KProperty
 
 // Every value in this file comes from DESIGN.md's front matter. A value that is not there does not exist.
 object Lcd {
     val Backlight = Color(0xFFFFA62E)
     val Ink = Color(0xFF1C1005)
     val Scanline = Color(0x0F1C1005)
-
-    val Shape = RectangleShape
 
     val pixel = 2.dp
     val keyDepth = 4.dp
@@ -41,8 +40,6 @@ object Lcd {
     val section = 16.dp
     val gutter = 20.dp
     val topInset = 22.dp
-    val navInset = 48.dp
-    val bottomInset = 68.dp
     val touch = 44.dp
     val row = 80.dp
     val lunCell = 40.dp
@@ -88,22 +85,18 @@ fun Inverted(on: Boolean = true, content: @Composable () -> Unit) {
 // The in-app motion and haptics switches, kept across launches
 class Switches(context: Context) {
     private val prefs = context.getSharedPreferences("switches", Context.MODE_PRIVATE)
-    private val motionState = mutableStateOf(prefs.getBoolean("motion", true))
-    private val hapticsState = mutableStateOf(prefs.getBoolean("haptics", true))
+    var motion by pref("motion")
+    var haptics by pref("haptics")
 
-    var motion: Boolean
-        get() = motionState.value
-        set(on) {
-            motionState.value = on
-            prefs.edit { putBoolean("motion", on) }
+    // Compose state, so a screen redraws when it changes, written through to the prefs
+    private fun pref(key: String) = object : ReadWriteProperty<Any?, Boolean> {
+        private val state = mutableStateOf(prefs.getBoolean(key, true))
+        override fun getValue(thisRef: Any?, property: KProperty<*>) = state.value
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Boolean) {
+            state.value = value
+            prefs.edit { putBoolean(key, value) }
         }
-
-    var haptics: Boolean
-        get() = hapticsState.value
-        set(on) {
-            hapticsState.value = on
-            prefs.edit { putBoolean("haptics", on) }
-        }
+    }
 }
 
 val LocalSwitches = staticCompositionLocalOf<Switches> { error("LcdTheme not set") }

@@ -26,6 +26,7 @@ import com.usbarsenal.app.backend.Lun
 import com.usbarsenal.app.backend.Probe
 import com.usbarsenal.app.backend.Root
 import com.usbarsenal.app.backend.UA
+import com.usbarsenal.app.backend.plain
 import com.usbarsenal.app.backend.readCheck
 import com.usbarsenal.app.backend.readProfile
 import com.usbarsenal.app.backend.readStatus
@@ -64,14 +65,9 @@ enum class Fn(val label: String) { STORAGE("Storage"), TETHER("Tether"), HID("HI
 // What a log on screen keeps; the files keep the rest
 const val LOG_KEEP = 2_000
 
-fun MutableList<String>.keepLast(n: Int = LOG_KEEP) {
-    if (size > n) subList(0, size - n).clear()
+fun MutableList<String>.keepLast() {
+    if (size > LOG_KEEP) subList(0, size - LOG_KEEP).clear()
 }
-
-// The C side colours its [+] lines even through a pipe
-private val ANSI = Regex("\\u001B\\[[0-9;]*[A-Za-z]")
-
-fun plain(line: String) = line.replace(ANSI, "")
 
 /*
  * The gadget as the screens see it, kept for the process like Setup's results: the last
@@ -163,7 +159,7 @@ object Gadget {
 
     // Once a process: what the kernel can do (Check's answer, when setup ran), and the profile
     suspend fun loadOnce() {
-        if (caps == null) readCheck(onLane = true).onSuccess { caps = it }
+        if (caps == null) readCheck().onSuccess { caps = it }
         if (profile.isEmpty()) profile = readProfile()
     }
 

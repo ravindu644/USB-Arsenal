@@ -73,6 +73,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.usbarsenal.app.lcd.dashes
 import com.usbarsenal.app.lcd.Dither
 import com.usbarsenal.app.lcd.FRAME_MS
 import com.usbarsenal.app.lcd.Haptics
@@ -408,8 +409,7 @@ fun FunctionRow(
     line2: String,
     on: Boolean,
     onToggle: (Boolean) -> Unit,
-    // null while the function's screen does not exist yet: the row cannot be opened
-    onOpen: (() -> Unit)?,
+    onOpen: () -> Unit,
     modifier: Modifier = Modifier,
     available: Boolean = true,
     // false holds the switch where it is (a command running, the backend needing attention)
@@ -430,14 +430,14 @@ fun FunctionRow(
                 SpriteIcon(icon, 2.dp, if (available) Modifier else Modifier.ghost(ground))
             }
             Column(
-                Modifier.weight(1f).lcdClickable(open, outline = false, role = Role.Button, enabled = onOpen != null) {
+                Modifier.weight(1f).lcdClickable(open, outline = false, role = Role.Button) {
                     haptics.keyPress()
-                    onOpen?.invoke()
+                    onOpen()
                 },
                 verticalArrangement = Arrangement.spacedBy(Lcd.lines),
             ) {
                 // The > says the row opens a screen; the switch is only its quick way on and off
-                Text(if (onOpen != null) "$label >" else label, LcdType.labelStrong, Modifier.clearAndSetSemantics { contentDescription = label })
+                Text("$label >", LcdType.labelStrong, Modifier.clearAndSetSemantics { contentDescription = label })
                 Marquee(line1, LcdType.data, Modifier.fillMaxWidth())
                 Marquee(line2, LcdType.data, Modifier.fillMaxWidth())
             }
@@ -497,7 +497,6 @@ fun Card(label: String, line: String, icon: Sprite, onOpen: () -> Unit, modifier
     val pressed by interaction.collectIsPressedAsState()
     val haptics = LocalHaptics.current
     val lit = focused || pressed
-    // The edge stays the screen's ink: drawn in the lit card's colours, it would vanish into the screen
     val edge = LocalLcd.current.ink
     Box(
         modifier
@@ -508,19 +507,11 @@ fun Card(label: String, line: String, icon: Sprite, onOpen: () -> Unit, modifier
             },
     ) {
         Inverted(lit) {
-            val c = LocalLcd.current
-            Column(Modifier.fillMaxWidth().background(c.ground).border(Lcd.pixel, edge).padding(Lcd.pixel)) {
-                // The face is the inverse of the card, whichever way the card is lit
-                Inverted {
-                    Row(
-                        Modifier.fillMaxWidth().height(40.dp).background(LocalLcd.current.ground).padding(horizontal = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(label, LcdType.labelStrong)
-                        Text(">", LcdType.labelStrong, Modifier.clearAndSetSemantics {})
-                    }
-                }
+            // The face is the inverse of the card, whichever way the card is lit
+            Panel({
+                Text(label, LcdType.labelStrong, Modifier.weight(1f))
+                Text(">", LcdType.labelStrong, Modifier.clearAndSetSemantics {})
+            }, edge) {
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 84.dp).padding(horizontal = 14.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -731,7 +722,7 @@ private data object Failed
  * while the row says Failed, for 2.4s or until the next command starts.
  */
 @Composable
-fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier = Modifier, binds: Int = 0, failed: Int = 0) {
+fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier, binds: Int, failed: Int) {
     // A failure from before the bar was drawn (Home opened again) is not played
     var seenFails by remember { mutableIntStateOf(failed) }
     var bonking by remember { mutableStateOf(false) }
@@ -900,16 +891,7 @@ private fun PinStage(port: Port, bonking: Boolean, binds: Int) {
             Box(Modifier.offset(6.dp, 5.dp).size(28.dp, 6.dp).background(if (plugged) ink else ground))
         }
         // The floor he walks on, dotted
-        Box(
-            Modifier.align(Alignment.BottomStart).fillMaxWidth().height(Lcd.pixel).drawBehind {
-                val dash = 4.dp.toPx()
-                var at = 0f
-                while (at < size.width) {
-                    drawRect(ink, Offset(at, 0f), Size(dash, size.height))
-                    at += dash * 2
-                }
-            },
-        )
+        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(Lcd.pixel).dashes(ink))
         // Off at rest, so reduced motion shows none
         if (plugged && loop(2600) { it in 40 until 360 }) {
             SpriteIcon(Sprites.Spark, Lcd.pixel, Modifier.offset(mid - 43.dp, 6.dp))

@@ -70,7 +70,7 @@ private fun attention(b: Backend): Pair<String, String>? = when (b.state) {
  * and on every function's screen until it is fixed (an update does not hold them).
  */
 @Composable
-fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings: (() -> Unit)?, fix: (Backend) -> Unit) {
+fun HomeScreen(open: (Fn) -> Unit, openLog: () -> Unit, openSettings: () -> Unit, fix: (Backend) -> Unit) {
     PollStatus()
     val context = LocalContext.current
     LaunchedEffect(Unit) { Gadget.backend = backendState(context) }
@@ -132,7 +132,7 @@ fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings
                     line2 = l2,
                     on = on,
                     onToggle = { flip(fn, it) },
-                    onOpen = open(fn),
+                    onOpen = { open(fn) },
                     modifier = Modifier
                         .drawnFrom(i, shown)
                         // A rule over every row but the first; inside drawnFrom, so it comes in with its row
@@ -151,8 +151,8 @@ fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings
         // Under the rows, as the board has them; a short window scrolls to them
         needs?.let { b -> attention(b)?.let { (label, fixLabel) -> Alert(label, fixLabel, onClick = { fix(b) }, Modifier.opener("home/fix")) } }
         KeyRow {
-            Key("Log", Modifier.weight(1f).opener("home/log"), enabled = openLog != null) { openLog?.invoke() }
-            Key("Settings", Modifier.weight(1f).opener("home/settings"), enabled = openSettings != null) { openSettings?.invoke() }
+            Key("Log", Modifier.weight(1f).opener("home/log"), onClick = openLog)
+            Key("Settings", Modifier.weight(1f).opener("home/settings"), onClick = openSettings)
         }
         if (wholeFault != null) Fault(wholeFault.message, onLog = openLog, modifier = Modifier.opener("home/fault"))
     }

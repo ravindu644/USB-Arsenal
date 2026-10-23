@@ -26,9 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -36,6 +34,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.usbarsenal.app.lcd.dashes
 import com.usbarsenal.app.lcd.Inverted
 import com.usbarsenal.app.lcd.Lcd
 import com.usbarsenal.app.lcd.LcdType
@@ -58,16 +57,16 @@ data class DriveImage(val name: String, val size: String, val kind: String, val 
 
 /*
  * .drive: a 150dp box with an inverted 40dp face (the LED, the LUN, eject) over the disc, the
- * file and `size · kind` with its access tag. Ejected or empty, the tray is out over the body:
+ * file and `size · kind` with its access tag. Empty, the tray is out over the body:
  * a ghosted disc on the drive's ground, sliding in 3 steps of 2 frames. The LED blinks while the host is
  * served and is hollow with no image.
  */
 @Composable
-fun Drive(lun: Int, image: DriveImage?, serving: Boolean, ejected: Boolean, onEject: () -> Unit, modifier: Modifier = Modifier) {
+fun Drive(lun: Int, image: DriveImage?, serving: Boolean, onEject: () -> Unit, modifier: Modifier = Modifier) {
     val ink = LocalLcd.current.ink
     val ground = LocalLcd.current.ground
     val haptics = LocalHaptics.current
-    val out = ejected || image == null
+    val out = image == null
     val tray by animateDpAsState(if (out) 0.dp else (-110).dp, stepSpec(6, steps = 3), label = "tray")
     Box(modifier.fillMaxWidth().height(150.dp).border(Lcd.pixel, ink).padding(Lcd.pixel).clipToBounds()) {
         if (image != null) {
@@ -112,7 +111,7 @@ fun Drive(lun: Int, image: DriveImage?, serving: Boolean, ejected: Boolean, onEj
                     Box(
                         Modifier
                             .size(44.dp, 40.dp)
-                            .lcdClickable(interaction, outline = true, role = Role.Button, enabled = !ejected) {
+                            .lcdClickable(interaction, outline = true, role = Role.Button) {
                                 haptics.gestureEnd()
                                 onEject()
                             }
@@ -166,11 +165,11 @@ fun FileRow(name: String, size: String, lun: String?, selected: Boolean, onPick:
     ) { Inverted(selected || focused, body) }
 }
 
-// .panel: a 2dp box over an inverted 40dp .face, as Identity's profile draws it
+// .panel: a 2dp box over an inverted 40dp .face, as Identity's profile draws it. A lit card keeps
+// the screen's [edge]: drawn in the card's own colours, it would vanish into the screen
 @Composable
-fun Panel(face: @Composable RowScope.() -> Unit, body: @Composable () -> Unit) {
-    val ink = LocalLcd.current.ink
-    Column(Modifier.fillMaxWidth().border(Lcd.pixel, ink).padding(Lcd.pixel)) {
+fun Panel(face: @Composable RowScope.() -> Unit, edge: Color = LocalLcd.current.ink, body: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth().background(LocalLcd.current.ground).border(Lcd.pixel, edge).padding(Lcd.pixel)) {
         Inverted {
             Row(
                 Modifier.fillMaxWidth().height(40.dp).background(LocalLcd.current.ground).padding(horizontal = 12.dp),
@@ -211,16 +210,7 @@ fun Wire(label: String, up: Boolean = false, moving: Boolean = true) {
     // A link that is down carries nothing: its packet rests
     val step = loop(1200, moving) { it * 4 / 1200 }
     Box(Modifier.fillMaxWidth().height(40.dp)) {
-        Box(
-            Modifier.padding(start = 44.dp).size(6.dp, 40.dp).drawBehind {
-                val dash = 4.dp.toPx()
-                var y = 0f
-                while (y < size.height) {
-                    drawRect(ink, Offset(0f, y), Size(size.width, dash))
-                    y += 2 * dash
-                }
-            },
-        )
+        Box(Modifier.padding(start = 44.dp).size(6.dp, 40.dp).dashes(ink))
         Box(
             Modifier
                 .padding(start = 39.dp)

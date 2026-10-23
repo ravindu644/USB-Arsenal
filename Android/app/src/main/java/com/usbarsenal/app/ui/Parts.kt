@@ -375,7 +375,6 @@ fun <T> Redraw(
     back: Boolean,
     modifier: Modifier = Modifier,
     frames: Int = 4,
-    contentAlignment: Alignment = Alignment.TopStart,
     content: @Composable (T) -> Unit,
 ) {
     val spec = stepSpec<Float>(frames)
@@ -384,7 +383,6 @@ fun <T> Redraw(
         target,
         // No size animation: a shorter state simply cuts in
         transitionSpec = { (EnterTransition.None togetherWith ExitTransition.KeepUntilTransitionsFinished) using null },
-        contentAlignment = contentAlignment,
         label = "redraw",
     ) { screen ->
         val painted by transition.animateFloat({ spec }, label = "bands") { if (it == EnterExitState.PreEnter) 0f else 1f }
