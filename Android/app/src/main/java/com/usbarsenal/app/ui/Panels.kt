@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -162,6 +163,23 @@ fun FileRow(name: String, size: String, lun: String?, selected: Boolean, onPick:
             }
             .semantics { this.selected = selected },
     ) { Inverted(selected || focused, body) }
+}
+
+// .panel: a 2dp box over an inverted 40dp .face, as Identity's profile draws it
+@Composable
+fun Panel(face: @Composable RowScope.() -> Unit, body: @Composable () -> Unit) {
+    val ink = LocalLcd.current.ink
+    Column(Modifier.fillMaxWidth().border(Lcd.pixel, ink).padding(Lcd.pixel)) {
+        Inverted {
+            Row(
+                Modifier.fillMaxWidth().height(40.dp).background(LocalLcd.current.ground).padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                content = face,
+            )
+        }
+        body()
+    }
 }
 
 // .node: one end of the tether chain, its name left and its value right; the phone is inverted

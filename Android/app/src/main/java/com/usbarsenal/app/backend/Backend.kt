@@ -91,6 +91,36 @@ suspend fun readCheck(binary: String = UA, onLane: Boolean = false): Result<Capa
     return (if (onLane) Root.change(cmd) else Root.read(cmd)).json(::parseCheck)
 }
 
+// What a shell shows of check's report: no colour (it always colours), no indent, and its marks
+// as the installer's [+] and [-], since VT323 has no check mark or cross. The blank lines that
+// part its sections stay
+private val ANSI = Regex("\u001B\\[[0-9;]*m")
+private const val REPORT_END = "@@check-json"
+
+// The report and the --json lines of one readCheckReport; a report cut short (a timeout before the
+// marker) keeps what it printed, which is where it stalled
+fun splitCheck(out: List<String>): Pair<List<String>, List<String>> {
+    val end = out.indexOf(REPORT_END)
+    val report = (if (end < 0) out else out.take(end))
+        .map { it.replace(ANSI, "").trim().replace("[✓]", "[+]").replace("[✗]", "[-]") }
+        .dropWhile { it.isEmpty() }
+        .dropLastWhile { it.isEmpty() }
+    return report to if (end < 0) emptyList() else out.drop(end + 1)
+}
+
+/*
+ * Check's shell: the report check prints, then its --json from the same root shell, for the
+ * app's own use. Both run the binary Check stages, with the controller picked. The report
+ * comes back even when the JSON does not.
+ * ponytail: check probes twice, once per format; one run that prints both if a kernel ever minds
+ */
+suspend fun readCheckReport(binary: String): Pair<List<String>, Result<Capabilities>> {
+    val check = "$NO_PROXY ${shellQuote(binary)}${udcFlag(Controller.picked)} check"
+    val r = Root.read("$check 2>&1; echo $REPORT_END; $check --json", timeoutMs = 30_000)
+    val (report, json) = splitCheck(r.out)
+    return report to r.copy(out = json).json(::parseCheck)
+}
+
 /*
  * identity show: "Profile: <path or built-in defaults>[ (copy)]", then a key column,
  * "  tether_function  ncm", where a derived value reads "(derived)". The profile comes back

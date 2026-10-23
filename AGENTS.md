@@ -223,7 +223,7 @@ name.
   `createOneShot` or a hand-made waveform for touch feedback. With reduced motion, every loop
   shows its resting frame.
 - **Fast work is paced so it can be read.** Nothing appears in a single frame: titles type,
-  shells play their session (DESIGN.md's Shell session row), Check's rows resolve one by one.
+  shells play their session (DESIGN.md's Shell session row: Root, Check, Backend).
   The pacing comes from the beat between lines, not from slow typing, and the keys never run
   ahead of what the screen says. Check a change frame by frame in a `screenrecord`, not by eye.
 - **A screen never re-lays itself out when work finishes.** It shows its final layout from

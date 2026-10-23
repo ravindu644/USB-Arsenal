@@ -1,15 +1,12 @@
 package com.usbarsenal.app.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -37,11 +34,9 @@ import com.usbarsenal.app.backend.profilesDir
 import com.usbarsenal.app.backend.writeProfile
 import com.usbarsenal.app.backend.writeText
 import com.usbarsenal.app.backend.profileText
-import com.usbarsenal.app.lcd.Inverted
 import com.usbarsenal.app.lcd.Lcd
 import com.usbarsenal.app.lcd.LcdType
 import com.usbarsenal.app.lcd.LocalHaptics
-import com.usbarsenal.app.lcd.LocalLcd
 import com.usbarsenal.app.lcd.SpriteIcon
 import com.usbarsenal.app.lcd.Sprites
 import kotlinx.coroutines.launch
@@ -208,18 +203,10 @@ fun IdentityScreen(back: () -> Unit, openLog: () -> Unit) {
 // The drive's look for a profile: an inverted face with its LED and name, the facts in the body
 @Composable
 private fun ProfilePanel(p: Profile?, live: Boolean) {
-    val ink = LocalLcd.current.ink
-    Column(Modifier.fillMaxWidth().border(Lcd.pixel, ink).padding(Lcd.pixel)) {
-        Inverted {
-            Row(
-                Modifier.fillMaxWidth().height(40.dp).background(LocalLcd.current.ground).padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                LedDot(if (live) Led.BUSY else Led.ON)
-                Text(p?.name ?: "", LcdType.labelStrong)
-            }
-        }
+    Panel({
+        LedDot(if (live) Led.BUSY else Led.ON)
+        Text(p?.name ?: "", LcdType.labelStrong)
+    }) {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 96.dp).padding(horizontal = 14.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),

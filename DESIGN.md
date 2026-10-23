@@ -491,7 +491,7 @@ other line (a prompt, stderr) uses the whole width (`.ln.wide`). The newest line
 amber with the cursor.
 
 ### Shell window (`.win`, `.strip`)
-Root and Backend play a shell session in the same window: a light 32px strip (the LED, what
+Root, Check and Backend play a shell session in the same window: a light 32px strip (the LED, what
 runs in Silkscreen bold, `su` or `sh`, and the phone's codename on the right in VT323) over
 the terminal, inside one 2px box. The codename is `ro.product.device` (`Build.DEVICE`, then
 `Build.PRODUCT`, then `localhost`), so the prompts are just `$` and `#`. The LED blinks while
@@ -499,11 +499,19 @@ the session works, is lit when it succeeded, and is hollow when idle or refused.
 
 A session is real commands with the app's narration as shell comments:
 `# checking root access`, `$ su`, `# # root access granted !`, `# id -u`, `# su -v`, then an
-idle `#`. Backend opens with `# usb-arsenal 1.2.0 for aarch64` and `# press install to install the
-backend` (or `# update 1.1.0 → 1.2.0`, `# the gadget stays up while it updates` and `# press
-update to update the backend`), waits at an idle `#`, and Install types
-`./install-backend.sh`; the installer's `[+]` lines are its output. A denial prints what the
+idle `#`. Backend opens with `# usb-arsenal 1.2.0 for aarch64` (or `# update 1.1.0 → 1.2.0` and
+`# the gadget stays up while it updates`) and types `./install-backend.sh` at once: opening it
+(setup's Next, Home's update, Settings' Reinstall) was the ask, so it has no Install key, only
+`Home`, dashed until the install ends. The installer's `[+]` lines are its output, typed straight
+through as they come, with no beat between them. A denial prints what the
 shell would have said (`su: inaccessible or not found`, su's own stderr, or the timeout).
+Check types `# checking this kernel for usb arsenal` and `usb-arsenal check`, which runs the
+moment it has typed; check's own report is the output, its blank lines included (no colour, no
+indent, and its marks as `[+]` and `[-]`, since VT323 has no check mark or cross), so
+a missing line names the kernel option it needs, and a line that needs a function (CD-ROM, the
+HID interval) shows only with it. The LED is lit when every must have line is ok. Its keys,
+`Recheck` and `Next`, wait for the report to finish typing. The report came as one piece, so it
+types straight through, with one beat after it, not one between its lines.
 
 **No root** shades the page, as HID off does: the D50 dither takes every touch, and an inverted
 box steps in with Pin in tears and `Grant root, then reopen the app`. No key: root managers take
@@ -562,9 +570,8 @@ name) over a 96px body. The LED is lit (`.on`) when the thing works, blinks (`.b
 working or serving, and is hollow when there is nothing.
 
 ### Fact rows (`.kv.fact`) and group headings (`.grp`)
-A fact that cannot be tapped is 32px tall, not 44, so long lists like Check fit. A Silkscreen
-bold heading groups them (`MUST HAVE`, `FUNCTIONS`, `BACKEND`, `ABOUT`).
-
+A fact that cannot be tapped is 32px tall, not 44, so long lists fit. A Silkscreen
+bold heading groups them (`BACKEND`, `ABOUT`).
 
 ### Rule (`.rule`)
 2px of ink across the 10px bleed, the line between Home's rows (and Controller's). Elsewhere it
@@ -672,7 +679,6 @@ Interaction motion:
 | Fault line | 1 | Appears with the error shake |
 | Tray | 6 (3 steps) | The drive tray slides out over the body on eject, and back in when a file is loaded, in 3 steps of 2 frames |
 | Shell session | 1 per step | A prompt appears at once and the cursor holds on it for a beat (7 frames, 280ms), then the command types at typing speed. Enter: the output types 4 characters a frame with a beat between its lines, and the next prompt comes the moment it ends. The work behind a command starts the moment it has typed. The keys appear one beat after the idle prompt |
-| Check answers | 4 per row | Check's cursors hold for at least one beat, then its rows resolve top to bottom, one every 4 frames. A probe that answers in 30ms would otherwise only flash. With reduced motion they all answer at once |
 
 Ambient loops:
 
@@ -726,8 +732,7 @@ the rich ones go through the tiers below.
 | DIP switch on / off | `ToggleOn` / `ToggleOff` |
 | Segment change, LUN switch, slider step, D-pad or keyboard focus move | `SegmentTick` |
 | Trackpad drag | `SegmentFrequentTick`, at most one per 8px of travel |
-| Shell typing (Root, Backend) | `SegmentFrequentTick`, one per frame that adds characters; none in the beat between lines |
-| Check row resolving | `SegmentTick` |
+| Shell typing (Root, Check, Backend) | `SegmentFrequentTick`, one per frame that adds characters; none in the beat between lines |
 | Gadget bound (the port left Android) | Rich: a thud on that frame, from whatever screen started it; on Home it is the frame Pin plugs in. A replug ending is a `SegmentTick` |
 | Stop all, eject | `GestureEnd` |
 | Command refused or failed | `Reject`, with the error shake |

@@ -20,7 +20,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
-import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -57,18 +56,15 @@ import com.usbarsenal.app.BuildConfig
 import com.usbarsenal.app.backend.Backend
 import com.usbarsenal.app.backend.BackendState
 import com.usbarsenal.app.backend.Capabilities
-import com.usbarsenal.app.backend.Probe
 import com.usbarsenal.app.backend.RootInfo
 import com.usbarsenal.app.backend.deviceArch
 import com.usbarsenal.app.backend.installBackend
-import com.usbarsenal.app.backend.readCheck
+import com.usbarsenal.app.backend.readCheckReport
 import com.usbarsenal.app.backend.rootInfo
 import com.usbarsenal.app.backend.stageBinary
-import com.usbarsenal.app.lcd.FRAME_MS
 import com.usbarsenal.app.lcd.Lcd
 import com.usbarsenal.app.lcd.LcdType
 import com.usbarsenal.app.lcd.LocalHaptics
-import com.usbarsenal.app.lcd.LocalReducedMotion
 import com.usbarsenal.app.lcd.Pin
 import com.usbarsenal.app.lcd.Sprite
 import com.usbarsenal.app.lcd.SpriteIcon
@@ -77,7 +73,6 @@ import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -94,6 +89,8 @@ private enum class Phase { BEFORE, TYPING, RUNNING, DONE, FAILED }
 private object Setup {
     var root by mutableStateOf<Result<RootInfo>?>(null)
     var check by mutableStateOf<Result<Capabilities>?>(null)
+    // check's own report, as its shell shows it
+    var report by mutableStateOf<List<String>>(emptyList())
     var staged: File? = null
 
 
@@ -251,12 +248,6 @@ private fun focusOn(key: Any?): FocusRequester {
     return focus
 }
 
-// Runs [block], then waits out the rest of [ms], so a working state is on screen long enough to read
-private suspend fun <T> atLeast(ms: Long, block: suspend () -> T): T {
-    val start = SystemClock.uptimeMillis()
-    return block().also { delay(ms - (SystemClock.uptimeMillis() - start)) }
-}
-
 // Welcome's parts come on one per frame, top to bottom, as DESIGN.md's rows typing on
 @Composable
 private fun Welcome(next: () -> Unit) {
@@ -353,93 +344,63 @@ private fun RootScreen(back: () -> Unit, next: () -> Unit) {
 @Composable
 private fun NoRoot(light: Boolean = false) = Shade("Grant root, then\nreopen the app", light) { SpriteIcon(Sprites.PinSad, 3.dp) }
 
+// What Check types; the app runs the binary it staged (backend/readCheckReport)
+private const val CHECK = "usb-arsenal check"
+
 /*
- * check --json's probes as Check.dc.html words them. A note says what a missing probe costs;
- * where check.c has more than one reason for a 0 or a -1, the note follows the same reason.
+ * The bundled binary checks the kernel before anything is installed, played as a root shell
+ * like Backend's: a comment says what is happening, the command types, check runs the moment
+ * it has typed, and its own report is the output. A result that was already there (Back from
+ * Backend) shows at once; Recheck starts the session over.
  */
-private class ProbeRow(
-    val label: String,
-    val of: (Capabilities) -> Probe,
-    val value: (Capabilities) -> String = { "ok" },
-    val note: (Capabilities, Probe) -> String,
-)
-
-private fun row(label: String, note: String, of: (Capabilities) -> Probe) = ProbeRow(label, of) { _, _ -> note }
-
-private val mustHave = listOf(
-    row("Root", "nothing works") { it.root },
-    row("configfs", "this kernel has no configfs usb gadget; it needs a custom kernel") { it.configfs },
-    // A 0 is no controller in /sys/class/udc, or the pick gone from it: a dual-role port in host mode lists none
-    ProbeRow("Controller", { it.udc }, { it.udcName }) { _, _ ->
-        "${Controller.picked?.let { "$it is not" } ?: "no usb device controller is"} listed now; the port may be in host mode (otg)"
-    },
-    ProbeRow("Gadget", { it.gadget }) { c, _ ->
-        if (c.root == Probe.OK && c.configfs == Probe.OK && c.udc == Probe.OK) "could not create a gadget"
-        else "needs the lines above first"
-    },
-)
-
-private val functions = listOf(
-    row("Storage", "no storage") { it.massStorage },
-    row("CD-ROM", "plain isos such as windows cannot boot as a cd-rom") { it.cdrom },
-    row("HID", "no keyboard and mouse") { it.hid },
-    // -1 is the Samsung kernel NCM would crash; 0 is a kernel without f_ncm. Tether falls back either way
-    ProbeRow("NCM", { it.ncm }) { _, p ->
-        if (p == Probe.CAVEAT) "unsafe on this samsung kernel; tether uses rndis" else "no ncm in this kernel; tether uses rndis"
-    },
-    row("RNDIS", "no tether on old windows hosts") { it.rndis },
-    row("NAT", "the host gets no internet through the phone") { it.nat },
-    row("NAT6", "the host gets ipv4 only") { it.nat6 },
-)
-
-// The bundled binary checks the kernel before anything is installed
 @Composable
 private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
     val context = LocalContext.current
     val haptics = LocalHaptics.current
-    val reduced = LocalReducedMotion.current
     var run by remember { mutableIntStateOf(0) }
-    // How many probe rows show their answer. A fresh result holds its cursors for a beat, then
-    // resolves top to bottom, one row every 4 frames, as if each were probed in turn
-    var shown by remember { mutableIntStateOf(if (Setup.check != null) Int.MAX_VALUE else 0) }
+    val had = remember { Setup.check != null }
+    val result = Setup.check
+    val session = buildList {
+        add(ShellLine("# ", "# checking this kernel for usb arsenal"))
+        if (result == null) {
+            add(ShellLine("# ", CHECK))
+        } else {
+            add(ShellLine("# ", CHECK, Setup.report, block = true))
+            add(ShellLine("# "))
+        }
+    }
+    val total = session.steps()
+    val step = rememberTyped(total, 1, instant = had && run == 0, key = run)
+    val stepNow by rememberUpdatedState(step)
+    val enter = session.enterAt(1)
     LaunchedEffect(run) {
         if (run == 0 && Setup.check != null) return@LaunchedEffect
-        shown = 0
         Setup.check = null
-        val r = atLeast(LINE_PAUSE * FRAME_MS.toLong()) {
-            // The install deletes the staged copy, so a Recheck after it stages again
-            val bin = Setup.staged?.takeIf { it.exists() } ?: stageBinary(context)?.also { Setup.staged = it }
-            bin?.let { readCheck(it.absolutePath) }
-                ?: Result.failure(IllegalStateException("no usb-arsenal binary for ${Build.SUPPORTED_ABIS.firstOrNull()}"))
-        }
-        val rows = r.getOrNull()?.let { if (it.requirementsMet) mustHave.size + functions.size else mustHave.size } ?: 0
+        snapshotFlow { stepNow }.first { it >= enter }
+        // The install deletes the staged copy, so a Recheck after it stages again
+        val bin = Setup.staged?.takeIf { it.exists() } ?: stageBinary(context)?.also { Setup.staged = it }
+        val (report, r) = bin?.let { readCheckReport(it.absolutePath) }
+            ?: (emptyList<String>() to Result.failure(IllegalStateException("no usb-arsenal binary for ${Build.SUPPORTED_ABIS.firstOrNull()}")))
+        // A check that could not finish says why in the shell, under what it printed
+        Setup.report = report + listOfNotNull(r.exceptionOrNull()?.let { it.message ?: "check failed" })
         Setup.check = r
         r.getOrNull()?.let { Gadget.caps = it }
-        // With reduced motion they all answer at once, as the shells type at once
-        if (!reduced) for (i in 1..rows) {
-            delay(4L * FRAME_MS)
-            shown = i
-            haptics.tick()
-        }
-        shown = Int.MAX_VALUE
-        if (r.getOrNull()?.requirementsMet != true) haptics.reject()
     }
-    val result = Setup.check
-    // Until the last row resolves, the screen still reads as checking
-    val settled = result != null && shown == Int.MAX_VALUE
     val caps = result?.getOrNull()
-    val blocked = settled && caps?.requirementsMet == false
-    // A probe that is still running finishes first; it is quick and its root shell is ours
-    BackHandler { if (settled) back() }
-    val focus = focusOn(settled)
+    // Done only once the report has typed, so the keys never run ahead of what the shell says
+    val done = result != null && step >= total
+    val canNext = done && caps?.requirementsMet == true
+    LaunchedEffect(done) { if (done && !canNext && (run > 0 || !had)) haptics.reject() }
+    // Back leaves until check starts; one that is running finishes first, quick and in our own root shell
+    BackHandler { if (done || stepNow < enter) back() }
+    val focus = focusOn(done)
     Screen(
         footer = {
             KeyRow {
-                val canNext = settled && caps?.requirementsMet == true
                 Key(
                     "Recheck",
-                    Modifier.weight(1f).then(if (settled && !canNext) Modifier.focusRequester(focus) else Modifier),
-                    enabled = settled,
+                    Modifier.weight(1f).then(if (done && !canNext) Modifier.focusRequester(focus) else Modifier),
+                    enabled = done,
                 ) { run++ }
                 Key(
                     "Next",
@@ -453,36 +414,8 @@ private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
     ) {
         Top { Steps(setupSteps() - 1, setupSteps()) }
         Title("Check")
-        if (settled) result.exceptionOrNull()?.let { Warn(it.message ?: "check failed") }
-        if (blocked) Warn("usb arsenal cannot run on this kernel")
-        // ponytail: nothing in the list takes focus, so keys cannot scroll a short window to its last rows; F3 settles it
-        Column {
-            if (result == null || caps != null) {
-                Group("Must have")
-                mustHave.forEachIndexed { i, row -> ProbeLine(row, caps.takeIf { i < shown }) }
-                Group("Functions")
-                if (blocked) {
-                    Note("skipped: needs every must have line first")
-                } else {
-                    functions.forEachIndexed { i, row -> ProbeLine(row, caps.takeIf { mustHave.size + i < shown }) }
-                }
-            }
-        }
+        Shell("sh", if (!done) Led.BUSY else if (canNext) Led.ON else Led.OFF, session.shownAt(step), Modifier.fill(min = 200.dp))
     }
-}
-
-@Composable
-private fun ProbeLine(row: ProbeRow, caps: Capabilities?) {
-    val probe = caps?.let(row.of)
-    Kv(row.label, fact = true) {
-        when (probe) {
-            null -> Cursor()
-            Probe.OK -> Text(row.value(caps), LcdType.data)
-            Probe.CAVEAT -> Tag("caveat")
-            Probe.MISSING -> Tag("missing")
-        }
-    }
-    if (probe != null && probe != Probe.OK) Note(row.note(caps, probe))
 }
 
 // What the install looks like from the shell; the app runs the installer itself (backend/Installer.kt)
@@ -490,9 +423,10 @@ private const val INSTALL = "./install-backend.sh"
 
 /*
  * The ported installer, played as a root shell like Root's. A comment says what will be
- * installed, the prompt waits for Install, which types the command; the installer's lines are
- * its output, and the prompt comes back. The layout never changes. [update] is the installed
- * version when this replaces one; the app's own version needs no root.
+ * installed and the command types at once: nothing is asked, as opening the screen (setup's
+ * Next, Home's update, Settings' Reinstall) already was. The installer's lines are its output,
+ * typed as they come, and the prompt comes back. The layout never changes. [update] is the
+ * installed version when this replaces one; the app's own version needs no root.
  */
 @Composable
 private fun InstallScreen(setup: Boolean, update: String?, back: () -> Unit, home: () -> Unit) {
@@ -509,16 +443,15 @@ private fun InstallScreen(setup: Boolean, update: String?, back: () -> Unit, hom
             add(ShellLine("# ", if (update != version) "# update $update → $version" else "# usb-arsenal $version for $arch"))
             // The install never touches the gadget, so this holds
             add(ShellLine("# ", "# the gadget stays up while it updates"))
-            add(ShellLine("# ", "# press update to update the backend"))
         } else {
             add(ShellLine("# ", "# usb-arsenal $version for $arch"))
-            add(ShellLine("# ", "# press install to install the backend"))
         }
     }
     val session = opening + when {
         phase == Phase.BEFORE -> listOf(ShellLine("# "))
-        ended -> listOf(ShellLine("# ", INSTALL, log.toList()), ShellLine("# "))
-        else -> listOf(ShellLine("# ", INSTALL, log.toList()))
+        // One stream of output: it types straight through, with no beat between its lines
+        ended -> listOf(ShellLine("# ", INSTALL, log.toList(), block = true), ShellLine("# "))
+        else -> listOf(ShellLine("# ", INSTALL, log.toList(), block = true))
     }
     val total = session.steps()
     val step = rememberTyped(total, 1, instant = ended, key = Setup.retries)
@@ -544,6 +477,12 @@ private fun InstallScreen(setup: Boolean, update: String?, back: () -> Unit, hom
     }
     // The haptic belongs to an install seen ending here, not to a screen that opens on an old one
     var watching by remember { mutableStateOf(phase == Phase.TYPING || phase == Phase.RUNNING) }
+    // Opening the screen was the ask: the command types at once
+    LaunchedEffect(Unit) {
+        if (Setup.phase != Phase.BEFORE) return@LaunchedEffect
+        watching = true
+        Setup.enter()
+    }
     LaunchedEffect(finished) {
         if (!finished || !watching) return@LaunchedEffect
         watching = false
@@ -574,17 +513,15 @@ private fun InstallScreen(setup: Boolean, update: String?, back: () -> Unit, hom
                             Setup.enter()
                         }
                     }
-                    else -> Key(if (update != null) "Update" else "Install", key, primary = true, enabled = phase == Phase.BEFORE) {
-                        watching = true
-                        Setup.enter()
-                    }
+                    // Where Home will be, dashed until the install has ended
+                    else -> Key("Home", Modifier.weight(1f), primary = true, enabled = false) {}
                 }
             }
         },
     ) {
         Top {
             if (setup) Steps(setupSteps(), setupSteps())
-            else if (phase == Phase.BEFORE || (phase == Phase.FAILED && finished)) BackKey()
+            else if (phase == Phase.FAILED && finished) BackKey()
         }
         Title("Backend")
         Shell("sh", led, session.shownAt(step), Modifier.fill(min = 200.dp))

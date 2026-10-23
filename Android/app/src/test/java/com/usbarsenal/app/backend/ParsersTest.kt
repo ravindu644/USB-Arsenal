@@ -48,6 +48,26 @@ class ParsersTest {
         assertEquals(true, c.requirementsMet)
     }
 
+    // check's report as Check's shell shows it: no colour or indent, VT323's marks, its blank lines
+    // kept between sections; the JSON after the marker. A report cut short keeps what it printed
+    @Test
+    fun checkReport() {
+        val esc = "\u001B"
+        val out = listOf(
+            "", "$esc[1mUSB Arsenal 1.2.0 - checking this system$esc[0m", "", "[MUST HAVE]",
+            "  [$esc[1;32m✓$esc[0m] Root privileges", "  [$esc[1;33m✗$esc[0m] hid", "      CONFIG_USB_CONFIGFS_F_HID", "",
+            "@@check-json", "{\"root\":1}",
+        )
+        assertEquals(
+            listOf(
+                "USB Arsenal 1.2.0 - checking this system", "", "[MUST HAVE]",
+                "[+] Root privileges", "[-] hid", "CONFIG_USB_CONFIGFS_F_HID",
+            ) to listOf("{\"root\":1}"),
+            splitCheck(out),
+        )
+        assertEquals(listOf("[MUST HAVE]") to emptyList<String>(), splitCheck(listOf("[MUST HAVE]")))
+    }
+
     // /sys/class/udc, a controller a line with its state, which can be several words. GKI's
     // dummy_udc.0 never counts
     @Test

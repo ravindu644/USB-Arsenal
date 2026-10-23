@@ -47,23 +47,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import kotlinx.coroutines.launch
-import com.usbarsenal.app.lcd.focusTick
-import com.usbarsenal.app.lcd.focusOutline
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.gestures.ScrollableState
-import androidx.compose.foundation.gestures.animateScrollBy
-import androidx.compose.foundation.focusable
 import kotlin.math.roundToInt
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Constraints
@@ -118,6 +109,7 @@ import com.usbarsenal.app.lcd.cursorOn
 import com.usbarsenal.app.lcd.dashedRect
 import com.usbarsenal.app.lcd.lcdClickable
 import com.usbarsenal.app.lcd.loop
+import com.usbarsenal.app.lcd.keyScroll
 import com.usbarsenal.app.lcd.stepSpec
 import kotlinx.coroutines.delay
 
@@ -558,8 +550,9 @@ fun LedDot(led: Led) {
 // The phone's codename, as adb shell's prompt shows it; no root needed to read it
 val host = listOf(Build.DEVICE, Build.PRODUCT).firstOrNull { !it.isNullOrBlank() && it != "unknown" } ?: "localhost"
 
-// One Enter's worth of a shell: the prompt, what is typed after it, and what that printed
-class ShellLine(val prompt: String, val typed: String = "", val out: List<String> = emptyList())
+// One Enter's worth of a shell: the prompt, what is typed after it, and what that printed. Output
+// that came as one piece ([block], check's report) types straight through, its beat only at the end
+class ShellLine(val prompt: String, val typed: String = "", val out: List<String> = emptyList(), val block: Boolean = false)
 
 /*
  * A shell session plays on the 40ms frame clock, one step a frame:
@@ -571,7 +564,8 @@ class ShellLine(val prompt: String, val typed: String = "", val out: List<String
  */
 private fun outSteps(line: String) = (line.length + 3) / 4
 
-private fun ShellLine.steps() = LINE_PAUSE + typeSteps(typed.length) + out.sumOf(::outSteps) + LINE_PAUSE * (out.size - 1).coerceAtLeast(0)
+private fun ShellLine.steps() =
+    LINE_PAUSE + typeSteps(typed.length) + out.sumOf(::outSteps) + if (block) 0 else LINE_PAUSE * (out.size - 1).coerceAtLeast(0)
 
 fun List<ShellLine>.steps() = sumOf { it.steps() }
 
@@ -587,7 +581,7 @@ fun List<ShellLine>.shownAt(step: Int): List<String> {
         left -= LINE_PAUSE + typeSteps(line.typed.length)
         if (left < 0) return shown
         line.out.forEachIndexed { k, out ->
-            if (k > 0) {
+            if (k > 0 && !line.block) {
                 left -= LINE_PAUSE
                 if (left < 0) return shown
             }
@@ -634,7 +628,7 @@ fun Shell(label: String, led: Led, lines: List<String>, modifier: Modifier = Mod
     }
 }
 
-// .kv: a label and its value. Facts nobody taps (.kv.fact) are 32dp, so long lists like Check fit
+// .kv: a label and its value. Facts nobody taps (.kv.fact) are 32dp, so long lists fit
 @Composable
 fun Kv(label: String, modifier: Modifier = Modifier, fact: Boolean = false, value: @Composable RowScope.() -> Unit) = Row(
     modifier.fillMaxWidth().heightIn(min = if (fact) 32.dp else Lcd.touch),
@@ -669,30 +663,11 @@ private val GLYPH = Regex("^\\[.] ")
 @Composable
 fun Terminal(lines: List<String>, modifier: Modifier = Modifier, live: Boolean = true) {
     val cursor = LocalLcd.current.ink
-    val scope = rememberCoroutineScope()
     // A log opens on its newest line; scrolling there after the first frame showed the top first
     val list = rememberLazyListState(if (live) lines.lastIndex.coerceAtLeast(0) else 0)
     val page = rememberScrollState()
-    val state: ScrollableState = if (live) list else page
-    val step = with(LocalDensity.current) { 80.dp.toPx() }
-    var focused by remember { mutableStateOf(false) }
-    val glide = stepSpec<Float>(2)
-    // Keys can reach it, which scrolls a short screen to it, and then step through its lines;
-    // at either end the key moves focus on as usual
-    val keys = Modifier
-        .onFocusChanged { focused = it.isFocused }
-        .onPreviewKeyEvent { e ->
-            val down = e.key == Key.DirectionDown
-            if (e.type != KeyEventType.KeyDown || !(down || e.key == Key.DirectionUp)) return@onPreviewKeyEvent false
-            if (if (down) !state.canScrollForward else !state.canScrollBackward) return@onPreviewKeyEvent false
-            scope.launch { state.animateScrollBy(if (down) step else -step, glide) }
-            true
-        }
-        .focusTick()
-        .focusable()
     Inverted {
-        val panel = modifier.then(keys)
-            .then(if (focused) Modifier.focusOutline(cursor) else Modifier)
+        val panel = modifier.keyScroll(if (live) list else page, cursor)
             .fillMaxWidth()
             .background(LocalLcd.current.ground)
         if (live) TerminalList(lines, list, cursor, panel)
