@@ -55,6 +55,8 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
@@ -162,6 +164,33 @@ fun Screen(
         footer?.let { Column(Modifier.padding(horizontal = Lcd.gutter), verticalArrangement = Arrangement.spacedBy(Lcd.section), content = it) }
     }
     bottomBar?.invoke()
+}
+
+/*
+ * Back puts focus on what opened the screen. A screen leaves composition when the next one is
+ * pushed, so focusRestorer has nothing left to restore: each opener carries an id instead, the
+ * stack keeps the id that held focus at each push, and a pop asks for it again. After a touch
+ * nothing holds focus, so nothing is asked for.
+ */
+object ReturnFocus {
+    // The opener holding focus now
+    var focused: String? = null
+    // The opener the screen coming back focuses, once
+    var returning by mutableStateOf<String?>(null)
+}
+
+// ponytail: composed{} as lcdClickable is; a Modifier.Node if it ever shows in a trace
+fun Modifier.opener(id: String): Modifier = composed {
+    val focus = remember { FocusRequester() }
+    // A shade on the screen going away holds focus out until its redraw ends, so wait for it
+    LaunchedEffect(ReturnFocus.returning, SheetsOpen.count) {
+        if (ReturnFocus.returning != id || SheetsOpen.count > 0) return@LaunchedEffect
+        runCatching { focus.requestFocus() }
+        ReturnFocus.returning = null
+    }
+    focusRequester(focus).onFocusChanged {
+        if (it.hasFocus) ReturnFocus.focused = id else if (ReturnFocus.focused == id) ReturnFocus.focused = null
+    }
 }
 
 // What a screen's body offers its parts

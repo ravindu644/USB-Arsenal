@@ -80,7 +80,7 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
         Screen {
             Top { BackKey() }
             Title("Tether")
-            fault?.let { Fault(it.message, onLog = openLog, modifier = Modifier.shake(shake)) }
+            fault?.let { Fault(it.message, onLog = openLog, modifier = Modifier.shake(shake).opener("tether/fault")) }
             Column(verticalArrangement = Arrangement.spacedBy(Lcd.section)) {
                 Segs(
                     listOf("NCM", "RNDIS"),
@@ -120,7 +120,7 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
                     // Without Droidspaces there is no container to hand the link to
                     if (ds?.installed != false) Kv("Gateway") { Dip(plan.gateway, { set(plan.copy(gateway = it)) }, "Gateway mode") }
                     if (plan.gateway) {
-                        LinkRow("Container", plan.container.takeIf { containers == null || it in containers }?.ifEmpty { null } ?: "none", { choosing = true })
+                        LinkRow("Container", plan.container.takeIf { containers == null || it in containers }?.ifEmpty { null } ?: "none", { choosing = true }, Modifier.opener("tether/container"))
                         TypedRow("Its iface", plan.iface, "usb0", "an interface name, up to 15 characters".takeUnless { validIface(plan.iface) }) {
                             set(plan.copy(iface = it))
                         }

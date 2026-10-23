@@ -147,14 +147,14 @@ fun IdentityScreen(back: () -> Unit, openLog: () -> Unit) {
             footer = {
                 KeyRow {
                     // Built-in is no file: there is nothing to edit
-                    Key("Edit", Modifier.weight(1f), enabled = shown != null && chosen != null) { sheet = chosen }
-                    Key("Create", Modifier.weight(1f), primary = true) { sheet = "" }
+                    Key("Edit", Modifier.weight(1f).opener("identity/edit"), enabled = shown != null && chosen != null) { sheet = chosen }
+                    Key("Create", Modifier.weight(1f).opener("identity/create"), primary = true) { sheet = "" }
                 }
             },
         ) {
             Top { BackKey() }
             Title("Identity")
-            fault?.let { Fault(it.message, onLog = openLog) }
+            fault?.let { Fault(it.message, onLog = openLog, modifier = Modifier.opener("identity/fault")) }
             ProfilePanel(shown, live = bound)
             Rule()
             Column(Modifier.bleed(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {

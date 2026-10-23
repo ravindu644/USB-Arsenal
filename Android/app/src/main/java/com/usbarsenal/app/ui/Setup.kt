@@ -144,9 +144,16 @@ fun App() {
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     var showing by remember { mutableStateOf<Job?>(null) }
+    // openers[i] held focus on stack[i] when stack[i + 1] was pushed (ReturnFocus)
+    var openers by rememberSaveable { mutableStateOf(listOf<String?>()) }
     fun show(next: List<Step>, goingBack: Boolean) {
         // One at a time: a second tap in the gap below would stack a screen twice
         if (showing?.isActive == true) return
+        val from = ReturnFocus.focused
+        ReturnFocus.returning = if (next.size == stack.size - 1) openers.getOrNull(next.size - 1) else null
+        // Padded to the stack, which a recreation can bring back longer than this
+        val held = (openers + List(stack.size) { null }).take(stack.size - 1)
+        openers = if (next.size > stack.size) held + from else held.take(next.size - 1)
         // Focus leaves with the old screen, so a key press during the redraw cannot reach it
         focusManager.clearFocus()
         // The key that asked has just lifted: draw that frame first. Composing the next screen

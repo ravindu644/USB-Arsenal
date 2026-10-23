@@ -90,6 +90,7 @@ fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings
     val up = Fn.entries.count { status.isOn(it) }
     val shown = rememberTyped(Fn.entries.size, 1)
     val first = remember { FocusRequester() }
+    // A row Back is returning to asks after this, so it wins; one that is gone leaves this
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     val port = when {
         busy?.stopping == true -> Port.Stopping(busy.says)
@@ -137,22 +138,23 @@ fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings
                         // A rule over every row but the first; inside drawnFrom, so it comes in with its row
                         .then(if (i > 0) Modifier.drawWithContent { drawContent(); drawRect(ink, size = Size(size.width, Lcd.pixel.toPx())) } else Modifier)
                         .shake(shake)
-                        .then(if (i == 0) Modifier.focusRequester(first) else Modifier),
+                        .then(if (i == 0) Modifier.focusRequester(first) else Modifier)
+                        .opener("home/${fn.name}"),
                     available = caps.has(fn),
                     // Storage starts from its picks; with none there is nothing to serve
                     enabled = !held && (on || startable(fn)),
                 )
                 // On the gutter, under the row that bleeds past it
-                if (fault != null) Fault(fault.message, onLog = openLog, modifier = Modifier.padding(horizontal = 10.dp))
+                if (fault != null) Fault(fault.message, onLog = openLog, modifier = Modifier.padding(horizontal = 10.dp).opener("home/fault/${fn.name}"))
             }
         }
         // Under the rows, as the board has them; a short window scrolls to them
-        needs?.let { b -> attention(b)?.let { (label, fixLabel) -> Alert(label, fixLabel, onClick = { fix(b) }) } }
+        needs?.let { b -> attention(b)?.let { (label, fixLabel) -> Alert(label, fixLabel, onClick = { fix(b) }, Modifier.opener("home/fix")) } }
         KeyRow {
-            Key("Log", Modifier.weight(1f), enabled = openLog != null) { openLog?.invoke() }
-            Key("Settings", Modifier.weight(1f), enabled = openSettings != null) { openSettings?.invoke() }
+            Key("Log", Modifier.weight(1f).opener("home/log"), enabled = openLog != null) { openLog?.invoke() }
+            Key("Settings", Modifier.weight(1f).opener("home/settings"), enabled = openSettings != null) { openSettings?.invoke() }
         }
-        if (wholeFault != null) Fault(wholeFault.message, onLog = openLog)
+        if (wholeFault != null) Fault(wholeFault.message, onLog = openLog, modifier = Modifier.opener("home/fault"))
     }
 }
 

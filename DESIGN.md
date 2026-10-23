@@ -766,7 +766,11 @@ Key map:
 Rules:
 - **Initial focus** goes to the first row on Home and the primary key or first row on every
   other screen, requested from a `LaunchedEffect`, never from the composable body.
-- **Focus comes back** to where it was after Back (`focusRestorer` on each list).
+- **Focus comes back** after Back to the row or key that opened the screen, and after a sheet
+  closes to the key that opened it. A pushed screen leaves composition, so `focusRestorer` has
+  nothing to restore: each opener carries an id (`Modifier.opener`) and the stack keeps the one
+  that held focus at each push. After a touch nothing holds focus, so nothing comes back.
+- **Tab comes round** at the end of a screen and of a sheet, to its first control.
 - **Every focus move** plays `SegmentTick`.
 - **Keys + mouse hands the gamepad to the host:** the left stick moves the host pointer,
   `BUTTON_A` is a left click, `BUTTON_X` a right click, and `BUTTON_B` still means Back.

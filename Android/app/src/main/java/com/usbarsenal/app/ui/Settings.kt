@@ -98,14 +98,14 @@ fun SettingsScreen(back: () -> Unit, openIdentity: (() -> Unit)?, openFonts: () 
                 Kv("Haptics") { Dip(switches.haptics, { switches.haptics = it }, "Haptics") }
 
                 Section("Identity")
-                LinkRow(profileName(Gadget.profile), "", openIdentity)
+                LinkRow(profileName(Gadget.profile), "", openIdentity, Modifier.opener("settings/identity"))
 
                 // Every command names it. The backend keeps the controller it holds while bound,
                 // so a change waits until nothing is
                 if (udcs.size > 1) {
                     Section("USB")
                     val bound = Gadget.status?.bound == true
-                    LinkRow("Controller", Controller.picked ?: "none", if (bound) null else ({ choosingUdc = true }))
+                    LinkRow("Controller", Controller.picked ?: "none", if (bound) null else ({ choosingUdc = true }), Modifier.opener("settings/controller"))
                     if (bound) Note("stop all to change it")
                 }
 
@@ -122,12 +122,12 @@ fun SettingsScreen(back: () -> Unit, openIdentity: (() -> Unit)?, openFonts: () 
                 }
                 fault?.let { Fault(it, onLog = null) }
                 if (changed) Warn("both apply from the next boot")
-                Key("Reinstall", Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp), enabled = backend != null) {
+                Key("Reinstall", Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp).opener("settings/reinstall"), enabled = backend != null) {
                     backend?.let(fix)
                 }
 
                 Section("Credits")
-                LinkRow("Fonts", "SIL OFL 1.1", openFonts)
+                LinkRow("Fonts", "SIL OFL 1.1", openFonts, Modifier.opener("settings/fonts"))
 
                 Section("About")
                 Kv("App", fact = true) { Text(BuildConfig.VERSION_NAME, LcdType.data) }

@@ -146,13 +146,13 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
             footer = {
                 KeyRow {
                     Key("Pick image", Modifier.weight(1f)) { picker.launch(arrayOf("*/*")) }
-                    Key("Create", Modifier.weight(1f), primary = true) { creating = true }
+                    Key("Create", Modifier.weight(1f).opener("storage/create"), primary = true) { creating = true }
                 }
             },
         ) {
             Top { BackKey() }
             Title("Storage")
-            fault?.let { Fault(it.message, onLog = openLog, modifier = Modifier.shake(shake)) }
+            fault?.let { Fault(it.message, onLog = openLog, modifier = Modifier.shake(shake).opener("storage/fault")) }
             LunStrip(count, lun, { lun = it }, { lun = count })
             Drive(
                 lun,

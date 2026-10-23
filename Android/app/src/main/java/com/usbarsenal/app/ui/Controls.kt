@@ -60,6 +60,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -624,10 +625,25 @@ fun Sheet(
     // [entry], a key, so no field raises the keyboard unasked. After a touch no key can take
     // focus, so the sheet itself holds it, and the next key steps to its first control
     val group = remember { FocusRequester() }
+    // Moved after the focus change that asked for it has been cancelled, never inside it
+    var wraps by remember { mutableIntStateOf(0) }
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(wraps) {
+        if (wraps == 0) return@LaunchedEffect
+        runCatching { group.requestFocus() }
+        focusManager.moveFocus(FocusDirection.Enter)
+    }
+    // Closed, focus goes back to the key that opened it (ReturnFocus)
+    var from by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(open) {
         if (open) {
+            from = ReturnFocus.focused
             withFrameMillis {}
             runCatching { if (entry?.requestFocus(FocusDirection.Enter) != true) group.requestFocus() }
+        } else if (from != null) {
+            // A Back that left with it (Discard, Apply) is already taking focus somewhere
+            if (ReturnFocus.returning == null) ReturnFocus.returning = from
+            from = null
         }
     }
     Box(Modifier.fillMaxSize()) {
@@ -654,7 +670,16 @@ fun Sheet(
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
                 .padding(Lcd.gutter)
                 .focusRequester(group)
-                .focusProperties { onExit = { if (open) cancelFocusChange() } }
+                .focusProperties {
+                    onExit = {
+                        if (open) {
+                            cancelFocusChange()
+                            // Tab past the last control comes round to the first, as it does on a screen.
+                            // ponytail: Shift+Tab stops at the first; wrapping to the last needs every sheet's last control
+                            if (requestedFocusDirection == FocusDirection.Next) wraps++
+                        }
+                    }
+                }
                 .focusable(),
             verticalArrangement = Arrangement.spacedBy(Lcd.section),
         ) {
