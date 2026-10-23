@@ -499,7 +499,8 @@ shell would have said (`su: inaccessible or not found`, su's own stderr, or the 
 **No root** shades the page, as HID off does: the D50 dither takes every touch, and an inverted
 box steps in with Pin in tears and `Grant root, then reopen the app`. No key: root managers take
 a grant at the app's next start. It covers Root when su says no, and every screen of a set-up
-app that finds no root at launch.
+app that finds no root at launch. On Root the box sits on the terminal, so there it is light: lcd
+ground, ink Pin and words.
 
 ### Trackpad
 A `.d25` panel with a pixel pointer where the finger is, a 44px wheel strip on its right, and an

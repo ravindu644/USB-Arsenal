@@ -358,9 +358,10 @@ private fun at(x: Float, width: Int, thumb: Float, range: IntRange) =
  * A page that cannot be used yet: it stays drawn under a D50 dither that takes every touch, and
  * an inverted box with [pin] and [text] steps in over it, 2 frames on. Nothing behind takes focus
  * while it shows (SheetsOpen), and Back still leaves. No key: what it asks for is done elsewhere.
+ * [light] is for a box over an inverted panel (Root's terminal), where an inverted one vanishes.
  */
 @Composable
-fun Shade(text: String, pin: @Composable () -> Unit) {
+fun Shade(text: String, light: Boolean = false, pin: @Composable () -> Unit) {
     val ink = LocalLcd.current.ink
     val reduced = LocalReducedMotion.current
     var shown by remember { mutableStateOf(reduced) }
@@ -380,7 +381,7 @@ fun Shade(text: String, pin: @Composable () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         if (shown) {
-            Inverted {
+            Inverted(!light) {
                 Column(
                     Modifier.padding(horizontal = 36.dp).background(LocalLcd.current.ground).padding(horizontal = 16.dp, vertical = 18.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,

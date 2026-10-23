@@ -340,13 +340,14 @@ private fun RootScreen(back: () -> Unit, next: () -> Unit) {
             Shell("su", if (!done) Led.BUSY else if (result.isSuccess) Led.ON else Led.OFF, session.shownAt(step), Modifier.fill(min = 200.dp))
         }
         // Root managers today only take a grant at the app's next start, so there is no retry
-        if (done && result.isFailure) NoRoot()
+        if (done && result.isFailure) NoRoot(light = true)
     }
 }
 
-// No root: the page shaded, Pin in tears, and what to do, which happens outside the app
+// No root: the page shaded, Pin in tears, and what to do, which happens outside the app. On
+// Root it sits over the terminal, so the box is [light]
 @Composable
-private fun NoRoot() = Shade("Grant root, then\nreopen the app") { SpriteIcon(Sprites.PinSad, 3.dp) }
+private fun NoRoot(light: Boolean = false) = Shade("Grant root, then\nreopen the app", light) { SpriteIcon(Sprites.PinSad, 3.dp) }
 
 /*
  * check --json's probes as Check.dc.html words them. A note says what a missing probe costs;
