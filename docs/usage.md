@@ -10,7 +10,7 @@ A command's options may come before or after its action.
 
 | Global option | Meaning |
 |---|---|
-| `--udc NAME` | The USB device controller to use. Only needed when `/sys/class/udc` lists more than one. |
+| `--udc NAME` | The USB device controller to use. Only needed when `/sys/class/udc` lists more than one. `dummy_udc.*` (built into every GKI kernel) is used only when this names it. |
 | `-v`, `--verbose` | Debug output |
 | `-h`, `--help`, `-V`, `--version` | Help, version |
 

@@ -67,7 +67,8 @@ static void usage(void) {
     printf("  %-9s %s\n", commands[i].name, commands[i].summary);
   printf("\nGlobal options:\n"
          "  --udc NAME     USB device controller to use (only needed when\n"
-         "                 /sys/class/udc lists more than one)\n"
+         "                 /sys/class/udc lists more than one;\n"
+         "                 dummy_udc.* is used only when named here)\n"
          "  -v, --verbose  Show debug output\n"
          "  -h, --help     Show this help\n"
          "  -V, --version  Print the version\n\n");

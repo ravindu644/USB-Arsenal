@@ -77,7 +77,13 @@ Only root and the `usb-arsenal` group (gid 3460) may use it. `usb-arsenal versio
 "no access" in that case. See [containers.md](containers.md#who-may-use-it).
 
 **"More than one USB device controller".**
-Pick one with `--udc NAME`; `check` lists them.
+Pick one with `--udc NAME`; `check` lists them. `dummy_udc.*`, which every GKI kernel builds in,
+is never counted, so it does not cause this.
+
+**"No peripheral-mode controller in /sys/class/udc now", or a controller "not in /sys/class/udc now".**
+A dual-role port leaves `/sys/class/udc` while it is a USB host (dwc3 removes its gadget side
+on the switch), for example after an OTG device. Unplug it; the controller comes back once the
+port is a device again, at the latest when a computer is plugged in.
 
 **A command was killed, or the phone lost power mid-way.**
 Run `usb-arsenal stop`. It reads the hand-back record in the workspace and finishes

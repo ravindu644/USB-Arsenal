@@ -188,6 +188,17 @@ int ua_find_configfs(char *out, size_t size) {
   return -1;
 }
 
+/* GKI kernels build dummy_hcd in (CONFIG_USB_DUMMY_HCD=y in gki_defconfig),
+ * so nearly every Android phone lists a dummy_udc.0 beside its real
+ * controller, and it reaches no host. It is left out unless --udc names it
+ * (tests/dummy_hcd.sh does): picked by itself whenever the real one is gone
+ * (a dual-role port in host mode lists none), it would quietly serve nothing.
+ */
+static int is_dummy_udc(const char *name) {
+  return !strncmp(name, "dummy_udc.", 10) &&
+         !(ua_udc_opt && !strcmp(name, ua_udc_opt));
+}
+
 int ua_list_udcs(char names[][64], int max) {
   DIR *d = opendir("/sys/class/udc");
   if (!d)
@@ -195,7 +206,7 @@ int ua_list_udcs(char names[][64], int max) {
   int n = 0;
   struct dirent *e;
   while ((e = readdir(d)) && n < max)
-    if (e->d_name[0] != '.')
+    if (e->d_name[0] != '.' && !is_dummy_udc(e->d_name))
       safe_strncpy(names[n++], e->d_name, 64);
   closedir(d);
   return n;
@@ -205,8 +216,10 @@ int ua_pick_udc(char *out, size_t size) {
   char names[16][64];
   int n = ua_list_udcs(names, 16);
   if (n == 0) {
-    ua_error("No USB device controller in /sys/class/udc");
-    ua_log("The kernel needs a peripheral-capable controller driver "
+    ua_error("No USB device controller in /sys/class/udc now");
+    ua_log("A dual-role port in host mode (OTG) lists none until it is a "
+           "device again, and dummy_udc.* counts only when --udc names it. "
+           "Otherwise the kernel needs a peripheral-capable controller driver "
            "(on a Raspberry Pi: dtoverlay=dwc2).");
     return -1;
   }
@@ -216,7 +229,8 @@ int ua_pick_udc(char *out, size_t size) {
         safe_strncpy(out, names[i], size);
         return 0;
       }
-    ua_error("No such UDC: %s", ua_udc_opt);
+    ua_error("No such UDC now: %s (a typo, or a dual-role port in host mode)",
+             ua_udc_opt);
   } else if (n == 1) {
     safe_strncpy(out, names[0], size);
     return 0;

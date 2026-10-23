@@ -369,8 +369,10 @@ private fun row(label: String, note: String, of: (Capabilities) -> Probe) = Prob
 private val mustHave = listOf(
     row("Root", "nothing works") { it.root },
     row("configfs", "this kernel has no configfs usb gadget; it needs a custom kernel") { it.configfs },
-    // check also says 0 when there are several controllers and no --udc, which the app cannot pass yet
-    ProbeRow("Controller", { it.udc }, { it.udcName }) { _, _ -> "no usb device controller, or more than one" },
+    // A 0 is no controller in /sys/class/udc, or the pick gone from it: a dual-role port in host mode lists none
+    ProbeRow("Controller", { it.udc }, { it.udcName }) { _, _ ->
+        "${Controller.picked?.let { "$it is not" } ?: "no usb device controller is"} listed now; the port may be in host mode (otg)"
+    },
     ProbeRow("Gadget", { it.gadget }) { c, _ ->
         if (c.root == Probe.OK && c.configfs == Probe.OK && c.udc == Probe.OK) "could not create a gadget"
         else "needs the lines above first"
