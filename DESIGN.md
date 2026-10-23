@@ -528,9 +528,9 @@ scrolls as a whole, so nothing is squeezed, and the pad takes half the window.
 ### Card (`.card`)
 A big way into a screen, in the drive panel's look: an inverted 40px face with the name and
 `>`, over a body with a 4x sprite and one VT323 line. The whole card is one key. Focused or
-held it inverts (the face goes light, the body dark), and a tap keeps it inverted for 2 frames
-before the screen changes, so a quick tap is still seen to land. HID's cards: `Keyboard and
-mouse` (the nodes while HID runs) and `Quacky` (`WIP`).
+held it inverts (the face goes light, the body dark, the 2px edge stays ink), and a tap keeps
+it inverted for 2 frames before the screen changes, so a quick tap is still seen to land. HID's
+cards: `Keyboard and mouse` (the nodes while HID runs) and `Quacky` (`WIP`).
 
 ### HID, Keys + mouse, Quacky
 - **HID:** the two cards, then `Interval`: the period on the left, `-`, the exponent and `+`

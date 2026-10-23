@@ -496,6 +496,8 @@ fun Card(label: String, line: String, icon: Sprite, onOpen: () -> Unit, modifier
     val pressed by interaction.collectIsPressedAsState()
     val haptics = LocalHaptics.current
     val lit = focused || pressed
+    // The edge stays the screen's ink: drawn in the lit card's colours, it would vanish into the screen
+    val edge = LocalLcd.current.ink
     Box(
         modifier
             .fillMaxWidth()
@@ -506,7 +508,7 @@ fun Card(label: String, line: String, icon: Sprite, onOpen: () -> Unit, modifier
     ) {
         Inverted(lit) {
             val c = LocalLcd.current
-            Column(Modifier.fillMaxWidth().background(c.ground).border(Lcd.pixel, c.ink).padding(Lcd.pixel)) {
+            Column(Modifier.fillMaxWidth().background(c.ground).border(Lcd.pixel, edge).padding(Lcd.pixel)) {
                 // The face is the inverse of the card, whichever way the card is lit
                 Inverted {
                     Row(
