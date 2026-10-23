@@ -47,23 +47,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import kotlinx.coroutines.launch
-import com.usbarsenal.app.lcd.focusTick
-import com.usbarsenal.app.lcd.focusOutline
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.gestures.ScrollableState
-import androidx.compose.foundation.gestures.animateScrollBy
-import androidx.compose.foundation.focusable
 import kotlin.math.roundToInt
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Constraints
@@ -118,6 +109,7 @@ import com.usbarsenal.app.lcd.cursorOn
 import com.usbarsenal.app.lcd.dashedRect
 import com.usbarsenal.app.lcd.lcdClickable
 import com.usbarsenal.app.lcd.loop
+import com.usbarsenal.app.lcd.keyScroll
 import com.usbarsenal.app.lcd.stepSpec
 import kotlinx.coroutines.delay
 
@@ -136,6 +128,8 @@ fun Screen(
     bottomBar: (@Composable () -> Unit)? = null,
     footer: (@Composable ColumnScope.() -> Unit)? = null,
     scroll: Boolean = true,
+    // Held by a screen whose body has a part that scrolls it from the keys (Check's list)
+    scrollState: ScrollState = rememberScrollState(),
     content: @Composable ScreenScope.() -> Unit,
 ) = Column(
     // The keyboard pushes the bar and the content up; the bar's own navigation-bar padding then gives way
@@ -160,7 +154,7 @@ fun Screen(
             .focusGroup(),
         verticalArrangement = Arrangement.spacedBy(Lcd.section),
     ) {
-        ScreenBody(Modifier.weight(1f).fillMaxWidth(), scroll, content)
+        ScreenBody(Modifier.weight(1f).fillMaxWidth(), scroll, scrollState, content)
         footer?.let { Column(Modifier.padding(horizontal = Lcd.gutter), verticalArrangement = Arrangement.spacedBy(Lcd.section), content = it) }
     }
     bottomBar?.invoke()
@@ -215,10 +209,10 @@ private data class Fill(val min: Dp, val weight: Float) : ParentDataModifier {
  * it left, as in a Column, so a part that sizes itself to its room (Keys + mouse) still can.
  */
 @Composable
-private fun ScreenBody(modifier: Modifier, scroll: Boolean, content: @Composable ScreenScope.() -> Unit) = Layout(
+private fun ScreenBody(modifier: Modifier, scroll: Boolean, state: ScrollState, content: @Composable ScreenScope.() -> Unit) = Layout(
     content = { ScreenScope.content() },
     modifier = modifier
-        .then(if (scroll) Modifier.lcdScroll(rememberScrollState(), inset = 0.dp) else Modifier)
+        .then(if (scroll) Modifier.lcdScroll(state, inset = 0.dp) else Modifier)
         .padding(start = Lcd.gutter, end = Lcd.gutter, top = Lcd.topInset),
 ) { parts, c ->
         val room = c.minHeight
@@ -669,30 +663,11 @@ private val GLYPH = Regex("^\\[.] ")
 @Composable
 fun Terminal(lines: List<String>, modifier: Modifier = Modifier, live: Boolean = true) {
     val cursor = LocalLcd.current.ink
-    val scope = rememberCoroutineScope()
     // A log opens on its newest line; scrolling there after the first frame showed the top first
     val list = rememberLazyListState(if (live) lines.lastIndex.coerceAtLeast(0) else 0)
     val page = rememberScrollState()
-    val state: ScrollableState = if (live) list else page
-    val step = with(LocalDensity.current) { 80.dp.toPx() }
-    var focused by remember { mutableStateOf(false) }
-    val glide = stepSpec<Float>(2)
-    // Keys can reach it, which scrolls a short screen to it, and then step through its lines;
-    // at either end the key moves focus on as usual
-    val keys = Modifier
-        .onFocusChanged { focused = it.isFocused }
-        .onPreviewKeyEvent { e ->
-            val down = e.key == Key.DirectionDown
-            if (e.type != KeyEventType.KeyDown || !(down || e.key == Key.DirectionUp)) return@onPreviewKeyEvent false
-            if (if (down) !state.canScrollForward else !state.canScrollBackward) return@onPreviewKeyEvent false
-            scope.launch { state.animateScrollBy(if (down) step else -step, glide) }
-            true
-        }
-        .focusTick()
-        .focusable()
     Inverted {
-        val panel = modifier.then(keys)
-            .then(if (focused) Modifier.focusOutline(cursor) else Modifier)
+        val panel = modifier.keyScroll(if (live) list else page, cursor)
             .fillMaxWidth()
             .background(LocalLcd.current.ground)
         if (live) TerminalList(lines, list, cursor, panel)

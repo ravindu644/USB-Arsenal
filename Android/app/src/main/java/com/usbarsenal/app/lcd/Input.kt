@@ -12,6 +12,18 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.ScrollableState
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.Role
@@ -84,6 +96,30 @@ fun Modifier.focusTick(): Modifier = composed {
     val haptics = LocalHaptics.current
     val inputMode = LocalInputModeManager.current
     onFocusChanged { if (it.isFocused && inputMode.inputMode == InputMode.Keyboard) haptics.tick() }
+}
+
+/*
+ * A part that only scrolls (a terminal, Check's list) still takes keys: focus reaches it, which
+ * scrolls a short screen to it, Up and Down then step [state] 80dp at a time, and at either end
+ * they move focus on as usual. Focused, it wears the dashed cursor in [cursor]. Off while
+ * [enabled] is false, so a part with nothing to scroll is no extra stop.
+ */
+fun Modifier.keyScroll(state: ScrollableState, cursor: Color, enabled: Boolean = true): Modifier = composed {
+    val scope = rememberCoroutineScope()
+    val step = with(LocalDensity.current) { 80.dp.toPx() }
+    var focused by remember { mutableStateOf(false) }
+    val glide = stepSpec<Float>(2)
+    onFocusChanged { focused = it.isFocused }
+        .onPreviewKeyEvent { e ->
+            val down = e.key == Key.DirectionDown
+            if (e.type != KeyEventType.KeyDown || !(down || e.key == Key.DirectionUp)) return@onPreviewKeyEvent false
+            if (if (down) !state.canScrollForward else !state.canScrollBackward) return@onPreviewKeyEvent false
+            scope.launch { state.animateScrollBy(if (down) step else -step, glide) }
+            true
+        }
+        .focusTick()
+        .focusable(enabled)
+        .then(if (focused) Modifier.focusOutline(cursor) else Modifier)
 }
 
 // BUTTON_L1 and BUTTON_R1 step a segmented control or the LUN strip while focus is inside it

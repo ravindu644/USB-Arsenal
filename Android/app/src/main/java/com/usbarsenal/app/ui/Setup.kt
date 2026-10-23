@@ -10,6 +10,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import com.usbarsenal.app.lcd.lcdClickable
+import com.usbarsenal.app.lcd.keyScroll
+import androidx.compose.foundation.rememberScrollState
 import com.usbarsenal.app.lcd.Inverted
 import com.usbarsenal.app.lcd.LocalLcd
 import com.usbarsenal.app.backend.Controller
@@ -430,7 +432,9 @@ private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
     // A probe that is still running finishes first; it is quick and its root shell is ours
     BackHandler { if (settled) back() }
     val focus = focusOn(settled)
+    val body = rememberScrollState()
     Screen(
+        scrollState = body,
         footer = {
             KeyRow {
                 val canNext = settled && caps?.requirementsMet == true
@@ -453,8 +457,8 @@ private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
         Title("Check")
         if (settled) result.exceptionOrNull()?.let { Warn(it.message ?: "check failed") }
         if (blocked) Warn("usb arsenal cannot run on this kernel")
-        // ponytail: nothing in the list takes focus, so keys cannot scroll a short window to its last rows; F3 settles it
-        Column {
+        // Nothing in the list takes focus, so on a short window the list itself does, to scroll it
+        Column(Modifier.keyScroll(body, LocalLcd.current.ink, enabled = body.maxValue in 1 until Int.MAX_VALUE)) {
             if (result == null || caps != null) {
                 Group("Must have")
                 mustHave.forEachIndexed { i, row -> ProbeLine(row, caps.takeIf { i < shown }) }
