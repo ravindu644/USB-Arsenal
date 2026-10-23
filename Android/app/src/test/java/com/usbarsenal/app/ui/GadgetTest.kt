@@ -43,6 +43,18 @@ class GadgetTest {
         assertEquals("no hid in this kernel" to "CONFIG_USB_CONFIGFS_F_HID", rowLines(Fn.HID, idle, caps(Probe.MISSING), null))
     }
 
+    // The bottom bar's few words for a command, never read from a path
+    @Test
+    fun saysWhatItDoes() {
+        assertEquals("starting HID", says(listOf("hid", "start", "--interval", "1")))
+        assertEquals("starting storage", says(listOf("storage", "start", "--lun", "0", "--mode", "rw", "/sdcard/backstop")))
+        assertEquals("stopping tether", says(listOf("tether", "stop")))
+        assertEquals("stopping everything", says(listOf("stop")))
+        assertEquals("ejecting a drive", says(listOf("storage", "eject", "--lun", "1")))
+        assertEquals("switching identity", says(listOf("identity", "set", "/sdcard/USB-Arsenal/Profiles/a.conf")))
+        assertEquals("back to built-in identity", says(listOf("identity", "unset")))
+    }
+
     // The host gets the next address, or the one before at the top of the subnet; none without one
     @Test
     fun hostAddress() {

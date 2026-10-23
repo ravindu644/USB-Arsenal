@@ -42,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -632,7 +633,16 @@ fun Terminal(lines: List<String>, modifier: Modifier = Modifier, live: Boolean =
 
 @Composable
 private fun TerminalList(lines: List<String>, list: LazyListState, cursor: Color, modifier: Modifier) {
-    LaunchedEffect(lines.size, lines.lastOrNull()) { if (lines.isNotEmpty()) list.scrollToItem(lines.lastIndex) }
+    // Each new line is brought into view before the frame is measured, so a log filling from
+    // empty never draws its top lines first (a scroll from an effect lands a frame late)
+    val seen = remember { object { var size = -1; var last: String? = null } }
+    SideEffect {
+        if (lines.isNotEmpty() && (lines.size != seen.size || lines.last() != seen.last)) {
+            seen.size = lines.size
+            seen.last = lines.last()
+            list.requestScrollToItem(lines.lastIndex)
+        }
+    }
     val ink = LocalLcd.current.ink
     LazyColumn(
         modifier

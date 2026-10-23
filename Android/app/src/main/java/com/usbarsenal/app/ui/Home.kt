@@ -91,8 +91,8 @@ fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     val port = when {
-        busy?.stopping == true -> Port.Stopping("usb-arsenal ${busy.typed}")
-        busy != null -> Port.Replugging("usb-arsenal ${busy.typed}")
+        busy?.stopping == true -> Port.Stopping(busy.says)
+        busy != null -> Port.Replugging(busy.says)
         status?.bound == true -> Port.Bound(status.udc)
         else -> Port.Android
     }

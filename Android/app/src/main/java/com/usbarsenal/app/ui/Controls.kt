@@ -627,7 +627,7 @@ fun Cells(tenths: Int, modifier: Modifier = Modifier) {
 sealed interface Port {
     data class Bound(val udc: String) : Port
 
-    // [command] is what is running, as typed
+    // [command] is what is running, in a few words
     data class Replugging(val command: String) : Port
 
     data class Stopping(val command: String) : Port

@@ -828,7 +828,7 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | Keys + mouse, the gamepad | app-side: 8-byte keyboard and 4-byte mouse reports, each one write to `/dev/hidgN` through a root `dd` per node; Speed and Natural scroll are app-side too, applied to the reports before they are written |
 | Quacky | nothing yet: a WIP page |
 | Identity | `identity show` (the profile in force), `identity generate FILE --force` then the six keys written in (`product`, `manufacturer`, `serial`, `id_vendor`, `id_product`, `max_power`), an edit from the file as it is, through a rename, `identity set FILE`, `identity unset` for Built-in |
-| Log tabs | command output (CLI) and `Logs/usb-arsenald.log` (Daemon) |
+| Log tabs | command output (CLI) and `Logs/usb-arsenald.log` (Daemon). Clear on Daemon empties the file (`: >`, safe while the daemon appends) and removes its rotated `.old` |
 | Function names in the bind screen | `mass_storage.ua`, `ncm.ua`, `hid.ua_kbd`, `hid.ua_mouse` |
 | Root screen | `id -u; su -v` (prints `3.3.0:KernelSU` or `<version>:MAGISK`), shown as a shell session; its `#` comments are the app's narration |
 | Check screen | `check --json`, run with the bundled binary before anything is installed |
