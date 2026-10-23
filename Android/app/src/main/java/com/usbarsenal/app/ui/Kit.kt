@@ -96,7 +96,7 @@ internal fun KitRows() = Column(Modifier.bleed(10.dp), verticalArrangement = Arr
 // D5: the bottom bar's four states, switched from here
 @Composable
 internal fun KitPort(port: Port, onPort: (Port) -> Unit) {
-    val states = listOf(Port.Bound("11201000.usb0"), Port.Replugging("usb-arsenal storage start"), Port.Stopping("usb-arsenal stop"), Port.Android)
+    val states = listOf(Port.Bound("11201000.usb0"), Port.Replugging("starting storage"), Port.Stopping("stopping everything"), Port.Android)
     Segs(listOf("bound", "replug", "stop", "android"), states.indexOfFirst { it::class == port::class }, { onPort(states[it]) })
 }
 

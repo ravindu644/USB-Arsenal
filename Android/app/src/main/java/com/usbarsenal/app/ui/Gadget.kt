@@ -36,8 +36,25 @@ import kotlinx.coroutines.launch
 // A failed command, where it was acted on (null: the whole gadget), with stderr's last line
 data class Fault(val where: Fn?, val message: String)
 
-// The command running, as typed after `usb-arsenal`, for which function, and whether it stops it
-data class Busy(val fn: Fn?, val typed: String, val stopping: Boolean)
+// The command running, as typed after `usb-arsenal`, for which function, whether it stops it,
+// and what it does in a few words (the bottom bar's line; the typed one goes to the log)
+data class Busy(val fn: Fn?, val typed: String, val stopping: Boolean, val says: String = typed)
+
+// A command in a few words. Read from its first two words, never from a path after them
+fun says(args: List<String>): String {
+    val what = args.firstOrNull().orEmpty()
+    val verb = args.getOrNull(1)
+    val name = if (what == "hid") "HID" else what
+    return when {
+        what == "stop" -> "stopping everything"
+        what == "identity" && verb == "unset" -> "back to built-in identity"
+        what == "identity" -> "switching identity"
+        verb == "eject" -> "ejecting a drive"
+        verb == "start" -> "starting $name"
+        verb == "stop" -> "stopping $name"
+        else -> args.joinToString(" ")
+    }
+}
 
 // The functions Home lists, in its order
 enum class Fn(val label: String) { STORAGE("Storage"), TETHER("Tether"), HID("HID") }
@@ -158,11 +175,12 @@ object Gadget {
         if (busy != null) return false
         val typed = args.joinToString(" ")
         // `stop` and `<function> stop`; never read from the typed line, whose path could end in it
-        busy = Busy(fn, typed, stopping = args.firstOrNull() == "stop" || args.getOrNull(1) == "stop")
+        busy = Busy(fn, typed, stopping = args.firstOrNull() == "stop" || args.getOrNull(1) == "stop", says = says(args.toList()))
         fault = null
         scope.launch {
             val r = Root.change("$UA " + args.joinToString(" ", transform = ::shellQuote))
-            cli += "$ usb-arsenal $typed"
+            // Root's prompt: every command runs as root
+            cli += "# usb-arsenal $typed"
             (r.out + r.err).forEach { cli += plain(it) }
             cli.keepLast()
             if (!r.ok) {
