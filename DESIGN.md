@@ -867,7 +867,7 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | Gateway, container, its iface | `--gateway CONTAINER`, `--gateway-iface IFACE`; the containers are `droidspaces show --json`'s `running`, and the gateway shows only with `/data/local/Droidspaces/bin/droidspaces` installed |
 | Tether address, DNS, upstream, DHCP and NAT | `--address CIDR`, `--dns IP[,IP]`, `--upstream IFACE`, `--no-net` |
 | Not applied sheet, Apply | Storage: `storage eject --lun N` for a LUN no longer picked, then one `storage start` with the changed picks (`storage stop` with none); Tether and HID: `stop`, then `start` with the setup |
-| HID interval | `hid start --interval N`, period 2^(N-1)×125µs, set at start (without the f_hid patch the backend warns and keeps 1 ms) |
+| HID interval | `hid start --interval N`, period 2^(N-1)×125µs, set at start; without the f_hid patch (`check`'s `hid_interval` is 0) it is `1 ms, fixed by this kernel` and the steppers are dead |
 | Keys + mouse, the gamepad | app-side: 8-byte keyboard and 4-byte mouse reports, each one write to `/dev/hidgN` through a root `dd` per node; Speed and Natural scroll are app-side too, applied to the reports before they are written |
 | Quacky | nothing yet: a WIP page |
 | Identity | `identity show` (the profile in force), `identity generate FILE --force` then the six keys written in (`product`, `manufacturer`, `serial`, `id_vendor`, `id_product`, `max_power`), an edit from the file as it is, through a rename, `identity set FILE`, `identity unset` for Built-in |

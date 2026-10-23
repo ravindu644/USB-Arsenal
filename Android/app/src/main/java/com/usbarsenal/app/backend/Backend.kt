@@ -165,6 +165,8 @@ data class Capabilities(
     val version: String,
     val udcName: String,
     val requirementsMet: Boolean,
+    // Whether f_hid takes an interval; null from a backend older than the probe
+    val hidInterval: Probe? = null,
 )
 
 // An ejected LUN has an empty file, mode and access
@@ -212,6 +214,7 @@ fun parseCheck(json: String): Capabilities = with(JSONObject(json)) {
         p("root"), p("configfs"), p("udc"), p("gadget"), p("mass_storage"), p("cdrom"), p("hid"),
         p("ncm"), p("rndis"), p("nat"), p("nat6"),
         getString("version"), getString("udc_name"), getInt("requirements_met") == 1,
+        if (has("hid_interval")) p("hid_interval") else null,
     )
 }
 

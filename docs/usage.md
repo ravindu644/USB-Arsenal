@@ -29,9 +29,11 @@ usb-arsenal stop      # everything off, the port back to its owner
 ```
 
 `check --json` prints the same probes as one JSON object for a program to read: each key
-(`root`, `configfs`, `udc`, `gadget`, `mass_storage`, `cdrom`, `hid`, `ncm`, `rndis`,
-`nat`, `nat6`) is `1` (ok), `0` (missing) or `-1` (works with caveats), plus `version`,
-`udc_name` and `requirements_met`. The exit code is the same as the text report's.
+(`root`, `configfs`, `udc`, `gadget`, `mass_storage`, `cdrom`, `hid`, `hid_interval`, `ncm`,
+`rndis`, `nat`, `nat6`) is `1` (ok), `0` (missing) or `-1` (works with caveats), plus `version`,
+`udc_name` and `requirements_met`. `hid_interval` says whether `hid --interval` takes (the
+f_hid patch in [kernel-requirements.md](kernel-requirements.md)); it is `0` whenever `hid` is.
+The exit code is the same as the text report's.
 
 `status --json` prints the live gadget as one JSON object, every key always present:
 

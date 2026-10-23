@@ -536,3 +536,7 @@ Tick a box only when the item is merged and verified as described in its phase.
   Tab comes round inside a sheet) and a TalkBack audit of the accessibility tree, on the S10.
   Haptics felt right on the S10; the A16 plays only the bind thud, because Samsung scales
   `performHapticFeedback` to nothing there. `docs/app.md` added.
+- 2026-10-23: `check` probes the f_hid `interval` attribute (`hid_interval`), so the app shows
+  HID's interval as fixed before HID first runs; before, a fresh launch on a stock kernel
+  offered the steppers until a running keyboard said otherwise (S10, 4.14). Setup shows its
+  steps as dots in place of `< BACK`, and the Controller step's hints cover every UDC state.

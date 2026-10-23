@@ -145,8 +145,8 @@ object Gadget {
         val idle = busy == null
         val seen = finished
         status = readStatus().getOrNull()
-        // A running keyboard says whether this kernel lets the interval be set at all
-        status?.hid?.firstOrNull { it.function == "keyboard" }?.let { HidSetup.fixed = it.interval < 0 }
+        // A running keyboard shows whether its interval took, which outranks check's probe
+        HidSetup.keyboardFixed = status?.hid?.firstOrNull { it.function == "keyboard" }?.let { it.interval < 0 }
         if (idle && busy == null && seen == finished) settle()
     }
 
@@ -611,9 +611,11 @@ object HidSetup {
     var interval by mutableIntStateOf(DEFAULT_INTERVAL)
         private set
 
-    // This kernel keeps the stock 1 ms whatever is asked (no f_hid interval control), as the
-    // running keyboard showed; the interval is then not a setting at all
-    var fixed by mutableStateOf(false)
+    // This kernel keeps the stock 1 ms whatever is asked (no f_hid interval control); the
+    // interval is then not a setting at all. A running keyboard shows it; before HID runs,
+    // check's probe does (a backend older than the probe knows nothing until then)
+    val fixed get() = keyboardFixed ?: Gadget.caps?.hidInterval?.let { it != Probe.OK } ?: false
+    var keyboardFixed by mutableStateOf<Boolean?>(null)
 
     // The trackpad's speed in quarters: 4 is 1.0x, half a host pixel per pixel of drag
     var speed by mutableIntStateOf(4)

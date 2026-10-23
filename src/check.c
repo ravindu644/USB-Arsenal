@@ -213,8 +213,14 @@ int ua_cmd_check(int argc, char **argv) {
     line("cdrom", ua_probe_function(&g, "mass_storage", "lun.0/cdrom"), 0,
          "CD-ROM emulation (mass_storage)",
          "Without lun.0/cdrom, non-hybrid ISOs (Windows) cannot boot");
-    line("hid", ua_probe_function(&g, "hid", NULL), 0, "hid",
-         "CONFIG_USB_CONFIGFS_F_HID; needed by 'hid'");
+    int hid = ua_probe_function(&g, "hid", NULL);
+    line("hid", hid, 0, "hid", "CONFIG_USB_CONFIGFS_F_HID; needed by 'hid'");
+    /* Known before HID runs, so a client never offers an interval the
+     * kernel would ignore */
+    line("hid_interval", hid > 0 && ua_probe_function(&g, "hid", "interval"), 0,
+         "HID poll interval (f_hid)",
+         "Stock f_hid polls the keyboard every 1 ms; the f_hid patch in "
+         "kernel-patches/ makes 'hid --interval' work");
     if (ua_ncm_unsafe())
       line("ncm", -1, 0,
            "ncm (unsafe on this Samsung kernel; tether uses rndis)",
@@ -237,8 +243,9 @@ int ua_cmd_check(int argc, char **argv) {
          "them the host gets IPv4 only");
   } else if (json_mode) {
     /* Every key always present, so a reader never has to guess */
-    static const char *const fkeys[] = {"mass_storage", "cdrom", "hid", "ncm",
-                                        "rndis",        "nat",   "nat6"};
+    static const char *const fkeys[] = {"mass_storage", "cdrom", "hid",
+                                        "hid_interval", "ncm",   "rndis",
+                                        "nat",          "nat6"};
     for (size_t i = 0; i < sizeof(fkeys) / sizeof(fkeys[0]); i++)
       ua_json_int(fkeys[i], 0, &json_first);
   } else {
