@@ -30,10 +30,15 @@ including one in a container, relays its command line to it over a filesystem so
   patch*10); commit that alone as `usb-arsenal: bump vX.Y.Z`.
 - **CI** (`.github/workflows/ci.yml`): every push
   and pull request builds the module zip with Droidspaces' published musl toolchains,
-  cached between runs.
+  cached between runs, and the app's release APK.
   Pushing a `vX.Y.Z` tag (or a manual run with `tag_name`) also publishes a release with
-  the zip, `SHA256SUMS` and generated notes. The tag must equal `UA_VERSION`, so bump
+  the zip, the APK, `SHA256SUMS` and generated notes. The tag must equal `UA_VERSION`, so bump
   first: `make bump NEW=X.Y.Z`, commit, then `git tag vX.Y.Z && git push --tags`.
+- **The app's signing key** is Droidspaces': `droidspaces.keystore` at the repo root and its
+  passwords in `Android/local.properties` (see `local.properties.example`), both gitignored;
+  CI takes them from the `RELEASE_KEYSTORE` (base64), `KEYSTORE_PASSWORD`, `KEY_ALIAS` and
+  `KEY_PASSWORD` secrets. Without them a release is signed with the debug key. Releases are
+  shrunk with R8.
 - **No wildcard SRCS**: add each new `.c` to the list in the Makefile.
 - Header dependencies are tracked (`-MMD`), so a header edit rebuilds what includes it.
 - clangd reads `compile_flags.txt`.

@@ -1,9 +1,12 @@
 name: USB Arsenal CI
 
 # One workflow. Every push and pull
-# request builds the module zip and uploads it as an artifact. A v* tag, or a
-# manual run with tag_name, also publishes it as a GitHub release. The
-# toolchains come from Droidspaces' releases and are cached between runs.
+# request builds the module zip and the app's APK and uploads them as an
+# artifact. A v* tag, or a manual run with tag_name, also publishes them as a
+# GitHub release. The toolchains come from Droidspaces' releases and are
+# cached between runs. The APK is signed with Droidspaces' key when the
+# RELEASE_KEYSTORE, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD secrets are
+# set, and with a debug key when they are not (a fork, a pull request).
 on:
   push:
     branches: [ "main", "master" ]
@@ -23,7 +26,7 @@ permissions:
 
 jobs:
   build:
-    name: Build the module (aarch64, armhf, x86_64, x86)
+    name: Build the module (aarch64, armhf, x86_64, x86) and the app
     runs-on: ubuntu-latest
     env:
       # The tag being released, if any
@@ -66,20 +69,57 @@ jobs:
         done
         echo "[+] Toolchains ready."
 
-    - name: Build the KernelSU/Magisk module
-      run: make module
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 17
+        cache: gradle
+
+    # The key lives in a secret as base64, as in Droidspaces; without it the
+    # release is signed with the debug key
+    - name: Decode Keystore
+      env:
+        RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
+      if: env.RELEASE_KEYSTORE != ''
+      run: echo "$RELEASE_KEYSTORE" | base64 -d > droidspaces.keystore
+
+    # A release signed with a throwaway key could never update the real app, so
+    # a release run without the key stops here instead of publishing one
+    - name: Require the key for a release
+      if: env.TAG != ''
+      env:
+        RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      run: |
+        [ -n "$RELEASE_KEYSTORE" ] && [ -n "$KEYSTORE_PASSWORD" ] || { echo "Releases are signed with Droidspaces' key: set RELEASE_KEYSTORE and KEYSTORE_PASSWORD"; exit 1; }
+
+    # Gradle's buildBackend runs make module first, so this builds the module
+    # zip as well as the APK that bundles its binaries
+    - name: Build the module and the app
+      env:
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      run: |
+        cd Android
+        chmod +x gradlew
+        ./gradlew assembleRelease --no-daemon
 
     # Every build, release or not, is named <version>-<commit> so the exact
     # source a zip came from is legible from its filename, as Droidspaces does.
     - name: Stage & Rename Artifacts
       run: |
-        ZIP_NAME="usb-arsenal-v${VERSION}-$(git log -1 --pretty=%h).zip"
+        HASH=$(git log -1 --pretty=%h)
+        ZIP_NAME="usb-arsenal-v${VERSION}-${HASH}.zip"
+        APK_NAME="usb-arsenal-v${VERSION}-${HASH}.apk"
         mkdir -p dist
         mv output/usb-arsenal-v${VERSION}.zip dist/${ZIP_NAME}
-        (cd dist && sha256sum ${ZIP_NAME} > SHA256SUMS)
+        mv Android/app/build/outputs/apk/release/app-release.apk dist/${APK_NAME}
+        (cd dist && sha256sum ${ZIP_NAME} ${APK_NAME} > SHA256SUMS)
         echo "ZIP_FILE=dist/${ZIP_NAME}" >> $GITHUB_ENV
 
-    - name: Upload Final Artifacts (module zip)
+    - name: Upload Final Artifacts (module zip and APK)
       uses: actions/upload-artifact@v4
       with:
         name: usb-arsenal-artifacts
@@ -95,6 +135,7 @@ jobs:
         name: USB Arsenal ${{ env.TAG }}
         files: |
           dist/*.zip
+          dist/*.apk
           dist/SHA256SUMS
         generate_release_notes: true
         draft: false
