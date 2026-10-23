@@ -49,6 +49,7 @@ private fun RowsPreview() = Board { KitRows() }
 private fun BottomBarPreview() = Board {
     BottomBar(Port.Bound("11201000.usb0"), onStopAll = {})
     BottomBar(Port.Replugging("usb-arsenal storage start"), onStopAll = {})
+    BottomBar(Port.Stopping("usb-arsenal stop"), onStopAll = {})
     BottomBar(Port.Android, onStopAll = {})
 }
 

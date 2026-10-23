@@ -158,6 +158,13 @@ fun App() {
             push(Step.INSTALL)
         }
     }
+    // A real bind (the port left Android) thuds wherever it was started; Home's Pin plugs in on it
+    val haptics = LocalHaptics.current
+    var thudded by remember { mutableIntStateOf(Gadget.binds) }
+    LaunchedEffect(Gadget.binds) {
+        if (Gadget.binds > thudded) haptics.bindPlug()
+        thudded = Gadget.binds
+    }
     Redraw(stack.last(), back, Modifier.fillMaxSize()) {
         when (it) {
             Step.WELCOME -> Welcome { push(Step.ROOT) }

@@ -73,22 +73,6 @@ class Haptics(private val view: View, private val feedback: HapticFeedback, priv
     fun reject() = simple(HapticFeedbackType.Reject)
     fun confirm() = simple(HapticFeedbackType.Confirm)
 
-    // Pin climbs into the port in three steps (0, 1, 2), each tick stronger. Called on the frame Pin moves
-    fun bindClimb(step: Int) {
-        if (!allowed()) return
-        val v = vibrator
-        when {
-            // Scales mean nothing without amplitude control, so those devices get the full tick
-            v != null && tier <= HapticTier.T2 && Build.VERSION.SDK_INT >= 30 -> {
-                val scale = if (v.hasAmplitudeControl()) 0.4f + 0.2f * step.coerceIn(0, 2) else 1f
-                v.play(VibrationEffect.startComposition().addPrimitive(PRIMITIVE_TICK, scale).compose())
-            }
-            v != null && tier == HapticTier.T3 && Build.VERSION.SDK_INT >= 29 ->
-                v.play(VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK))
-            else -> feedback.performHapticFeedback(HapticFeedbackType.SegmentTick)
-        }
-    }
-
     // The thud on the frame Pin plugs in
     fun bindPlug() {
         if (!allowed()) return

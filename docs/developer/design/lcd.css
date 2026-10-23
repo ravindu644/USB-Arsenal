@@ -85,8 +85,16 @@ body{margin:0}
 .st > span{display:inline-block;min-width:100%;animation:mq 8s steps(32,end) infinite alternate}
 @keyframes mq{0%,20%{transform:translateX(0)}80%,100%{transform:translateX(min(0px,calc(100cqw - 100%)))}}
 
-/* Bottom bar: gadget state, always on Home. Inverted only while replugging */
-.strip{display:flex;flex-direction:column;gap:16px;margin:auto -20px -68px;padding:14px 20px 68px;box-sizing:border-box;border-top:2px solid var(--ink)}
+/* Bottom bar: gadget state, always on Home, one height in every state. Inverted while replugging or stopping */
+.strip{display:flex;flex-direction:column;gap:12px;margin:auto -20px -68px;padding:14px 20px 68px;box-sizing:border-box;border-top:2px solid var(--ink)}
+/* Pin's stage: the host's port hanging from the top, a dotted floor, Pin (32x36) on it */
+.strip .stage{position:relative;height:72px;overflow:hidden}
+.strip .port{position:absolute;left:calc(50% - 20px);top:0;width:40px;height:16px;background:currentColor;z-index:2}
+.strip .port i{position:absolute;left:6px;top:5px;width:28px;height:6px;background:var(--lcd)}
+.strip .port.full i{background:currentColor}
+.strip .floor{position:absolute;left:0;right:0;bottom:0;height:2px;background:repeating-linear-gradient(90deg,currentColor 0 4px,transparent 4px 8px)}
+.strip .row{display:flex;align-items:center;gap:12px;height:48px}
+.strip .row .key{width:140px}
 .who{display:flex;align-items:center;gap:12px;min-height:44px}
 
 /* Inputs */

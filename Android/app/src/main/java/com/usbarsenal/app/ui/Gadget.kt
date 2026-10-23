@@ -68,6 +68,21 @@ object Gadget {
     var profile by mutableStateOf<Map<String, String>>(emptyMap())
     var busy by mutableStateOf<Busy?>(null)
 
+    // How many times the port went from Android to the gadget: each one plugs Pin in with a thud
+    var binds by mutableIntStateOf(0)
+        private set
+
+    // How many commands failed: each one runs Pin into the port's edge
+    var fails by mutableIntStateOf(0)
+        private set
+
+    // Bound or not as last seen with no command running; null until the first read, so a launch
+    // onto a gadget already bound plays nothing
+    private var wasBound: Boolean? = null
+
+    // Commands finished so far: a status read that saw one finish took its state mid-command
+    private var finished = 0
+
     // The installer's verdict on the backend, as Home last read it; null until it has
     var backend by mutableStateOf<Backend?>(null)
 
@@ -108,9 +123,23 @@ object Gadget {
 
     // A status that cannot be read is not shown: claiming a gadget is still bound would be worse
     suspend fun refresh() {
+        val idle = busy == null
+        val seen = finished
         status = readStatus().getOrNull()
         // A running keyboard says whether this kernel lets the interval be set at all
         status?.hid?.firstOrNull { it.function == "keyboard" }?.let { HidSetup.fixed = it.interval < 0 }
+        if (idle && busy == null && seen == finished) settle()
+    }
+
+    // Only settled states count: a replug unbinds and binds inside its command, which is never
+    // seen as the port leaving Android. A stop never settles from its own command either, so
+    // Apply's stop then start is a replug; a poll after a stop that stays stopped settles it.
+    // ponytail: a replug run from the CLI while the app polls could show one unbound read and
+    // play the moment; two unbound polls in a row would rule it out
+    private fun settle() {
+        val now = status?.bound ?: return
+        if (wasBound == false && now) binds++
+        wasBound = now
     }
 
     // Once a process: what the kernel can do (Check's answer, when setup ran), and the profile
@@ -142,9 +171,13 @@ object Gadget {
                     else -> r.err.lastOrNull()?.let(::plain) ?: "[-] Failed (exit ${r.code})"
                 }
                 fault = Fault(fn, why)
+                fails++
             }
             refresh()
+            val stopping = busy?.stopping == true
             busy = null
+            finished++
+            if (!stopping) settle()
             onDone(r.ok)
         }
         return true
