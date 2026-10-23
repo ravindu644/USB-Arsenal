@@ -58,6 +58,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.focusable
 import kotlin.math.roundToInt
@@ -573,12 +574,17 @@ private val GLYPH = Regex("^\\[.] ")
  * after it; any other line (a prompt, stderr) uses the whole width. Only the lines on screen
  * are composed, so a long log costs what a short one does.
  */
-// [live] false is a document on the panel (a licence): no backlit line, no cursor
+// [live] false is a document on the panel (a licence): no backlit line, no cursor. It is short and
+// composed whole, so its scrollbar measures pixels; lines of a log are one row each, so counting
+// them is exact, but a document's paragraphs differ in height and a count made its thumb jump
 @Composable
 fun Terminal(lines: List<String>, modifier: Modifier = Modifier, live: Boolean = true) {
     val cursor = LocalLcd.current.ink
     val scope = rememberCoroutineScope()
-    val list = rememberLazyListState()
+    // A log opens on its newest line; scrolling there after the first frame showed the top first
+    val list = rememberLazyListState(if (live) lines.lastIndex.coerceAtLeast(0) else 0)
+    val page = rememberScrollState()
+    val state: ScrollableState = if (live) list else page
     val step = with(LocalDensity.current) { 80.dp.toPx() }
     var focused by remember { mutableStateOf(false) }
     val glide = stepSpec<Float>(2)
@@ -589,24 +595,31 @@ fun Terminal(lines: List<String>, modifier: Modifier = Modifier, live: Boolean =
         .onPreviewKeyEvent { e ->
             val down = e.key == Key.DirectionDown
             if (e.type != KeyEventType.KeyDown || !(down || e.key == Key.DirectionUp)) return@onPreviewKeyEvent false
-            if (if (down) !list.canScrollForward else !list.canScrollBackward) return@onPreviewKeyEvent false
-            scope.launch { list.animateScrollBy(if (down) step else -step, glide) }
+            if (if (down) !state.canScrollForward else !state.canScrollBackward) return@onPreviewKeyEvent false
+            scope.launch { state.animateScrollBy(if (down) step else -step, glide) }
             true
         }
         .focusTick()
         .focusable()
-    Inverted { TerminalList(lines, list, live, cursor, focused, modifier.then(keys)) }
-}
-
-@Composable
-private fun TerminalList(lines: List<String>, list: LazyListState, live: Boolean, cursor: Color, focused: Boolean, modifier: Modifier) {
-    LaunchedEffect(lines.size, lines.lastOrNull()) { if (live && lines.isNotEmpty()) list.scrollToItem(lines.lastIndex) }
-    val ink = LocalLcd.current.ink
-    LazyColumn(
-        modifier
+    Inverted {
+        val panel = modifier.then(keys)
             .then(if (focused) Modifier.focusOutline(cursor) else Modifier)
             .fillMaxWidth()
             .background(LocalLcd.current.ground)
+        if (live) TerminalList(lines, list, cursor, panel)
+        // In the terminal's 10dp padding, 3dp from its edge, as the log's
+        else Column(panel.lcdScroll(page, inset = 1.dp).padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            for (line in lines) TerminalLine(line, newest = false, cursor)
+        }
+    }
+}
+
+@Composable
+private fun TerminalList(lines: List<String>, list: LazyListState, cursor: Color, modifier: Modifier) {
+    LaunchedEffect(lines.size, lines.lastOrNull()) { if (lines.isNotEmpty()) list.scrollToItem(lines.lastIndex) }
+    val ink = LocalLcd.current.ink
+    LazyColumn(
+        modifier
             // The scrollbar, by lines: what share of them is in view, and how far down the first is
             .drawWithContent {
                 drawContent()
@@ -623,18 +636,20 @@ private fun TerminalList(lines: List<String>, list: LazyListState, live: Boolean
         state = list,
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        itemsIndexed(lines) { i, line ->
-            val glyph = GLYPH.find(line)?.value
-            val newest = live && i == lines.lastIndex
-            Inverted(newest) {
-                Row(
-                    Modifier.fillMaxWidth().background(LocalLcd.current.ground).padding(horizontal = 4.dp, vertical = 3.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    if (glyph != null) Text(glyph.trim(), LcdType.data, Modifier.width(28.dp))
-                    Text(line.removePrefix(glyph.orEmpty()), LcdType.data, cursor = newest)
-                }
-            }
+        itemsIndexed(lines) { i, line -> TerminalLine(line, i == lines.lastIndex, cursor) }
+    }
+}
+
+@Composable
+private fun TerminalLine(line: String, newest: Boolean, cursor: Color) {
+    val glyph = GLYPH.find(line)?.value
+    Inverted(newest) {
+        Row(
+            Modifier.fillMaxWidth().background(LocalLcd.current.ground).padding(horizontal = 4.dp, vertical = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (glyph != null) Text(glyph.trim(), LcdType.data, Modifier.width(28.dp))
+            Text(line.removePrefix(glyph.orEmpty()), LcdType.data, cursor = newest)
         }
     }
 }

@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -84,7 +85,8 @@ fun LogScreen(back: () -> Unit) {
         Top { BackKey() }
         Title("Log")
         Segs(listOf("CLI", "Daemon"), tab, { tab = it })
-        // A short window scrolls the screen to it, and it keeps a dozen lines
-        Terminal(lines, Modifier.fill(min = 240.dp))
+        // A short window scrolls the screen to it, and it keeps a dozen lines. Each tab has its
+        // own, so switching opens on that tab's newest line instead of the other's place
+        key(tab) { Terminal(lines, Modifier.fill(min = 240.dp)) }
     }
 }
