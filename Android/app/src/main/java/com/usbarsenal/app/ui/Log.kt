@@ -9,6 +9,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -17,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.usbarsenal.app.backend.Root
 import com.usbarsenal.app.backend.WORKSPACE
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val DAEMON_LOG = "$WORKSPACE/Logs/usb-arsenald.log"
@@ -34,7 +37,7 @@ private object DaemonLog {
 /*
  * Log: CLI is this session's command output, as each command printed it; Daemon follows
  * Logs/usb-arsenald.log on its own root shell, open only while that tab shows. Clear empties
- * the tab in front, Copy logs copies it.
+ * the tab in front (on Daemon, the log file itself), Copy logs copies it.
  */
 @Composable
 fun LogScreen(back: () -> Unit) {
@@ -42,7 +45,10 @@ fun LogScreen(back: () -> Unit) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val daemon = DaemonLog.lines
-    LaunchedEffect(tab) {
+    // A clear of the Daemon tab restarts its tail on the emptied file
+    var clears by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(tab, clears) {
         if (tab != 1) return@LaunchedEffect
         // The last 200 lines the first time; after that, the bytes since the tab last showed.
         // A file now shorter than that was rotated at a daemon start: its last 200 lines again
@@ -74,7 +80,22 @@ fun LogScreen(back: () -> Unit) {
     Screen(
         footer = {
             KeyRow {
-                Key("Clear", Modifier.weight(1f)) { lines.clear() }
+                Key("Clear", Modifier.weight(1f)) {
+                    if (tab == 0) {
+                        lines.clear()
+                    } else {
+                        // The file itself, so a relaunch does not read it all back. The daemon
+                        // appends (O_APPEND), so it writes on at the new end; the .old a daemon
+                        // start rotated aside goes too. Its own shell: this is not a gadget change
+                        scope.launch {
+                            if (Root.read(": > $DAEMON_LOG; rm -f $DAEMON_LOG.old").ok) {
+                                daemon.clear()
+                                DaemonLog.offset = 0
+                                clears++
+                            }
+                        }
+                    }
+                }
                 Key("Copy logs", Modifier.weight(1f), primary = true) {
                     context.getSystemService(ClipboardManager::class.java)
                         .setPrimaryClip(ClipData.newPlainText("usb-arsenal log", lines.joinToString("\n")))
