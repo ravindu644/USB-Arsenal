@@ -183,6 +183,23 @@ Tick a box only when the item is merged and verified as described in its phase.
       the inquiry string, leased from the profile's subnet; live change re-plugged once;
       Android-side profile symlinked, deletion reported
 
+## Phase 7. Android app (see [app.md](../app.md))
+- [x] Kotlin and Compose foundation in `Android/`, no Material: the LCD language of
+      `DESIGN.md` (tokens, sprites, stepped motion, haptic tiers, focus cursor)
+- [x] Root: a short-lived shell per operation with a timeout, one ordered lane for gadget
+      changes, reads beside it; `status --json` and `check --json` parsed
+- [x] Setup: Welcome, Root, Controller (several UDCs), Check, Backend (the ported
+      Droidspaces installer, binary then module)
+- [x] Screens: Home with Pin acting out the port, Storage, Tether, HID, Keys + mouse,
+      Identity, Log, Settings
+- [x] Font scale 1.3, reduced motion, keyboard, D-pad and gamepad, TalkBack
+- [x] Ship: adaptive icon and splash, signed and R8-shrunk release, the APK in CI with a
+      versionCode per commit
+- [ ] Window size classes: list-detail at 600dp and up
+- [ ] Screenshot parity with `docs/developer/design/rendered/`
+- [x] Hardware: HID, Identity and Storage from the app on the a166p; setup, haptics and a
+      tether started from Home's switch (the PC leased `192.168.42.130`) on the S10
+
 ## Phase 4. UVC (TODO)
 - [ ] `f_uvc` plus a userspace frame feeder, after the kernel's `uvc-gadget` sample
 
@@ -513,3 +530,9 @@ Tick a box only when the item is merged and verified as described in its phase.
   into sections parted by rules. Verified on the a166p: a created profile is what
   `identity show` reports, and an apply while bound moves the PC's `lsusb` from
   `18d1:4ee7` to `1d6b:0104`.
+- 2026-10-23: Phase 7 written up. The app passed font scale 1.3 (the bottom bar's Stop all
+  key grew to fit), reduced motion (every screen still with the animator scale at 0), a
+  keyboard, D-pad and gamepad walk (focus now returns to what opened a screen or a sheet, and
+  Tab comes round inside a sheet) and a TalkBack audit of the accessibility tree, on the S10.
+  Haptics felt right on the S10; the A16 plays only the bind thud, because Samsung scales
+  `performHapticFeedback` to nothing there. `docs/app.md` added.

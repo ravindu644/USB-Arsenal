@@ -7,7 +7,7 @@ several USB devices at once over one cable: a USB drive or CD-ROM holding any im
 network adapter that shares the phone's internet, and a keyboard and mouse that a program on the phone can
 drive.
 
-**There is no app and no kernel module to install.** One static binary drives the
+**There is no kernel module to install.** One static binary drives the
 kernel's own USB gadget drivers through configfs, and always gives the USB port back to
 Android when it is done, so ADB and MTP return.
 
@@ -56,6 +56,9 @@ Android when it is done, so ADB and MTP return.
 1. Build the module with `make module`, or take the zip from a release.
 2. Flash `usb-arsenal-v<version>.zip` in KernelSU and reboot. The daemon starts at boot.
 3. Run `usb-arsenal check` in a root shell.
+
+Or install the app's APK from a release: it checks the kernel, installs the module and drives
+everything from the phone ([the app](docs/app.md)).
 
 **Linux**
 
@@ -108,6 +111,7 @@ untested; reports are welcome.
 | Page | What it covers |
 |------|----------------|
 | [Installation](docs/installation.md) | The KernelSU module, a manual install, Linux boards. |
+| [The app](docs/app.md) | The Android app: setup, every screen, keys and TalkBack. |
 | [Usage](docs/usage.md) | Every command and option, with examples. |
 | [Tethering](docs/tethering.md) | NAT mode, OpenWrt gateway mode, the host side. |
 | [Containers](docs/containers.md) | The daemon, and using USB Arsenal from inside a container. |
