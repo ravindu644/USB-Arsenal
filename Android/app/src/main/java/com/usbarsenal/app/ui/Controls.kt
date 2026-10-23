@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -734,7 +735,7 @@ fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier = Modifier, 
                     else -> "Port with Android" to ""
                 }
                 Row(
-                    Modifier.fillMaxWidth().height(Lcd.touch + 4.dp).background(LocalLcd.current.ground),
+                    Modifier.fillMaxWidth().heightIn(min = Lcd.touch + 4.dp).background(LocalLcd.current.ground),
                     horizontalArrangement = Arrangement.spacedBy(Lcd.tight),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -744,7 +745,7 @@ fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier = Modifier, 
                         Marquee(detail, LcdType.data, Modifier.fillMaxWidth())
                     }
                     // Live whenever the gadget really is bound, Failed showing or not
-                    Key("Stop all", Modifier.width(140.dp), enabled = port is Port.Bound, haptic = { gestureEnd() }, onClick = onStopAll)
+                    Key("Stop all", Modifier.widthIn(min = 140.dp), enabled = port is Port.Bound, haptic = { gestureEnd() }, onClick = onStopAll)
                 }
             }
         }
