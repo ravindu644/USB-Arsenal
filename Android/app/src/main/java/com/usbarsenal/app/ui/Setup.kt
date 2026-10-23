@@ -181,9 +181,10 @@ fun App() {
     }
     // The controllers once a launch. A set-up app on a phone with several and no pick (set up
     // before the step existed, or its pick gone) is asked for one before anything else
-    var listing by remember { mutableStateOf<Job?>(null) }
     LaunchedEffect(Unit) {
         if (stack.first() == Step.HOME && Controller.refresh(context)) push(Step.CONTROLLER)
+        // Setup brought back past Root (the process was killed) counts its steps from them again
+        else if (stack.first() != Step.HOME && stack.size > 2) Controller.refresh(context)
     }
     // A real bind (the port left Android) thuds wherever it was started; Home's Pin plugs in on it
     val haptics = LocalHaptics.current
@@ -195,21 +196,15 @@ fun App() {
     Redraw(stack.last(), back, Modifier.fillMaxSize()) {
         when (it) {
             Step.WELCOME -> Welcome { push(Step.ROOT) }
-            // Opened from Home, Root goes back there once granted; in setup it leads on to Check
             Step.ROOT -> RootScreen(back = ::pop) {
-                if (!setup) {
-                    pop()
-                    return@RootScreen
-                }
-                // More than one controller: the user picks theirs before Check runs with it. With
-                // one, no pick and no step. One read at a time, so a second tap pushes nothing
-                if (listing?.isActive == true) return@RootScreen
-                listing = scope.launch { push(if (Controller.refresh(context)) Step.CONTROLLER else Step.CHECK) }
+                // More than one controller (Root read them): the user picks theirs before Check runs
+                // with it, a kept pick already picked. With one, no pick and no step
+                push(if (several()) Step.CONTROLLER else Step.CHECK)
             }
             // In setup it leads on to Check; asked for at a launch, it goes back to Home
-            Step.CONTROLLER -> ControllerScreen(back = ::pop) { if (setup) push(Step.CHECK) else pop() }
+            Step.CONTROLLER -> ControllerScreen(setup, back = ::pop) { if (setup) push(Step.CHECK) else pop() }
             Step.CHECK -> CheckScreen(back = ::pop) { push(Step.INSTALL) }
-            Step.INSTALL -> InstallScreen(update = update, back = ::pop, home = home)
+            Step.INSTALL -> InstallScreen(setup, update = update, back = ::pop, home = home)
             Step.HOME -> HomeScreen(
                 // A function opens once its screen exists
                 open = { fn ->
@@ -242,6 +237,11 @@ fun App() {
     // A set-up app that finds no root at launch: nothing works, on any screen, until it is granted
     if (!setup && Gadget.backend?.state == BackendState.NO_ROOT) NoRoot()
 }
+
+// Setup is Root, Check and Backend, and Controller after Root on a phone with several
+private fun several() = (Controller.udcs?.size ?: 0) > 1
+
+private fun setupSteps() = if (several()) 4 else 3
 
 // Initial focus goes to the screen's primary key once it is there, from an effect, never the body
 @Composable
@@ -296,6 +296,7 @@ private const val ASKING = "# checking root access"
  */
 @Composable
 private fun RootScreen(back: () -> Unit, next: () -> Unit) {
+    val context = LocalContext.current
     val haptics = LocalHaptics.current
     // A result that was already there shows at once; one that arrives now types
     val had = remember { Setup.root != null }
@@ -317,7 +318,10 @@ private fun RootScreen(back: () -> Unit, next: () -> Unit) {
     LaunchedEffect(Unit) {
         if (Setup.root != null) return@LaunchedEffect
         snapshotFlow { stepNow }.first { it >= enter }
-        Setup.root = rootInfo()
+        val r = rootInfo()
+        // Controller's step joins the dots here, so it is there before Next lights
+        if (r.isSuccess) Controller.refresh(context)
+        Setup.root = r
     }
     val done = result != null && step >= total
     // Reject once the denial is on screen, not when su answers ahead of the typing
@@ -335,7 +339,7 @@ private fun RootScreen(back: () -> Unit, next: () -> Unit) {
                 }
             },
         ) {
-            Top { if (done) BackKey() }
+            Top { Steps(1, setupSteps(), joins = true) }
             Title("Root")
             Shell("su", if (!done) Led.BUSY else if (result.isSuccess) Led.ON else Led.OFF, session.shownAt(step), Modifier.fill(min = 200.dp))
         }
@@ -445,7 +449,7 @@ private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
             }
         },
     ) {
-        Top { if (settled) BackKey() }
+        Top { Steps(setupSteps() - 1, setupSteps()) }
         Title("Check")
         if (settled) result.exceptionOrNull()?.let { Warn(it.message ?: "check failed") }
         if (blocked) Warn("usb arsenal cannot run on this kernel")
@@ -489,7 +493,7 @@ private const val INSTALL = "./install-backend.sh"
  * version when this replaces one; the app's own version needs no root.
  */
 @Composable
-private fun InstallScreen(update: String?, back: () -> Unit, home: () -> Unit) {
+private fun InstallScreen(setup: Boolean, update: String?, back: () -> Unit, home: () -> Unit) {
     val context = LocalContext.current
     val haptics = LocalHaptics.current
     val phase = Setup.phase
@@ -576,7 +580,10 @@ private fun InstallScreen(update: String?, back: () -> Unit, home: () -> Unit) {
             }
         },
     ) {
-        Top { if (phase == Phase.BEFORE || (phase == Phase.FAILED && finished)) BackKey() }
+        Top {
+            if (setup) Steps(setupSteps(), setupSteps())
+            else if (phase == Phase.BEFORE || (phase == Phase.FAILED && finished)) BackKey()
+        }
         Title("Backend")
         Shell("sh", led, session.shownAt(step), Modifier.fill(min = 200.dp))
     }
@@ -589,7 +596,7 @@ private fun InstallScreen(update: String?, back: () -> Unit, home: () -> Unit) {
  * and runs Check with it.
  */
 @Composable
-private fun ControllerScreen(back: () -> Unit, next: () -> Unit) {
+private fun ControllerScreen(setup: Boolean, back: () -> Unit, next: () -> Unit) {
     BackHandler(onBack = back)
     val context = LocalContext.current
     // Read again when the process was killed on this step, so its rows come back
@@ -608,7 +615,7 @@ private fun ControllerScreen(back: () -> Unit, next: () -> Unit) {
             }
         },
     ) {
-        Top { BackKey() }
+        Top { if (setup) Steps(2, setupSteps()) else BackKey() }
         Title("Controller")
         Text("This phone has more than one USB controller. Pick the one your cable is in.", LcdType.data)
         Column(Modifier.bleed(10.dp).selectableGroup()) {

@@ -243,9 +243,13 @@ Structure:
 - **Secondary screens** sit outside the function list, as two keys above the bar: Log and
   Settings. Identity lives inside Settings, because it is configuration.
 - **First launch** runs Welcome, Root, Check and Install, then Home. Later launches open Home,
-  which leads back to Root or Install only when the backend needs it.
+  which leads back to Root or Install only when the backend needs it. Setup's top bar holds no
+  `< BACK` (Back still goes back) but its steps, centred LEDs 12px apart, lit up to the one on
+  screen: Root 1 of 3, Check 2, Backend 3 (Root 1 of 4, Controller 2, Check 3, Backend 4 with
+  several controllers). Welcome has none.
 - **Controller** comes between Root and Check, only when `/sys/class/udc` lists more than one
-  controller. `This phone has more than one USB controller. Pick the one your cable is in.`,
+  controller. Root reads them once su says yes (the list needs root), and Controller's step
+  joins Root's dots then: the row re-centres and the new LED blinks twice before it holds. `This phone has more than one USB controller. Pick the one your cable is in.`,
   then one Home-style row each: Pin happy (`^ ^`) on a `configured` controller and dozing on any
   other, its name, its state, and what that state means (`a computer is talking to it`, `nothing
   on the other end`). The picked row is inverted, and `Next` waits for a pick. Check then runs
@@ -315,7 +319,8 @@ The phone frame is 390×844.
 | `lun-cell` | 40px | Width of a LUN cell |
 
 Screen anatomy, top to bottom:
-1. **Top bar**, 44px: `< BACK` on function screens; Pin, `USB ARSENAL` and the version on Home.
+1. **Top bar**, 44px: `< BACK` on function screens; Pin, `USB ARSENAL` and the version on Home;
+   the steps (`.steps`) in setup.
    Nothing on the right unless it is a fact found nowhere else on the screen.
 2. **Title** in `display-title` (`display-hero` on Home).
 3. **Content.** A terminal or a shell takes the free height (`flex:1`), and never less than 240px

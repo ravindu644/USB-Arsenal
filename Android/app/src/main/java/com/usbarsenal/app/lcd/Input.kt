@@ -1,6 +1,5 @@
 package com.usbarsenal.app.lcd
 
-import androidx.activity.OnBackPressedDispatcher
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -13,7 +12,6 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.Role
@@ -96,16 +94,5 @@ fun Modifier.shoulderStep(step: (Int) -> Unit) = onKeyEvent {
         Key.ButtonR1 -> step(1)
         else -> return@onKeyEvent false
     }
-    true
-}
-
-/*
- * Back, Escape and BUTTON_B (which falls back to BACK) mean back. While anything is focused
- * Compose takes Back and Escape as a focus exit, and Escape's own fallback to BACK never
- * happens, so the root catches both first and hands them to the back dispatcher.
- */
-fun Modifier.backKeys(dispatcher: OnBackPressedDispatcher?) = onPreviewKeyEvent {
-    if (dispatcher == null || (it.key != Key.Escape && it.key != Key.Back)) return@onPreviewKeyEvent false
-    if (it.type == KeyEventType.KeyUp) dispatcher.onBackPressed()
     true
 }

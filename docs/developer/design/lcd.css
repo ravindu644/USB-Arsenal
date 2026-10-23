@@ -131,6 +131,10 @@ body{margin:0}
 .led{width:8px;height:8px;box-sizing:border-box;border:2px solid var(--lcd)}
 .led.on{background:var(--lcd)}
 .led.busy{background:var(--lcd);animation:led 1.2s steps(1,end) infinite}
+/* Setup's steps in the top bar: LEDs on the light ground, lit up to the step on screen */
+.steps{display:flex;justify-content:center;gap:12px;flex:1}
+.steps .led{border-color:var(--ink)}
+.steps .led.on{background:var(--ink)}
 @keyframes led{30%{visibility:hidden}40%{visibility:visible}55%{visibility:hidden}60%{visibility:visible}}
 .body{display:flex;align-items:center;gap:14px;min-height:96px;padding:12px 14px;box-sizing:border-box}
 

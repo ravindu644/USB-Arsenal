@@ -2,7 +2,6 @@ package com.usbarsenal.app.lcd
 
 import android.content.Context
 import androidx.core.content.edit
-import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -119,7 +118,6 @@ fun LcdTheme(switches: Switches, content: @Composable () -> Unit) {
         LocalReducedMotion provides rememberReducedMotion(switches),
         LocalHaptics provides haptics,
     ) {
-        val back = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
-        Box(Modifier.fillMaxSize().background(Lcd.Backlight).scanlines().backKeys(back)) { content() }
+        Box(Modifier.fillMaxSize().background(Lcd.Backlight).scanlines()) { content() }
     }
 }

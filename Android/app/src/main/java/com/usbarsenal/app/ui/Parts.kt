@@ -483,6 +483,37 @@ fun Top(content: @Composable RowScope.() -> Unit = {}) = Row(
     content = content,
 )
 
+/*
+ * Setup's steps in the top bar, in place of `< BACK`: one LED per step, lit up to [at]. A step
+ * that joins while the row shows (Controller, once Root finds several) blinks twice, then holds.
+ */
+@Composable
+fun Steps(at: Int, of: Int, joins: Boolean = false) {
+    // The count this row first drew; with [joins], a dot past it has just joined
+    val first = remember { if (joins) of else Int.MAX_VALUE }
+    Row(
+        Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = "Step $at of $of" },
+        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        for (i in 0 until of) if (i >= first) JoiningDot() else LedDot(if (i < at) Led.ON else Led.OFF)
+    }
+}
+
+// Off, on, off, on, 3 frames each, then it stays; with reduced motion it is simply there
+@Composable
+private fun JoiningDot() {
+    val reduced = LocalReducedMotion.current
+    var beat by remember { mutableIntStateOf(if (reduced) 3 else 0) }
+    LaunchedEffect(Unit) {
+        while (beat < 3) {
+            delay(3L * FRAME_MS)
+            beat++
+        }
+    }
+    if (beat % 2 == 0) Box(Modifier.size(8.dp)) else LedDot(Led.OFF)
+}
+
 // A title types on, at typing speed, each time its screen is drawn
 @Composable
 fun Title(text: String) {

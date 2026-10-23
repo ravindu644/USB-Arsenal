@@ -1,5 +1,6 @@
 package com.usbarsenal.app
 
+import android.annotation.SuppressLint
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
@@ -12,6 +13,7 @@ import androidx.activity.enableEdgeToEdge
 import com.usbarsenal.app.lcd.LcdTheme
 import com.usbarsenal.app.lcd.Switches
 import android.view.InputDevice
+import android.view.KeyEvent
 import android.view.MotionEvent
 import com.usbarsenal.app.ui.App
 import com.usbarsenal.app.ui.Stick
@@ -31,6 +33,26 @@ class MainActivity : ComponentActivity() {
         // The launch window's Pin (Android 8 to 11's splash) has done its job once Compose draws;
         // left in place it would show wherever Compose does not paint, a resize or the keyboard
         window.setBackgroundDrawable(ColorDrawable(getColor(R.color.lcd)))
+    }
+
+    /*
+     * Back and Escape mean back, focused or not, so they go to the back dispatcher before any
+     * view: Compose takes both as a focus exit while anything is focused, and Escape has no
+     * fallback to BACK in every key map (the S10's has none). BUTTON_B falls back to BACK.
+     * Activity.dispatchKeyEvent is public; lint flags it for androidx's own @RestrictTo override.
+     * Only a press whose down came here counts: one let go after a dialog or su's prompt closed is not ours.
+     */
+    private var backDown = false
+
+    @SuppressLint("RestrictedApi")
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode != KeyEvent.KEYCODE_ESCAPE && event.keyCode != KeyEvent.KEYCODE_BACK) return super.dispatchKeyEvent(event)
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) backDown = true
+        if (event.action == KeyEvent.ACTION_UP) {
+            if (backDown && !event.isCanceled) onBackPressedDispatcher.onBackPressed()
+            backDown = false
+        }
+        return true
     }
 
     private var hat = 0f to 0f
