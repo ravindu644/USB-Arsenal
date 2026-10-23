@@ -156,7 +156,6 @@ fun IdentityScreen(back: () -> Unit, openLog: () -> Unit) {
             Title("Identity")
             fault?.let { Fault(it.message, onLog = openLog, modifier = Modifier.opener("identity/fault")) }
             ProfilePanel(shown, live = bound)
-            Rule()
             Column(Modifier.bleed(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 FilesHeader(PROFILES, label = "Profiles")
                 FileRow(BUILT_IN.name, "${BUILT_IN.vid}:${BUILT_IN.pid}", null, selected = chosen == null, onPick = { pick(null) })

@@ -512,7 +512,7 @@ ground, ink Pin and words.
 ### Trackpad
 A `.d25` panel with a pixel pointer where the finger is, a 44px wheel strip on its right, and an
 L/M/R bar under it. A drag moves the host pointer, a tap clicks, and a button is down for as
-long as it is held. No report bytes are shown. Under L/M/R a rule, then `Speed` (a slider,
+long as it is held. No report bytes are shown. Under L/M/R, `CONFIGURE`: `Speed` (a slider,
 0.25x to 4x in quarters; 1.0x is half a host pixel per pixel of drag) and `Natural scroll` (a
 DIP, on by default: the wheel strip moves content with the finger). On Keys + mouse the pad
 takes the height those leave, never more than the Keys tab's height above the `TYPE` box.
@@ -565,10 +565,11 @@ bold heading groups them (`MUST HAVE`, `FUNCTIONS`, `BACKEND`, `ABOUT`).
 
 
 ### Rule (`.rule`)
-2px of ink across the 10px bleed, the line between Home's rows. It parts a screen's sections
-where they do different jobs: Settings' five sections, Identity's panel from its profiles,
-Storage's drive and mode from `FILES`, Tether's live chain and counters from its setup, HID's
-cards from `Interval`. Nowhere else: the setup flow, Log and Fonts are one block each.
+2px of ink across the 10px bleed, the line between Home's rows (and Controller's). Elsewhere it
+parts only Settings' sections and Storage's mode from `FILES`. Nowhere else: a panel's box or a
+heading already parts the rest (Storage's drive from its mode, Identity's panel from `PROFILES`,
+Tether's counters from `CONFIGURE`, HID's cards from `Interval`, Keys + mouse's L M R from
+`CONFIGURE`).
 
 ### Settings
 In sections, a rule between each: `APP` (Motion, Haptics), `IDENTITY` (one row, the profile in
@@ -582,7 +583,7 @@ change it`, as the backend keeps the controller it holds.
 ### Identity
 The profile picked here as a panel in the drive's look: an inverted face with an LED (blinking
 while the host sees the gadget) and the name, over the USB sprite, product, maker, `vid:pid · N
-mA` and its serial (`serial from this phone` when it has none). Under a rule, `PROFILES` and the folder, then the rows like
+mA` and its serial (`serial from this phone` when it has none). Under it, `PROFILES` and the folder, then the rows like
 `FILES`: `Built-in` first, then each profile with its `vid:pid`, the picked one inverted. `Edit`
 (dead on Built-in) and `Create` open one sheet in the Create sheet's look: Name (locked when
 editing), Product, Maker, Serial (empty: the phone's own), USB IDs as two four-digit inputs,

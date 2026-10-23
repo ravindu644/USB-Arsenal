@@ -327,7 +327,8 @@ fun KbdMouseScreen(back: () -> Unit) {
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     // The pad takes what L M R, the rule, Speed and Natural scroll leave, up to the
                     // Keys tab's height above its box; a short screen (landscape) gets the floor
-                    val below = Lcd.touch + Lcd.pixel * 4 + Lcd.pixel + Lcd.touch * 2 + Lcd.section * 4
+                    // L M R, CONFIGURE (a 20dp line and its 4dp top), Speed and Natural scroll, 4 gaps
+                    val below = Lcd.touch + Lcd.pixel * 4 + 24.dp + Lcd.touch * 2 + Lcd.section * 4
                     val padHeight = if (maxHeight == Dp.Infinity) {
                         (windowHeight / 2).coerceIn(120.dp, KEYS_ABOVE_BOX)
                     } else {
@@ -336,11 +337,11 @@ fun KbdMouseScreen(back: () -> Unit) {
                     Column(verticalArrangement = Arrangement.spacedBy(Lcd.section)) {
                         pad(Modifier.height(padHeight), if (on) ({ full = true }) else null)
                         MouseButtons { bit, down -> button(bit, down) }
-                        Rule()
                         Column(
                             Modifier.onFocusChanged { setupFocused = it.hasFocus },
                             verticalArrangement = Arrangement.spacedBy(Lcd.section),
                         ) {
+                            Group("Configure")
                             val speed = HidSetup.speed
                             Slider("Speed", speed, 1..16, if (speed % 4 == 0) "${speed / 4}.0x" else "${speed / 4f}x", { HidSetup.setSpeed(context, it) })
                             Kv("Natural scroll") { Dip(HidSetup.natural, { HidSetup.setNatural(context, it) }, "Natural scroll") }
