@@ -63,11 +63,14 @@ body{margin:0}
 
 /* DIP switch: on/off for one function */
 .dip{all:unset;box-sizing:border-box;display:flex;align-items:center;flex:none;min-height:44px;padding:0 2px;cursor:pointer}
-.dip .trk{box-sizing:border-box;width:68px;height:32px;border:2px solid currentColor;padding:2px;display:flex;justify-content:space-between}
-.dip .k{width:26px;background:currentColor}
-.dip .lab{flex:1;display:flex;align-items:center;justify-content:center;font-weight:700}
+/* The knob runs over the track's edge on its side and a dot past it above and below; 1 is on, O is off */
+.dip .trk{box-sizing:border-box;width:68px;height:32px;border:2px solid currentColor;padding:2px;display:flex;align-items:center}
+.dip .k{flex:none;width:30px;height:36px;margin-right:-4px;background:currentColor}
+.dip .lab{flex:1;display:flex;align-items:center;justify-content:center;font-size:0}
+.dip .lab::after{content:"1";font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none}
 .dip.off .trk{flex-direction:row-reverse}
-.dip.off .lab{visibility:hidden}
+.dip.off .k{margin:0 0 0 -4px}
+.dip.off .lab::after{content:"O"}
 
 /* Rows bleed 10px past the gutter (margin:0 -10px on the list) and pad 10px back, so text stays on the gutter */
 .row{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;width:100%;min-height:80px;padding:10px}

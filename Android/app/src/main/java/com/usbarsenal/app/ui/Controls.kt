@@ -55,6 +55,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
@@ -207,9 +208,9 @@ fun LunStrip(count: Int, selected: Int, onSelect: (Int) -> Unit, onAdd: () -> Un
 }
 
 /*
- * .dip: one function on or off. On prints ON with the knob right; off is the knob left. The knob
- * snaps across in one frame. It draws in the ink around it, so it inverts with its row. A
- * function this kernel lacks gets a dithered track with no knob, which focus skips.
+ * .dip: one function on or off. On prints 1 with the knob right; off prints O with the knob
+ * left. The knob snaps across in one frame. It draws in the ink around it, so it inverts with
+ * its row. A function this kernel lacks gets a dithered track with no knob, which focus skips.
  */
 @Composable
 fun Dip(on: Boolean, onToggle: (Boolean) -> Unit, label: String, modifier: Modifier = Modifier, enabled: Boolean = true) {
@@ -236,10 +237,21 @@ fun Dip(on: Boolean, onToggle: (Boolean) -> Unit, label: String, modifier: Modif
                 .then(if (enabled) Modifier else Modifier.dither(Dither.D50, ink))
                 .border(Lcd.pixel, ink)
                 .padding(Lcd.pixel),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             if (!enabled) return@Row
-            if (on) Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) { Text("on", LcdType.labelStrong) }
-            Box(Modifier.width(26.dp).fillMaxHeight().background(ink))
+            val mark = @Composable { Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { Text(if (on) "1" else "O", LcdType.data) } }
+            if (on) mark()
+            // It runs over the track's edge on its side and a dot past it above and below, so
+            // where it sits reads at a glance
+            Box(
+                Modifier.width(26.dp).fillMaxHeight().drawBehind {
+                    val edge = (Lcd.pixel * 2).toPx()
+                    val rise = (Lcd.pixel * 3).toPx()
+                    drawRect(ink, Offset(if (on) 0f else -edge, -rise), Size(size.width + edge, size.height + rise * 2))
+                },
+            )
+            if (!on) mark()
         }
     }
 }
