@@ -1,6 +1,6 @@
 package com.usbarsenal.app.ui
 
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalWindowInfo
 import android.content.res.Configuration
 import androidx.compose.foundation.systemGestureExclusion
 import android.provider.Settings
@@ -216,8 +216,8 @@ fun KbdMouseScreen(back: () -> Unit) {
 
     // A phone held sideways: the Mouse tab cannot fit, so the whole screen scrolls instead, by the
     // title, the tabs or a label (the pad and L M R keep their own gestures)
-    val window = LocalConfiguration.current
-    val short = window.screenHeightDp < 600
+    val windowHeight = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
+    val short = windowHeight < 600.dp
     // Full screen: the pad and L M R alone, landscape, the system bars hidden. Only while HID runs
     var full by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(on) { if (!on) full = false }
@@ -329,7 +329,7 @@ fun KbdMouseScreen(back: () -> Unit) {
                     // Keys tab's height above its box; a short screen (landscape) gets the floor
                     val below = Lcd.touch + Lcd.pixel * 4 + Lcd.pixel + Lcd.touch * 2 + Lcd.section * 4
                     val padHeight = if (maxHeight == Dp.Infinity) {
-                        (window.screenHeightDp / 2).dp.coerceIn(120.dp, KEYS_ABOVE_BOX)
+                        (windowHeight / 2).coerceIn(120.dp, KEYS_ABOVE_BOX)
                     } else {
                         KEYS_ABOVE_BOX.coerceAtMost(maxHeight - below).coerceAtLeast(120.dp)
                     }

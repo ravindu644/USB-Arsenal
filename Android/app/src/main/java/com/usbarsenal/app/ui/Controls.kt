@@ -896,7 +896,7 @@ private fun PinStage(port: Port, bonking: Boolean, binds: Int) {
             dozing -> Sprites.PinBlink
             else -> Sprites.Pin
         }
-        SpriteIcon(sprite, Lcd.pixel, Modifier.offset(x, (if (plugged) 10.dp else 34.dp) - lift))
+        SpriteIcon(sprite, Lcd.pixel, Modifier.offset { IntOffset(x.roundToPx(), ((if (plugged) 10.dp else 34.dp) - lift).roundToPx()) })
         // The host's port, its slot filled once he is in it
         Box(Modifier.offset(mid - 20.dp, 0.dp).size(40.dp, 16.dp).background(ink)) {
             Box(Modifier.offset(6.dp, 5.dp).size(28.dp, 6.dp).background(if (plugged) ink else ground))
@@ -917,7 +917,10 @@ private fun PinStage(port: Port, bonking: Boolean, binds: Int) {
             SpriteIcon(Sprites.Spark, Lcd.pixel, Modifier.offset(mid - 43.dp, 6.dp))
             SpriteIcon(Sprites.Spark, Lcd.pixel, Modifier.offset(mid + 29.dp, 6.dp))
         }
-        if (dizzy) SpriteIcon(Sprites.Spark, Lcd.pixel, Modifier.offset(x + loop(600) { if (it < 300) 0.dp else 14.dp }, 12.dp))
+        if (dizzy) {
+            val sway = loop(600) { if (it < 300) 0.dp else 14.dp }
+            SpriteIcon(Sprites.Spark, Lcd.pixel, Modifier.offset { IntOffset((x + sway).roundToPx(), 12.dp.roundToPx()) })
+        }
         if (dozing) {
             val rise = loop(1800) { it / 600 }
             Text("z", LcdType.labelStrong, Modifier.offset(home + 34.dp + 4.dp * rise, 22.dp - 8.dp * rise))

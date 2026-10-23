@@ -1,7 +1,7 @@
 package com.usbarsenal.app
 
 import android.annotation.SuppressLint
-import android.graphics.drawable.ColorDrawable
+import androidx.core.graphics.drawable.toDrawable
 import android.os.Build
 import android.os.Bundle
 import android.graphics.Color
@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
         setContent { LcdTheme(switches) { App() } }
         // The launch window's Pin (Android 8 to 11's splash) has done its job once Compose draws;
         // left in place it would show wherever Compose does not paint, a resize or the keyboard
-        window.setBackgroundDrawable(ColorDrawable(getColor(R.color.lcd)))
+        window.setBackgroundDrawable(getColor(R.color.lcd).toDrawable())
     }
 
     /*
