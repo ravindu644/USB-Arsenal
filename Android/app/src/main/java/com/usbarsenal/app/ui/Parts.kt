@@ -76,6 +76,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.LayoutScopeMarker
 import androidx.compose.foundation.ScrollState
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.usbarsenal.app.lcd.SpriteIcon
@@ -152,6 +153,8 @@ fun Screen(
             .padding(bottom = if (bottomBar == null) Lcd.gutter else Lcd.section)
             // Behind an open sheet nothing takes focus: a key pressed there would act unseen
             .focusProperties { onEnter = { if (SheetsOpen.count > 0) cancelFocusChange() } }
+            // Nor does TalkBack reach it, whose double tap would act through the scrim
+            .then(if (SheetsOpen.count > 0) Modifier.clearAndSetSemantics {} else Modifier)
             .focusGroup(),
         verticalArrangement = Arrangement.spacedBy(Lcd.section),
     ) {
@@ -439,7 +442,7 @@ fun Key(
 @Composable
 fun BackKey(modifier: Modifier = Modifier) {
     val dispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
-    Key("< Back", modifier) { dispatcher?.onBackPressed() }
+    Key("< Back", modifier.semantics { contentDescription = "Back" }) { dispatcher?.onBackPressed() }
 }
 
 // .top: 44dp, even when empty, so titles line up from screen to screen

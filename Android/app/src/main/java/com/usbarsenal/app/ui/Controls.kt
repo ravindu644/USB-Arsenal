@@ -61,6 +61,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -167,6 +168,8 @@ fun Segs(
     steps: Int = options.size,
     // An option the kernel cannot honour: ghosted, never picked or focused, skipped by L1 and R1
     enabled: (Int) -> Boolean = { true },
+    // What TalkBack says for an option whose printed label is only a mark
+    spoken: (Int) -> String? = { null },
 ) {
     val ink = LocalLcd.current.ink
     val haptics = LocalHaptics.current
@@ -185,13 +188,13 @@ fun Segs(
     ) {
         options.forEachIndexed { i, label ->
             if (i > 0) Box(Modifier.width(Lcd.pixel).fillMaxHeight().background(ink))
-            Seg(label, i == selected, enabled(i), if (cell != null) Modifier.width(cell) else Modifier.weight(1f)) { pick(i) }
+            Seg(label, spoken(i), i == selected, enabled(i), if (cell != null) Modifier.width(cell) else Modifier.weight(1f)) { pick(i) }
         }
     }
 }
 
 @Composable
-private fun Seg(label: String, on: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun Seg(label: String, spoken: String?, on: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val body = @Composable {
@@ -206,7 +209,10 @@ private fun Seg(label: String, on: Boolean, enabled: Boolean, modifier: Modifier
         modifier
             .zIndex(if (focused) 1f else 0f)
             .lcdClickable(interaction, outline = on, role = Role.RadioButton, enabled = enabled, onClick = onClick)
-            .semantics { selected = on },
+            .semantics {
+                selected = on
+                if (spoken != null) contentDescription = spoken
+            },
     ) {
         Inverted(on || focused, body)
     }
@@ -220,7 +226,7 @@ fun nextEnabled(from: Int, d: Int, steps: Int, enabled: (Int) -> Boolean): Int? 
 @Composable
 fun LunStrip(count: Int, selected: Int, onSelect: (Int) -> Unit, onAdd: () -> Unit, modifier: Modifier = Modifier) {
     val options = List(count) { "$it" } + if (count < 8) listOf("+") else emptyList()
-    Segs(options, selected, { if (it == count) onAdd() else onSelect(it) }, modifier, cell = Lcd.lunCell, steps = count)
+    Segs(options, selected, { if (it == count) onAdd() else onSelect(it) }, modifier, cell = Lcd.lunCell, steps = count, spoken = { if (it == count) "Add a LUN" else "LUN $it" })
 }
 
 /*
@@ -256,7 +262,7 @@ fun Dip(on: Boolean, onToggle: (Boolean) -> Unit, label: String, modifier: Modif
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (!enabled) return@Row
-            val mark = @Composable { Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { Text(if (on) "1" else "O", LcdType.data) } }
+            val mark = @Composable { Box(Modifier.weight(1f).clearAndSetSemantics {}, contentAlignment = Alignment.Center) { Text(if (on) "1" else "O", LcdType.data) } }
             if (on) mark()
             // It runs over the track's edge on its side and a dot past it above and below, so
             // where it sits reads at a glance
@@ -429,7 +435,7 @@ fun FunctionRow(
                 verticalArrangement = Arrangement.spacedBy(Lcd.lines),
             ) {
                 // The > says the row opens a screen; the switch is only its quick way on and off
-                Text(if (onOpen != null) "$label >" else label, LcdType.labelStrong)
+                Text(if (onOpen != null) "$label >" else label, LcdType.labelStrong, Modifier.clearAndSetSemantics { contentDescription = label })
                 Marquee(line1, LcdType.data, Modifier.fillMaxWidth())
                 Marquee(line2, LcdType.data, Modifier.fillMaxWidth())
             }
@@ -508,7 +514,7 @@ fun Card(label: String, line: String, icon: Sprite, onOpen: () -> Unit, modifier
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(label, LcdType.labelStrong)
-                        Text(">", LcdType.labelStrong)
+                        Text(">", LcdType.labelStrong, Modifier.clearAndSetSemantics {})
                     }
                 }
                 Row(
@@ -544,7 +550,7 @@ fun LinkRow(label: String, value: String, onClick: (() -> Unit)?, modifier: Modi
             Kv(label, Modifier.background(LocalLcd.current.ground).padding(horizontal = 10.dp)) {
                 Marquee(value, LcdType.data, Modifier.weight(1f), end = true)
                 // The > says the row opens something, as Home's rows do; outside the marquee, so it never slides away
-                if (onClick != null) Text(" >", LcdType.data)
+                if (onClick != null) Text(" >", LcdType.data, Modifier.clearAndSetSemantics {})
             }
         }
     }

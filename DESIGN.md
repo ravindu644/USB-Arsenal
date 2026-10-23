@@ -772,6 +772,11 @@ Rules:
   `BUTTON_A` is a left click, `BUTTON_X` a right click, and `BUTTON_B` still means Back.
 - Built with `focusable`, `focusGroup`, `focusProperties` and `onKeyEvent` /
   `onPreviewKeyEvent`.
+- **TalkBack hears words, not marks.** A control says what it is and its state, from its
+  role: a switch is its function's name, on or off, never its printed `1` or `O`. Marks for the
+  eye (`>`, `<`, `+`, `-`) are cleared or replaced by words (`Back`, `Add a LUN`, `Shorter
+  interval`). A text field is read after its visible label, which comes first in the order.
+  Behind an open sheet or shade, the screen is cleared from the tree, as it is from focus.
 
 ## Pixel art and Pin
 
