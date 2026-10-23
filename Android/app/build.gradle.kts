@@ -15,11 +15,17 @@ fun secret(name: String): String? =
     sequenceOf(local.getProperty(name), providers.gradleProperty(name).orNull, System.getenv(name))
         .firstOrNull { !it.isNullOrBlank() }
 
-// UA_VERSION is the only version source; versionCode matches `make bump` and module.prop
+// UA_VERSION is the only version source; versionCode matches the module.prop `make module` writes
 val uaVersion = Regex("""#define\s+UA_VERSION\s+"(\d+)\.(\d+)\.(\d+)"""")
     .find(rootProject.file("../src/include/usbarsenal.h").readText())
     ?.groupValues?.drop(1)?.map(String::toInt)
     ?: error("UA_VERSION x.y.z not found in src/include/usbarsenal.h")
+
+// Every commit gets its own versionCode, as the Makefile gives module.prop, so CI builds
+// between bumps install over each other. A shallow clone counts 1, a tarball 0
+val commits = runCatching {
+    providers.exec { commandLine("git", "rev-list", "--count", "HEAD") }.standardOutput.asText.get().trim().toInt()
+}.getOrDefault(0)
 
 android {
     namespace = "com.usbarsenal.app"
@@ -30,7 +36,8 @@ android {
         minSdk = 26
         targetSdk = 37
         versionName = uaVersion.joinToString(".")
-        versionCode = uaVersion[0] * 1000 + uaVersion[1] * 100 + uaVersion[2] * 10
+        // ponytail: 10000 commits per release before the count spills into the next version's codes
+        versionCode = (uaVersion[0] * 1000 + uaVersion[1] * 100 + uaVersion[2] * 10) * 10000 + commits
     }
 
     // Droidspaces' key at the repo root, gitignored. Without it (a fork, or CI with no secrets) the

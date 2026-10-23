@@ -26,8 +26,10 @@ including one in a container, relays its command line to it over a filesystem so
 - `make module`: every architecture in a KernelSU/Magisk zip (`module/`).
 - `make format`: clang-format over `src/`. Bare `make` prints help.
 - **Version:** `UA_VERSION` in `usbarsenal.h` is the only source. `make bump NEW=x.y.z`
-  rewrites it and `module/module.prop` (versionCode = major*1000 + minor*100 +
-  patch*10); commit that alone as `usb-arsenal: bump vX.Y.Z`.
+  rewrites it and `module/module.prop`; commit that alone as `usb-arsenal: bump vX.Y.Z`.
+  The built versionCode, in the module zip and the APK alike, is
+  (major*1000 + minor*100 + patch*10) * 10000 + the commit count, as Droidspaces does, so
+  every commit's build updates the last; CI checks out the full history for it.
 - **CI** (`.github/workflows/ci.yml`): every push
   and pull request builds the module zip with Droidspaces' published musl toolchains,
   cached between runs, and the app's release APK.

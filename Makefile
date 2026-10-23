@@ -9,9 +9,13 @@ OUT_DIR     = output
 CC ?= cc
 
 # UA_VERSION in usbarsenal.h is the one place the version lives; `make bump`
-# rewrites it. versionCode follows Droidspaces: major*1000 + minor*100 + patch*10.
+# rewrites it. versionCode follows Droidspaces: (major*1000 + minor*100 + patch*10)
+# * 10000 + the commit count, so every commit's build updates the one before it
+# between bumps. A shallow clone counts 1 and a tarball 0; both still sort above
+# the old codes. The app's build.gradle.kts computes the same number.
 VERSION := $(shell grep "define UA_VERSION" $(SRC_DIR)/include/usbarsenal.h | awk '{print $$3}' | tr -d '"')
-VERSION_CODE := $(shell echo $(VERSION) | awk -F. '{print $$1*1000 + $$2*100 + $$3*10}')
+COMMITS := $(shell git rev-list --count HEAD 2>/dev/null || echo 0)
+VERSION_CODE := $(shell echo $(VERSION) | awk -F. '{print ($$1*1000 + $$2*100 + $$3*10) * 10000 + $(COMMITS)}')
 NPROC   := $(shell nproc 2>/dev/null || echo 4)
 
 V ?= 0
