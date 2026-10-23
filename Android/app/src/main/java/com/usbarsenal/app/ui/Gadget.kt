@@ -559,17 +559,38 @@ object HidSetup {
     // This kernel keeps the stock 1 ms whatever is asked (no f_hid interval control), as the
     // running keyboard showed; the interval is then not a setting at all
     var fixed by mutableStateOf(false)
+
+    // The trackpad's speed in quarters: 4 is 1.0x, half a host pixel per pixel of drag
+    var speed by mutableIntStateOf(4)
+        private set
+
+    // The wheel strip moves content with the finger, as a touchscreen does
+    var natural by mutableStateOf(true)
+        private set
     private var loaded = false
 
     fun load(context: Context) {
         if (loaded) return
         loaded = true
-        interval = prefs(context).getInt("interval", DEFAULT_INTERVAL).coerceIn(1, 16)
+        val p = prefs(context)
+        interval = p.getInt("interval", DEFAULT_INTERVAL).coerceIn(1, 16)
+        speed = p.getInt("speed", 4).coerceIn(1, 16)
+        natural = p.getBoolean("natural", true)
     }
 
     fun set(context: Context, next: Int) {
         interval = next.coerceIn(1, 16)
         prefs(context).edit { putInt("interval", interval) }
+    }
+
+    fun setSpeed(context: Context, next: Int) {
+        speed = next.coerceIn(1, 16)
+        prefs(context).edit { putInt("speed", speed) }
+    }
+
+    fun setNatural(context: Context, next: Boolean) {
+        natural = next
+        prefs(context).edit { putBoolean("natural", next) }
     }
 
     private fun prefs(context: Context) = context.getSharedPreferences("hid", Context.MODE_PRIVATE)

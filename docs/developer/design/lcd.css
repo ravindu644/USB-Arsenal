@@ -151,6 +151,12 @@ body{margin:0}
 .card .body{min-height:84px}
 .card:active,.card:focus-visible{background:var(--ink);color:var(--lcd)}
 .card:active .face,.card:focus-visible .face{background:var(--lcd);color:var(--ink)}
+/* Slider: the label, a 2px track with a 28px pixel dot placed by the value, the value at its end */
+.slider{display:flex;align-items:center;gap:12px;min-height:44px}
+.slider .rail{position:relative;flex:1;height:44px}
+.slider .rail::before{content:"";position:absolute;left:0;right:0;top:21px;height:2px;background:currentColor}
+.slider .dot{position:absolute;top:8px;width:28px;height:28px;color:currentColor}
+.slider .val{width:52px;text-align:right;font-family:'VT323',ui-monospace,monospace;font-size:22px;line-height:20px;text-transform:none}
 /* The trackpad: a .d25 panel with a 44px wheel strip on its right */
 .pad{position:relative;box-sizing:border-box;border:2px solid var(--ink);overflow:hidden}
 .pad .wheel{position:absolute;top:0;right:0;bottom:0;width:44px;border-left:2px solid var(--ink);display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:6px 0;box-sizing:border-box;background:var(--lcd)}

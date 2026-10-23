@@ -39,6 +39,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.drawBehind
@@ -152,6 +154,7 @@ private val KEYS_ABOVE_BOX = gridHeight(2) + gridHeight(4) + gridHeight(2) + Lcd
 fun KbdMouseScreen(back: () -> Unit) {
     BackHandler(onBack = back)
     PollStatus()
+    val context = LocalContext.current
     // Kept through a status read that fails: one bad poll must not kill the writers
     val status = Gadget.status
     var hid by remember { mutableStateOf(status?.hid.orEmpty()) }
@@ -193,6 +196,8 @@ fun KbdMouseScreen(back: () -> Unit) {
         }
     }
 
+    // Speed or Natural scroll has focus: A works them, as it does a key
+    var setupFocused by remember { mutableStateOf(false) }
     Box(
         Modifier.fillMaxSize().onPreviewKeyEvent {
             // A and X click on the host; B stays Back
@@ -202,7 +207,7 @@ fun KbdMouseScreen(back: () -> Unit) {
                 else -> return@onPreviewKeyEvent false
             }
             // On Keys, A presses the focused key instead
-            if (!on || tab != 0) return@onPreviewKeyEvent false
+            if (!on || tab != 0 || setupFocused) return@onPreviewKeyEvent false
             button(bit, it.type == KeyEventType.KeyDown)
             true
         },
@@ -213,11 +218,15 @@ fun KbdMouseScreen(back: () -> Unit) {
             Segs(listOf("Mouse", "Keys"), tab, { tab = it })
             if (tab == 0) {
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
-                    // Where the screen is short (landscape), the pad gives up height so L M R stay on it
-                    val pad = KEYS_ABOVE_BOX.coerceAtMost(maxHeight - Lcd.touch - Lcd.pixel * 2 - Lcd.section).coerceAtLeast(120.dp)
+                    // The pad takes what L M R, the rule, Speed and Natural scroll leave, up to the
+                    // Keys tab's height above its box; a short screen (landscape) gets the floor
+                    val below = Lcd.touch + Lcd.pixel * 4 + Lcd.pixel + Lcd.touch * 2 + Lcd.section * 4
+                    val pad = KEYS_ABOVE_BOX.coerceAtMost(maxHeight - below).coerceAtLeast(120.dp)
                     Column(verticalArrangement = Arrangement.spacedBy(Lcd.section)) {
                         Trackpad(
                             pad,
+                            HidSetup.speed,
+                            HidSetup.natural,
                             onMove = { dx, dy -> pointer(dx, dy) },
                             onTap = {
                                 button(MOUSE_LEFT, true)
@@ -226,6 +235,15 @@ fun KbdMouseScreen(back: () -> Unit) {
                             onWheel = { pointer(wheel = it) },
                         )
                         MouseButtons { bit, down -> button(bit, down) }
+                        Rule()
+                        Column(
+                            Modifier.onFocusChanged { setupFocused = it.hasFocus },
+                            verticalArrangement = Arrangement.spacedBy(Lcd.section),
+                        ) {
+                            val speed = HidSetup.speed
+                            Slider("Speed", speed, 1..16, if (speed % 4 == 0) "${speed / 4}.0x" else "${speed / 4f}x", { HidSetup.setSpeed(context, it) })
+                            Kv("Natural scroll") { Dip(HidSetup.natural, { HidSetup.setNatural(context, it) }, "Natural scroll") }
+                        }
                     }
                 }
             } else {
@@ -242,8 +260,10 @@ fun KbdMouseScreen(back: () -> Unit) {
  * as DESIGN.md's haptics table says, so a drag is felt without buzzing.
  */
 @Composable
-private fun Trackpad(height: Dp, onMove: (Int, Int) -> Unit, onTap: () -> Unit, onWheel: (Int) -> Unit) {
-    // The gestures outlive a recomposition; they must reach the writer as it is now
+private fun Trackpad(height: Dp, speed: Int, natural: Boolean, onMove: (Int, Int) -> Unit, onTap: () -> Unit, onWheel: (Int) -> Unit) {
+    // The gestures outlive a recomposition; they must reach the writer, and use the setup, as it is now
+    val quarters by rememberUpdatedState(speed)
+    val follow by rememberUpdatedState(natural)
     val move by rememberUpdatedState(onMove)
     val tap by rememberUpdatedState(onTap)
     val wheel by rememberUpdatedState(onWheel)
@@ -261,15 +281,16 @@ private fun Trackpad(height: Dp, onMove: (Int, Int) -> Unit, onTap: () -> Unit, 
                 .dither(Dither.D25, ink)
                 .pointerInput(Unit) { detectTapGestures(onTap = { at = it; tap() }) }
                 .pointerInput(Unit) {
-                    // Half a pixel of host travel per pixel of drag, the remainder carried over
+                    // Half a pixel of host travel per pixel of drag at 1.0x (4 quarters), the
+                    // remainder carried over
                     var rx = 0f
                     var ry = 0f
                     var travel = 0f
                     detectDragGestures(onDragStart = { at = it }) { change, d ->
                         change.consume()
                         at = change.position
-                        rx += d.x / 2
-                        ry += d.y / 2
+                        rx += d.x * quarters / 8
+                        ry += d.y * quarters / 8
                         val dx = rx.toInt()
                         val dy = ry.toInt()
                         rx -= dx
@@ -303,10 +324,11 @@ private fun Trackpad(height: Dp, onMove: (Int, Int) -> Unit, onTap: () -> Unit, 
                         change.consume()
                         acc += dy
                         while (abs(acc) >= stepPx) {
-                            // Dragging up scrolls up, as a wheel turned away does
+                            // Dragging up scrolls up, as a wheel turned away does; natural scroll
+                            // moves the content with the finger instead, as a touchscreen does
                             val up = acc < 0
                             acc += if (up) stepPx else -stepPx
-                            wheel(if (up) 1 else -1)
+                            wheel(if (up != follow) 1 else -1)
                             haptics.dragTick()
                         }
                     }

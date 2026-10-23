@@ -201,6 +201,11 @@ components:
     textColor: "{colors.ink}"
     height: 28px
     padding: 2px
+  slider:
+    backgroundColor: "{colors.lcd}"
+    textColor: "{colors.ink}"
+    typography: "{typography.data}"
+    height: 44px
 ---
 
 # DESIGN.md
@@ -402,6 +407,13 @@ at most.
 One choice among several: storage mode, NCM or RNDIS, log file, profile, power. Options are
 divided by 2px ink. The chosen one is inverted. Labels must fit: `CD`, not `CDROM`.
 
+### Slider (`.slider`)
+One value from a few dozen steps, in one 44px row: the label, a 2px track with a 28px pixel dot
+on it, then the value in VT323 at its end (`1.0x`). A tap or a sideways drag puts the dot on the
+step under the finger; it jumps a step at a time, never slides. D-pad Left and Right and L1 and
+R1 step it, and at either end Left and Right move focus on. TalkBack reads it as a range with
+its value. It lives on Keys + mouse (`Speed`).
+
 ### LUN strip (`.segs.luns`)
 `0`, `1`, ..., then `+`. Left-aligned, 40px cells, `+` hidden at eight LUNs.
 
@@ -467,8 +479,10 @@ shell would have said (`su: inaccessible or not found`, su's own stderr, or the 
 ### Trackpad
 A `.d25` panel with a pixel pointer where the finger is, a 44px wheel strip on its right, and an
 L/M/R bar under it. A drag moves the host pointer, a tap clicks, and a button is down for as
-long as it is held. No report bytes are shown. On Keys + mouse its height is the Keys tab's
-height above the `TYPE` box, so its bottom edge sits where that box begins.
+long as it is held. No report bytes are shown. Under L/M/R a rule, then `Speed` (a slider,
+0.25x to 4x in quarters; 1.0x is half a host pixel per pixel of drag) and `Natural scroll` (a
+DIP, on by default: the wheel strip moves content with the finger). On Keys + mouse the pad
+takes the height those leave, never more than the Keys tab's height above the `TYPE` box.
 
 ### Card (`.card`)
 A big way into a screen, in the drive panel's look: an inverted 40px face with the name and
@@ -647,7 +661,7 @@ the rich ones go through the tiers below.
 | --- | --- |
 | Key press | `VirtualKey` |
 | DIP switch on / off | `ToggleOn` / `ToggleOff` |
-| Segment change, LUN switch, D-pad or keyboard focus move | `SegmentTick` |
+| Segment change, LUN switch, slider step, D-pad or keyboard focus move | `SegmentTick` |
 | Trackpad drag | `SegmentFrequentTick`, at most one per 8px of travel |
 | Gadget bound (the bind animation) | Rich: three rising ticks as Pin climbs, a thud on the frame it plugs in |
 | Stop all, eject | `GestureEnd` |
@@ -782,7 +796,7 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | Tether address, DNS, upstream, DHCP and NAT | `--address CIDR`, `--dns IP[,IP]`, `--upstream IFACE`, `--no-net` |
 | Not applied sheet, Apply | Storage: `storage eject --lun N` for a LUN no longer picked, then one `storage start` with the changed picks (`storage stop` with none); Tether and HID: `stop`, then `start` with the setup |
 | HID interval | `hid start --interval N`, period 2^(N-1)×125µs, set at start (without the f_hid patch the backend warns and keeps 1 ms) |
-| Keys + mouse, the gamepad | app-side: 8-byte keyboard and 4-byte mouse reports, each one write to `/dev/hidgN` through a root `dd` per node |
+| Keys + mouse, the gamepad | app-side: 8-byte keyboard and 4-byte mouse reports, each one write to `/dev/hidgN` through a root `dd` per node; Speed and Natural scroll are app-side too, applied to the reports before they are written |
 | Quacky | nothing yet: a WIP page |
 | Identity | `identity show` (the profile in force), `identity generate FILE --force` then the six keys written in (`product`, `manufacturer`, `serial`, `id_vendor`, `id_product`, `max_power`), an edit from the file as it is, through a rename, `identity set FILE`, `identity unset` for Built-in |
 | Log tabs | command output (CLI) and `Logs/usb-arsenald.log` (Daemon) |
