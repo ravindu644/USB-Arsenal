@@ -140,7 +140,8 @@ suspend fun readProfile(): Map<String, String> {
 data class Droidspaces(val installed: Boolean, val running: List<String>?)
 
 suspend fun readDroidspaces(): Droidspaces {
-    val r = Root.read("d=$DROIDSPACES; [ -x \$d ] || exit 3; \$d show --json")
+    // A Droidspaces from before --json ignores the flag and prints its table; its JSON was --format
+    val r = Root.read("d=$DROIDSPACES; [ -x \$d ] || exit 3; o=\$(\$d show --json); case \"\$o\" in \"{\"*) echo \"\$o\" ;; *) \$d show --format ;; esac")
     if (r.code == 3) return Droidspaces(false, null)
     return Droidspaces(true, if (r.ok) runCatching { parseContainers(r.out.joinToString("\n")) }.getOrNull() else null)
 }
