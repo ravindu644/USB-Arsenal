@@ -599,42 +599,6 @@ private fun KeyGrid(rows: List<List<String>>, mods: Int, onMod: (Int) -> Unit, o
     }
 }
 
-/*
- * HID off: the page stays drawn under a D50 dither that takes every touch, and an inverted box
- * steps in over it, 2 frames on. Nothing behind takes focus while it shows (SheetsOpen), and
- * Back still leaves.
- */
+// HID off: the page shaded, Pin asking for HID first
 @Composable
-private fun HidOff() {
-    val ink = LocalLcd.current.ink
-    val reduced = LocalReducedMotion.current
-    var shown by remember { mutableStateOf(reduced) }
-    LaunchedEffect(Unit) {
-        delay(2L * FRAME_MS)
-        shown = true
-    }
-    DisposableEffect(Unit) {
-        SheetsOpen.count++
-        onDispose { SheetsOpen.count-- }
-    }
-    Box(
-        Modifier
-            .fillMaxSize()
-            .dither(Dither.D50, ink)
-            .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } },
-        contentAlignment = Alignment.Center,
-    ) {
-        if (shown) {
-            Inverted {
-                Column(
-                    Modifier.padding(horizontal = 36.dp).background(LocalLcd.current.ground).padding(horizontal = 16.dp, vertical = 18.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    Pin(3.dp)
-                    Text("Enable HID on Home\nto use this page", LcdType.labelStrong)
-                }
-            }
-        }
-    }
-}
+private fun HidOff() = Shade("Enable HID on Home\nto use this page") { Pin(3.dp) }

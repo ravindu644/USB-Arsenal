@@ -253,7 +253,8 @@ Structure:
   passed. The controllers are read once a launch: a pick no longer listed is dropped, and a
   set-up app with several and no pick shows this step over Home, where Next goes back.
 - **What setup finds lasts until the app leaves recents.** Back never asks su or the kernel
-  again; only Retry and Recheck do. A result that was already there shows at once; only one
+  again; only Recheck does. A root manager takes a grant at the app's next start, so a denial
+  has no retry, only the shade below. A result that was already there shows at once; only one
   that arrives on screen types or resolves.
 - **New functions are new rows.** The structure does not change.
 - **Tablets and landscape** keep the function list as a 420px pane beside the selected
@@ -495,6 +496,11 @@ update to update the backend`), waits at an idle `#`, and Install types
 `./install-backend.sh`; the installer's `[+]` lines are its output. A denial prints what the
 shell would have said (`su: inaccessible or not found`, su's own stderr, or the timeout).
 
+**No root** shades the page, as HID off does: the D50 dither takes every touch, and an inverted
+box steps in with Pin in tears and `Grant root, then reopen the app`. No key: root managers take
+a grant at the app's next start. It covers Root when su says no, and every screen of a set-up
+app that finds no root at launch.
+
 ### Trackpad
 A `.d25` panel with a pixel pointer where the finger is, a 44px wheel strip on its right, and an
 L/M/R bar under it. A drag moves the host pointer, a tap clicks, and a button is down for as
@@ -578,9 +584,9 @@ a pick is set at once; while the host sees it, a pick waits for the `Not applied
 whose Apply reconnects the gadget once.
 ### Attention key (`.alert`)
 Home's one line about the backend, inverted, above Log and Settings: the state on the left in
-Silkscreen (`BACKEND UPDATE`, `NOT INSTALLED`, `MODULE MISSING`, `BACKEND BROKEN`, `NO ROOT`),
-the fix on the right in VT323 (`1.1.0 → 1.2.0`, `install`, `reinstall`, `grant`). It is a key:
-it opens Install or Root. While it shows, the switches cannot move, except on an update.
+Silkscreen (`BACKEND UPDATE`, `NOT INSTALLED`, `MODULE MISSING`, `BACKEND BROKEN`), the fix on
+the right in VT323 (`1.1.0 → 1.2.0`, `install`, `reinstall`). It is a key: it opens Install. No
+root is the shade, not this key. While it shows, the switches cannot move, except on an update.
 
 ### Unavailable function
 The row stays so the user learns what the phone lacks. Its icon is `.ghost`, its DIP switch is
@@ -845,7 +851,7 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | Check screen | `check --json`, run with the bundled binary before anything is installed |
 | Controller step, Settings' Controller | `/sys/class/udc/*` and each one's `state`; the pick is app-side and goes as `--udc NAME` on every command |
 | Backend screen | the ported installer: the binary to `/data/local/USB-Arsenal/bin`, `module/` to `/data/adb/modules/usb-arsenal`, each step printing what it really printed, then `[+] Installed`, and `[!] Reboot to load the SELinux rule` only when the module had no rule before. The daemon is Settings' daemon mode, never the install's. `./install-backend.sh` is how the session shows it; there is no such script. The version is the app's own, never asked of root |
-| Home attention key | the installer's backend check: not installed, module missing, corrupted, update available, no root |
+| Home attention key | the installer's backend check: not installed, module missing, corrupted, update available (no root is the shade) |
 | Home status, live rows | `status --json` |
 
 Every command runs through root in its own short-lived shell with a timeout (see AGENTS.md),

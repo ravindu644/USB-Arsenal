@@ -164,17 +164,12 @@ fun App() {
         show(listOf(Step.HOME), false)
     }
     val setup = stack.first() != Step.HOME
-    // What a backend that needs something leads to: Root without root (asking su again, not the
-    // answer setup kept), else Install, as an update over an installed one
+    // What a backend that needs something leads to: Install, as an update over an installed one.
+    // No root is no key, but the shade over every screen
     val fix = { b: Backend ->
-        if (b.state == BackendState.NO_ROOT) {
-            Setup.root = null
-            push(Step.ROOT)
-        } else {
-            update = b.installed
-            Setup.fresh()
-            push(Step.INSTALL)
-        }
+        update = b.installed
+        Setup.fresh()
+        push(Step.INSTALL)
     }
     // The controllers once a launch. A set-up app on a phone with several and no pick (set up
     // before the step existed, or its pick gone) is asked for one before anything else
@@ -236,6 +231,8 @@ fun App() {
             Step.QUACKY -> QuackyScreen(back = ::pop)
         }
     }
+    // A set-up app that finds no root at launch: nothing works, on any screen, until it is granted
+    if (!setup && Gadget.backend?.state == BackendState.NO_ROOT) NoRoot()
 }
 
 // Initial focus goes to the screen's primary key once it is there, from an effect, never the body
@@ -292,7 +289,6 @@ private const val ASKING = "# checking root access"
 @Composable
 private fun RootScreen(back: () -> Unit, next: () -> Unit) {
     val haptics = LocalHaptics.current
-    var attempt by remember { mutableIntStateOf(0) }
     // A result that was already there shows at once; one that arrives now types
     val had = remember { Setup.root != null }
     val result = Setup.root
@@ -304,46 +300,45 @@ private fun RootScreen(back: () -> Unit, next: () -> Unit) {
             add(ShellLine("# ", "id -u", listOf("0")))
             add(ShellLine("# ", "su -v", listOf(it.su)))
             add(ShellLine("# "))
-        }?.onFailure {
-            add(ShellLine("$ ", "# root access denied"))
-            add(ShellLine("$ "))
         }
     }
     val total = session.steps()
-    val step = rememberTyped(total, 1, instant = had && attempt == 0, key = attempt)
+    val step = rememberTyped(total, 1, instant = had)
     val stepNow by rememberUpdatedState(step)
     val enter = session.enterAt(1)
-    LaunchedEffect(attempt) {
-        if (attempt == 0 && Setup.root != null) return@LaunchedEffect
-        Setup.root = null
+    LaunchedEffect(Unit) {
+        if (Setup.root != null) return@LaunchedEffect
         snapshotFlow { stepNow }.first { it >= enter }
         Setup.root = rootInfo()
     }
     val done = result != null && step >= total
     // Reject once the denial is on screen, not when su answers ahead of the typing
-    LaunchedEffect(done) { if (done && result.isFailure && !(had && attempt == 0)) haptics.reject() }
+    LaunchedEffect(done) { if (done && result.isFailure && !had) haptics.reject() }
     BackHandler { if (done) back() }
     val focus = focusOn(done)
-    Screen(
-        footer = {
-            when {
-                // Next is there from the start, dashed until su has answered, so nothing pops in
-                !done -> Key("Next", Modifier.fillMaxWidth(), primary = true, enabled = false) {}
-                result.isSuccess -> Key("Next", Modifier.fillMaxWidth().focusRequester(focus), primary = true, onClick = next)
-                else -> Key("Retry", Modifier.fillMaxWidth().focusRequester(focus), primary = true) { attempt++ }
-            }
-        },
-    ) {
-        Top { if (done) BackKey() }
-        Title("Root")
-        Shell("su", if (!done) Led.BUSY else if (result.isSuccess) Led.ON else Led.OFF, session.shownAt(step), Modifier.fill(min = 200.dp))
-        if (done && result.isFailure) {
-            Warn("nothing can reach the usb controller")
-            // Without root there is no asking su which manager it is
-            Text("allow USB Arsenal in your root manager, then retry", LcdType.data)
+    Box(Modifier.fillMaxSize()) {
+        Screen(
+            footer = {
+                // Next is there from the start, dashed until su has said yes, so nothing pops in
+                if (done && result.isSuccess) {
+                    Key("Next", Modifier.fillMaxWidth().focusRequester(focus), primary = true, onClick = next)
+                } else {
+                    Key("Next", Modifier.fillMaxWidth(), primary = true, enabled = false) {}
+                }
+            },
+        ) {
+            Top { if (done) BackKey() }
+            Title("Root")
+            Shell("su", if (!done) Led.BUSY else if (result.isSuccess) Led.ON else Led.OFF, session.shownAt(step), Modifier.fill(min = 200.dp))
         }
+        // Root managers today only take a grant at the app's next start, so there is no retry
+        if (done && result.isFailure) NoRoot()
     }
 }
+
+// No root: the page shaded, Pin in tears, and what to do, which happens outside the app
+@Composable
+private fun NoRoot() = Shade("Grant root, then\nreopen the app") { SpriteIcon(Sprites.PinSad, 3.dp) }
 
 /*
  * check --json's probes as Check.dc.html words them. A note says what a missing probe costs;

@@ -83,6 +83,9 @@ object Sprites {
     val PinHappy = Sprite(pinTop + listOf("...#.#....#.#...", "...##.#..#.##...", "...#........#...") + pinBody)
     val PinDizzy = Sprite(pinTop + listOf("...##.#..#.##...", "...#.#....#.#...", "...##.#..#.##...") + pinBody)
 
+    // No root: a tear under each eye
+    val PinSad = Sprite(pinTop + listOf("...#.##..##.#...", "...#.#....#.#...", "...#........#...") + pinBody)
+
     val Storage = Sprite(
         listOf(
             ".....######.....",

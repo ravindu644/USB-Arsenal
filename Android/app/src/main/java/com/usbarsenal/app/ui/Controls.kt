@@ -347,6 +347,46 @@ private fun at(x: Float, width: Int, thumb: Float, range: IntRange) =
     range.first + ((x - thumb / 2) / (width - thumb).coerceAtLeast(1f) * (range.last - range.first)).roundToInt()
 
 /*
+ * A page that cannot be used yet: it stays drawn under a D50 dither that takes every touch, and
+ * an inverted box with [pin] and [text] steps in over it, 2 frames on. Nothing behind takes focus
+ * while it shows (SheetsOpen), and Back still leaves. No key: what it asks for is done elsewhere.
+ */
+@Composable
+fun Shade(text: String, pin: @Composable () -> Unit) {
+    val ink = LocalLcd.current.ink
+    val reduced = LocalReducedMotion.current
+    var shown by remember { mutableStateOf(reduced) }
+    LaunchedEffect(Unit) {
+        delay(2L * FRAME_MS)
+        shown = true
+    }
+    DisposableEffect(Unit) {
+        SheetsOpen.count++
+        onDispose { SheetsOpen.count-- }
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .dither(Dither.D50, ink)
+            .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (shown) {
+            Inverted {
+                Column(
+                    Modifier.padding(horizontal = 36.dp).background(LocalLcd.current.ground).padding(horizontal = 16.dp, vertical = 18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    pin()
+                    Text(text, LcdType.labelStrong)
+                }
+            }
+        }
+    }
+}
+
+/*
  * .row: a function on Home. Its name and two status lines open the function; the DIP switch
  * beside them flips it. The row inverts while the opening part has focus or is held. A
  * function this kernel lacks keeps its row, ghosted, its switch dead, its lines saying why.

@@ -59,7 +59,8 @@ private fun attention(b: Backend): Pair<String, String>? = when (b.state) {
     BackendState.NOT_INSTALLED -> "Not installed" to "install"
     BackendState.MODULE_MISSING -> "Module missing" to "reinstall"
     BackendState.CORRUPTED -> "Backend broken" to "reinstall"
-    BackendState.NO_ROOT -> "No root" to "grant"
+    // The shade over every screen says it
+    BackendState.NO_ROOT -> null
 }
 
 /*
