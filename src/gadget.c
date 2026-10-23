@@ -117,7 +117,7 @@ static sigset_t crit_old;
  * lock, so two commands run at once queue up instead of both deciding they
  * are first and overwriting each other's handoff. Released before a tether
  * daemon forks, so it never inherits the lock. */
-void ua_crit_enter(void) {
+static void ua_crit_enter(void) {
   if (crit_depth++ == 0) {
     char p[PATH_MAX];
     ua_ws_path("Gadget", "lock", p, sizeof(p));
@@ -135,7 +135,7 @@ void ua_crit_enter(void) {
   }
 }
 
-void ua_crit_leave(void) {
+static void ua_crit_leave(void) {
   if (crit_depth > 0 && --crit_depth == 0) {
     if (crit_lock >= 0)
       close(crit_lock);
@@ -154,17 +154,6 @@ static int pathf(char *out, size_t size, const char *fmt, ...) {
   return (n < 0 || (size_t)n >= size) ? -1 : 0;
 }
 
-static int write_attr(const char *dir, const char *attr, const char *val) {
-  char p[PATH_MAX];
-  if (pathf(p, sizeof(p), "%s/%s", dir, attr) < 0)
-    return -1;
-  if (write_file(p, val) < 0) {
-    ua_debug("write %s <- %s: %s", p, val, strerror(errno));
-    return -1;
-  }
-  return 0;
-}
-
 int ua_find_configfs(char *out, size_t size) {
   static const char *const roots[] = {"/sys/kernel/config", "/config"};
   for (int attempt = 0; attempt < 3; attempt++) {
@@ -177,8 +166,9 @@ int ua_find_configfs(char *out, size_t size) {
       }
     }
     /* A plain Linux board often has configfs built but not mounted, and
-     * libcomposite as a module. Android always has both ready. */
-    if (attempt == 0 && grep_file("/proc/filesystems", "configfs") == 1)
+     * libcomposite as a module. Android always has both ready. The mount
+     * loads a modular configfs itself, and fails harmlessly without one. */
+    if (attempt == 0)
       mount("none", "/sys/kernel/config", "configfs", 0, NULL);
     if (attempt == 1) {
       char *argv[] = {"modprobe", "libcomposite", NULL};
@@ -353,13 +343,16 @@ int ua_gadget_has(const struct ua_gadget *g, const char *func) {
          lstat(p, &st) == 0;
 }
 
+/* A gadget directory whose UDC names a controller */
+static int bound(const char *gadget) {
+  char p[PATH_MAX], buf[64];
+  return pathf(p, sizeof(p), "%s/UDC", gadget) == 0 &&
+         read_file(p, buf, sizeof(buf)) > 0;
+}
+
 /* Bound to the controller right now, as far as this tool is concerned */
 int ua_gadget_live(const struct ua_gadget *g) {
-  char p[PATH_MAX], buf[64];
-  if (!ua_gadget_taken())
-    return 0;
-  return pathf(p, sizeof(p), "%s/UDC", g->path) == 0 &&
-         read_file(p, buf, sizeof(buf)) > 0;
+  return ua_gadget_taken() && bound(g->path);
 }
 
 static int build_skeleton(const struct ua_gadget *g) {
@@ -433,7 +426,7 @@ static void android_release(const struct ua_gadget *g) {
   if (is_android()) {
     ua_debug("setprop sys.usb.config none");
     ua_setprop("sys.usb.config", "none");
-    if (ua_wait_prop("sys.usb.state", "none", UA_HANDOFF_TIMEOUT_MS) < 0)
+    if (ua_wait(ua_getprop, "sys.usb.state", "none", UA_HANDOFF_TIMEOUT_MS) < 0)
       ua_warn("Android did not report sys.usb.state=none in time");
   }
   /* A gadget HAL may not follow the property at all. Take it by hand. */
@@ -575,9 +568,7 @@ static int keep_ours(const char *dir, const struct dirent *e) {
 
 int ua_gadget_remove(struct ua_gadget *g, const char *func) {
   char p[PATH_MAX];
-  if (pathf(p, sizeof(p), "%s/%s", g->config, func) == 0 && unlink(p) < 0 &&
-      errno != ENOENT)
-    ua_warn("Cannot unlink %s: %s", p, strerror(errno));
+  ua_gadget_unlink(g, func);
   if (ua_gadget_func_dir(g, func, p, sizeof(p)) < 0)
     return -1;
   /* Groups made under the function (lun.1 and up) must go first. Its own
@@ -653,7 +644,7 @@ static void pullup(const struct ua_gadget *g) {
 static void wait_configured(const struct ua_gadget *g) {
   char p[PATH_MAX];
   if (pathf(p, sizeof(p), "/sys/class/udc/%s/state", g->udc) == 0 &&
-      ua_wait_file(p, "configured", UA_ENUM_TIMEOUT_MS) < 0)
+      ua_wait(read_file, p, "configured", UA_ENUM_TIMEOUT_MS) < 0)
     ua_warn("The host has not configured the gadget yet (is the cable "
             "plugged into a computer?)");
 }
@@ -704,9 +695,8 @@ static int unlink_all(const char *dir) {
 /* Our own gadget holds something: bound, or functions linked. A kept, empty
  * gadget (keep_gadget) does not count. */
 int ua_gadget_in_use(const char *cfs) {
-  char p[PATH_MAX], buf[64], names[MAX_ENTRIES][NAME_MAX + 1];
-  if (pathf(p, sizeof(p), "%s/" UA_GADGET "/UDC", cfs) == 0 &&
-      read_file(p, buf, sizeof(buf)) > 0)
+  char p[PATH_MAX], names[MAX_ENTRIES][NAME_MAX + 1];
+  if (pathf(p, sizeof(p), "%s/" UA_GADGET, cfs) == 0 && bound(p))
     return 1;
   return pathf(p, sizeof(p), "%s/" UA_GADGET "/configs/" UA_CONFIG, cfs) == 0 &&
          list_dir(p, names, keep_link) > 0;
@@ -731,9 +721,8 @@ static int g1_ready(const struct ua_gadget *g) {
 }
 
 static int g1_bound(const struct ua_gadget *g) {
-  char p[PATH_MAX], buf[64];
-  return pathf(p, sizeof(p), "%s/g1/UDC", g->cfs) == 0 &&
-         read_file(p, buf, sizeof(buf)) > 0;
+  char p[PATH_MAX];
+  return pathf(p, sizeof(p), "%s/g1", g->cfs) == 0 && bound(p);
 }
 
 static void bind_g1(const struct ua_gadget *g) {
@@ -751,7 +740,8 @@ static void android_restore(const struct ua_gadget *g,
     ua_debug("setprop sys.usb.config %s", h->usb_config);
     ua_setprop("sys.usb.config", h->usb_config);
     /* adb modes also wait for adbd to come back, which takes a while */
-    if (ua_wait_prop("sys.usb.state", h->usb_config, UA_RESTORE_TIMEOUT_MS) < 0)
+    if (ua_wait(ua_getprop, "sys.usb.state", h->usb_config,
+                UA_RESTORE_TIMEOUT_MS) < 0)
       ua_debug("sys.usb.state did not reach %s in time", h->usb_config);
   }
   /* No property service (container), or a HAL that ignored it: bind g1
@@ -774,10 +764,8 @@ void ua_gadget_teardown(struct ua_gadget *g) {
    * serving an interface that is about to vanish */
   ua_tether_kill();
   if (access(g->path, F_OK) == 0) {
-    char buf[64];
-    if (pathf(p, sizeof(p), "%s/UDC", g->path) == 0 &&
-        read_file(p, buf, sizeof(buf)) > 0) {
-      write_file(p, UNBIND);
+    if (bound(g->path)) {
+      write_attr(g->path, "UDC", UNBIND);
       was_here = 1;
     }
     if (unlink_all(g->config) > 0)

@@ -99,16 +99,42 @@ ssize_t write_all(int fd, const void *buf, size_t count) {
  * typo in a path must fail with ENOENT, not create a stray file. State files
  * go through stdio instead. errno is kept for callers that care which
  * configfs check rejected the write. */
-int write_file(const char *path, const char *content) {
+static int write_path(const char *path, const void *buf, size_t len) {
   int fd = open(path, O_WRONLY | O_TRUNC | O_CLOEXEC);
   if (fd < 0)
     return -1;
-  size_t len = strlen(content);
-  ssize_t w = write_all(fd, content, len);
+  ssize_t w = write_all(fd, buf, len);
   int saved = errno;
   close(fd);
   errno = saved;
   return w == (ssize_t)len ? 0 : -1;
+}
+
+int write_file(const char *path, const char *content) {
+  return write_path(path, content, strlen(content));
+}
+
+/* <dir>/<attr>, for the binary attributes f_hid takes */
+int write_attr_buf(const char *dir, const char *attr, const void *buf,
+                   size_t len) {
+  char p[PATH_MAX];
+  int n = snprintf(p, sizeof(p), "%s/%s", dir, attr);
+  if (n < 0 || (size_t)n >= sizeof(p)) {
+    errno = ENAMETOOLONG;
+    return -1;
+  }
+  return write_path(p, buf, len);
+}
+
+/* Logged with -v when the kernel refuses it; errno survives the log, since
+ * callers tell EBUSY (a host's medium lock) from the rest */
+int write_attr(const char *dir, const char *attr, const char *val) {
+  if (write_attr_buf(dir, attr, val, strlen(val)) == 0)
+    return 0;
+  int saved = errno;
+  ua_debug("write %s/%s <- %s: %s", dir, attr, val, strerror(saved));
+  errno = saved;
+  return -1;
 }
 
 int read_file(const char *path, char *buf, size_t size) {
@@ -130,11 +156,12 @@ int read_file(const char *path, char *buf, size_t size) {
   return (int)total;
 }
 
-int grep_file(const char *path, const char *pattern) {
-  char buf[16384];
-  if (read_file(path, buf, sizeof(buf)) < 0)
-    return -1;
-  return strstr(buf, pattern) ? 1 : 0;
+static int wait_exit(pid_t pid) {
+  int status;
+  while (waitpid(pid, &status, 0) < 0)
+    if (errno != EINTR)
+      return -1;
+  return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
 static int internal_run(char *const argv[], int quiet) {
@@ -153,14 +180,9 @@ static int internal_run(char *const argv[], int quiet) {
     execvp(argv[0], argv);
     _exit(127);
   }
-  int status;
-  while (waitpid(pid, &status, 0) < 0)
-    if (errno != EINTR)
-      return -1;
-  return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+  return wait_exit(pid);
 }
 
-int run_command(char *const argv[]) { return internal_run(argv, 0); }
 int run_command_quiet(char *const argv[]) { return internal_run(argv, 1); }
 
 /* stdout of argv into out, trailing newlines stripped. musl's popen() runs
@@ -203,11 +225,7 @@ int run_capture(char *const argv[], char *out, size_t size) {
   out[total] = '\0';
   while (total > 0 && (out[total - 1] == '\n' || out[total - 1] == '\r'))
     out[--total] = '\0';
-  int status;
-  while (waitpid(pid, &status, 0) < 0)
-    if (errno != EINTR)
-      return -1;
-  return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+  return wait_exit(pid);
 }
 
 /* run_command_log: stderr and stdout of argv go to the [IPT] debug log, so an
@@ -243,11 +261,7 @@ int run_command_log(char *const argv[]) {
   } else {
     close(pfd[0]);
   }
-  int status;
-  while (waitpid(pid, &status, 0) < 0)
-    if (errno != EINTR)
-      return -1;
-  return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+  return wait_exit(pid);
 }
 
 int ds_thread_create(pthread_t *tid, void *(*fn)(void *), void *arg) {
@@ -296,22 +310,13 @@ static void sleep_ms(int ms) {
     ;
 }
 
-/* Poll until path reads want, or the timeout runs out. 0 on match. */
-int ua_wait_file(const char *path, const char *want, int timeout_ms) {
+/* Poll until get(key) reads want, or the timeout runs out. 0 on match. get is
+ * read_file or ua_getprop. */
+int ua_wait(int (*get)(const char *, char *, size_t), const char *key,
+            const char *want, int timeout_ms) {
   char buf[256];
   for (int waited = 0;; waited += 100) {
-    if (read_file(path, buf, sizeof(buf)) >= 0 && strcmp(buf, want) == 0)
-      return 0;
-    if (waited >= timeout_ms)
-      return -1;
-    sleep_ms(100);
-  }
-}
-
-int ua_wait_prop(const char *name, const char *want, int timeout_ms) {
-  char buf[256];
-  for (int waited = 0;; waited += 100) {
-    if (ua_getprop(name, buf, sizeof(buf)) == 0 && strcmp(buf, want) == 0)
+    if (get(key, buf, sizeof(buf)) >= 0 && strcmp(buf, want) == 0)
       return 0;
     if (waited >= timeout_ms)
       return -1;

@@ -42,9 +42,6 @@
 
 #define UA_NAME "usb-arsenal"
 #define UA_VERSION "1.2.0"
-#define UA_PROJECT_NAME "USB Arsenal"
-#define UA_AUTHOR "ravindu644"
-#define UA_REPO "https://github.com/ravindu644/USB-Arsenal"
 
 /* Our own gadget directory, and the instance name every function we create
  * carries */
@@ -95,9 +92,10 @@ void ua_json_int(const char *key, long long val, int *first);
 int mkdir_p(const char *path, mode_t mode);
 ssize_t write_all(int fd, const void *buf, size_t count);
 int write_file(const char *path, const char *content);
+int write_attr(const char *dir, const char *attr, const char *val);
+int write_attr_buf(const char *dir, const char *attr, const void *buf,
+                   size_t len);
 int read_file(const char *path, char *buf, size_t size);
-int grep_file(const char *path, const char *pattern);
-int run_command(char *const argv[]);
 int run_command_quiet(char *const argv[]);
 int run_command_log(char *const argv[]);
 int run_capture(char *const argv[], char *out, size_t size);
@@ -105,8 +103,8 @@ int ds_thread_create(pthread_t *tid, void *(*fn)(void *), void *arg);
 int is_android(void);
 int ua_getprop(const char *name, char *out, size_t size);
 int ua_setprop(const char *name, const char *value);
-int ua_wait_file(const char *path, const char *want, int timeout_ms);
-int ua_wait_prop(const char *name, const char *want, int timeout_ms);
+int ua_wait(int (*get)(const char *, char *, size_t), const char *key,
+            const char *want, int timeout_ms);
 pid_t ua_read_our_pid(const char *pidfile);
 void ua_device_seed(char *out, size_t size);
 #define UA_MAX_FDS 8
@@ -146,8 +144,6 @@ int ua_gadget_commit(struct ua_gadget *g);
 void ua_gadget_teardown(struct ua_gadget *g);
 int ua_gadget_func_dir(const struct ua_gadget *g, const char *func, char *dir,
                        size_t size);
-void ua_crit_enter(void);
-void ua_crit_leave(void);
 
 /* config.c */
 
@@ -163,8 +159,6 @@ struct ua_config {
   unsigned hid_perm, hid_group;
 };
 
-void ua_config_defaults(struct ua_config *c);
-int ua_config_load(const char *path, struct ua_config *c);
 void ua_config_active(struct ua_config *c);
 /* One or more IPv4 addresses, comma-separated: tether_dns and tether --dns */
 int ua_valid_dns(const char *v);

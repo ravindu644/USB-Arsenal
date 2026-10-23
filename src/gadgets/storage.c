@@ -29,6 +29,13 @@ enum mode { MODE_AUTO, MODE_CDROM, MODE_DVD, MODE_DISK, MODE_RW };
 static const char *const mode_names[] = {"auto", "cdrom", "dvd", "disk", "rw"};
 #define NMODES (int)(sizeof(mode_names) / sizeof(mode_names[0]))
 
+static int mode_of(const char *name) {
+  for (int i = 0; i < NMODES; i++)
+    if (!strcmp(name, mode_names[i]))
+      return i;
+  return -1;
+}
+
 #ifndef LOOP_SET_BLOCK_SIZE
 #define LOOP_SET_BLOCK_SIZE 0x4C09
 #endif
@@ -81,11 +88,6 @@ void ua_help_storage(void) {
       "  truncate -s 4G pendrive.img\n");
 }
 
-/* lseek works for block devices too, no BLKGETSIZE64 needed */
-static long long image_size(int fd) {
-  return (long long)lseek(fd, 0, SEEK_END);
-}
-
 /* An MBR or GPT means the image boots as a disk: isohybrid ISOs carry one
  * for exactly that reason. A plain ISO9660 image starts with 32 KB of zeros,
  * so it gets CD-ROM mode, the only way it can boot. */
@@ -111,15 +113,6 @@ static int is_loop(const char *file) {
   return base && !strncmp(base + 1, "loop", 4);
 }
 
-static int lun_write(const char *ldir, const char *attr, const char *val) {
-  char p[PATH_MAX];
-  snprintf(p, sizeof(p), "%s/%s", ldir, attr);
-  if (write_file(p, val) == 0)
-    return 0;
-  ua_debug("%s <- %s: %s", p, val, strerror(errno));
-  return -1;
-}
-
 /* Eject. "\n" rather than "": a zero-length write never reaches the store
  * function. forced_eject (6.6+) also clears a host's medium lock. */
 static int lun_eject(const char *ldir) {
@@ -127,7 +120,7 @@ static int lun_eject(const char *ldir) {
   snprintf(p, sizeof(p), "%s/forced_eject", ldir);
   if (access(p, F_OK) == 0)
     return write_file(p, "1");
-  return lun_write(ldir, "file", "\n");
+  return write_attr(ldir, "file", "\n");
 }
 
 /* Eject, retrying while EBUSY for up to [tries] tenths of a second: a host's
@@ -151,18 +144,18 @@ static int lun_load(const char *ldir, const char *path, enum mode mode,
   if (read_file(file, cur, sizeof(cur)) > 0 &&
       lun_eject_wait(ldir, wait ? 30 : 1) < 0)
     return errno == EBUSY ? -EBUSY : -1;
-  lun_write(ldir, "removable", "1");
+  write_attr(ldir, "removable", "1");
   if (inquiry[0])
-    lun_write(ldir, "inquiry_string", inquiry);
-  if (lun_write(ldir, "cdrom", mode == MODE_CDROM ? "1" : "0") < 0 &&
+    write_attr(ldir, "inquiry_string", inquiry);
+  if (write_attr(ldir, "cdrom", mode == MODE_CDROM ? "1" : "0") < 0 &&
       mode == MODE_CDROM) {
     ua_error("This kernel cannot emulate a CD-ROM (no lun.N/cdrom)");
     return -1;
   }
-  lun_write(ldir, "ro", mode == MODE_RW ? "0" : "1");
+  write_attr(ldir, "ro", mode == MODE_RW ? "0" : "1");
 
   snprintf(file, sizeof(file), "%s\n", path);
-  if (lun_write(ldir, "file", file) < 0) {
+  if (write_attr(ldir, "file", file) < 0) {
     ua_error("The kernel refused %s: %s", path, strerror(errno));
     return -1;
   }
@@ -176,12 +169,6 @@ static int lun_load(const char *ldir, const char *path, enum mode mode,
  * read error" on every sector, and the only log is a dontaudit nobody sees.
  * So ask the policy itself, on any distro, instead of trusting a label list. */
 #define UA_STORAGE_LABEL "u:object_r:media_rw_data_file:s0"
-
-/* Labels can outlive SELinux (a kernel booted with it off still reads them
- * from disk), so ask whether it is running, not whether a file has one */
-static int selinux_on(void) {
-  return access("/sys/fs/selinux/enforce", F_OK) == 0;
-}
 
 /* The kernel's own context, from kthreadd (kernel_t on Fedora, kernel on
  * Android). In a PID namespace /proc/2 is someone else; Android's name is
@@ -215,9 +202,10 @@ static int kernel_may(int fd, const char *cls, int rw, int android, char *label,
   label[0] = '\0';
   /* The policy answers the same in permissive mode, so a denial only counts
    * when it is enforced: not with SELinux permissive, nor in a permissive
-   * domain (the reply's flags) */
-  if (!selinux_on() ||
-      (read_file("/sys/fs/selinux/enforce", v, sizeof(v)) > 0 && v[0] == '0'))
+   * domain (the reply's flags). Labels can outlive SELinux (a kernel booted
+   * with it off still reads them from disk), so ask whether it is running,
+   * not whether a file has one. */
+  if (read_file("/sys/fs/selinux/enforce", v, sizeof(v)) <= 0 || v[0] == '0')
     return 1;
   ssize_t n = fgetxattr(fd, "security.selinux", label, lsize - 1);
   if (n <= 0)
@@ -354,7 +342,8 @@ struct load {
  * thing on both sides. name is only for messages. */
 static int prepare(struct load *l, int android_gadget) {
   snprintf(l->path, sizeof(l->path), "/proc/self/fd/%d", l->fd);
-  long long size = image_size(l->fd);
+  /* lseek works for block devices too, no BLKGETSIZE64 needed */
+  long long size = (long long)lseek(l->fd, 0, SEEK_END);
   if (l->mode == MODE_AUTO) {
     l->mode = detect_mode(l->fd);
     if (l->mode == MODE_CDROM && size > CDROM_MAX_BYTES)
@@ -756,18 +745,13 @@ static int parse(int argc, char **argv, struct sargs *a, int report) {
       if (operand(a, optind - 1, argv, &lun, &mode, report) < 0)
         return UA_EXIT_USAGE;
       break;
-    case 'm': {
-      int found = 0;
-      for (int i = 0; i < NMODES; i++)
-        if (!strcmp(optarg, mode_names[i]))
-          mode = i, found = 1;
-      if (!found) {
+    case 'm':
+      if ((mode = mode_of(optarg)) < 0) {
         if (report)
           ua_usage_error("storage", "Unknown mode '%s'", optarg);
         return UA_EXIT_USAGE;
       }
       break;
-    }
     case 'l': {
       long v = strtol(optarg, &end, 10);
       if (*optarg == '\0' || *end || v < 0 || v > 7) {
@@ -888,9 +872,8 @@ int ua_cmd_storage(int argc, char **argv) {
       l->loop_fd = -1;
       l->name[0] = '\0';
       l->mode = m->mode;
-      for (int i = 0; !m->mode_set && i < NMODES; i++)
-        if (!strcmp(cfg.storage_mode, mode_names[i]))
-          l->mode = (enum mode)i;
+      if (!m->mode_set && mode_of(cfg.storage_mode) >= 0)
+        l->mode = (enum mode)mode_of(cfg.storage_mode);
       if ((l->fd = m->fd) >= 0) {
         char link[64];
         snprintf(link, sizeof(link), "/proc/self/fd/%d", l->fd);

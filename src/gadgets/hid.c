@@ -11,6 +11,7 @@
  */
 
 #include "usbarsenal.h"
+#include <grp.h>
 
 #define KBD "hid.ua_kbd"
 #define MOUSE "hid.ua_mouse"
@@ -81,18 +82,6 @@ void ua_help_hid(void) {
       "  " UA_NAME " hid stop\n");
 }
 
-static int write_bin(const char *dir, const char *attr, const void *buf,
-                     size_t len) {
-  char p[PATH_MAX];
-  snprintf(p, sizeof(p), "%s/%s", dir, attr);
-  int fd = open(p, O_WRONLY | O_TRUNC | O_CLOEXEC);
-  if (fd < 0)
-    return -1;
-  ssize_t w = write_all(fd, buf, len);
-  close(fd);
-  return w == (ssize_t)len ? 0 : -1;
-}
-
 /* f_hid locks its attributes once the function is in a config, so this must
  * run before commit links it */
 static int setup_fn(struct ua_gadget *g, const struct hid_fn *f, int *created,
@@ -105,10 +94,10 @@ static int setup_fn(struct ua_gadget *g, const struct hid_fn *f, int *created,
   /* Already there and linked from an earlier start: out of the config for
    * the writes, commit puts it back */
   ua_gadget_unlink(g, f->func);
-  if (write_bin(dir, "protocol", f->protocol, 1) < 0 ||
-      write_bin(dir, "subclass", "1", 1) < 0 ||
-      write_bin(dir, "report_length", f->report_length, 1) < 0 ||
-      write_bin(dir, "report_desc", f->desc, f->desc_len) < 0) {
+  if (write_attr_buf(dir, "protocol", f->protocol, 1) < 0 ||
+      write_attr_buf(dir, "subclass", "1", 1) < 0 ||
+      write_attr_buf(dir, "report_length", f->report_length, 1) < 0 ||
+      write_attr_buf(dir, "report_desc", f->desc, f->desc_len) < 0) {
     ua_error("Cannot configure the %s: %s", f->label, strerror(errno));
     return -1;
   }
@@ -126,7 +115,7 @@ static int setup_fn(struct ua_gadget *g, const struct hid_fn *f, int *created,
     } else {
       char v[8];
       int n = snprintf(v, sizeof(v), "%u", interval);
-      if (write_bin(dir, "interval", v, (size_t)n) < 0) {
+      if (write_attr_buf(dir, "interval", v, (size_t)n) < 0) {
         ua_error("Cannot set the %s poll interval: %s", f->label,
                  strerror(errno));
         return -1;
@@ -211,10 +200,7 @@ static int apply_perm(const struct ua_gadget *g, int report) {
   return ret;
 }
 
-void ua_hid_reapply(const struct ua_gadget *g) {
-  if (ua_gadget_has(g, KBD) || ua_gadget_has(g, MOUSE))
-    apply_perm(g, 0);
-}
+void ua_hid_reapply(const struct ua_gadget *g) { apply_perm(g, 0); }
 
 static gid_t parse_group(const char *s, int *ok) {
   char *end;
@@ -223,20 +209,9 @@ static gid_t parse_group(const char *s, int *ok) {
   if (*s && !*end && v >= 0)
     return (gid_t)v;
   /* By name through /etc/group; Android has none, so numbers only there */
-  FILE *f = fopen("/etc/group", "re");
-  char line[512];
-  size_t n = strlen(s);
-  while (f && fgets(line, sizeof(line), f)) {
-    if (!strncmp(line, s, n) && line[n] == ':') {
-      char *gid = strchr(line + n + 1, ':');
-      fclose(f);
-      return gid ? (gid_t)strtol(gid + 1, NULL, 10) : 0;
-    }
-  }
-  if (f)
-    fclose(f);
-  *ok = 0;
-  return 0;
+  struct group *gr = getgrnam(s);
+  *ok = gr != NULL;
+  return gr ? gr->gr_gid : 0;
 }
 
 static int do_start(mode_t perm, gid_t gid, unsigned interval) {
@@ -244,10 +219,10 @@ static int do_start(mode_t perm, gid_t gid, unsigned interval) {
   if (ua_gadget_open(&g) < 0 || ua_check_requirements(&g, UA_NEED_HID) < 0)
     return UA_EXIT_FAIL;
 
+  /* Saved before commit, which re-applies it after the bind */
+  save_perm(perm, gid);
   if (!(ua_gadget_has(&g, KBD) && ua_gadget_has(&g, MOUSE) &&
         ua_gadget_live(&g))) {
-    /* Saved before commit, which re-applies it after the bind */
-    save_perm(perm, gid);
     int created[2] = {0, 0};
     if (ua_gadget_begin(&g) < 0)
       return UA_EXIT_FAIL;
@@ -263,11 +238,9 @@ static int do_start(mode_t perm, gid_t gid, unsigned interval) {
       }
     if (ua_gadget_commit(&g) < 0)
       return UA_EXIT_FAIL;
-  } else {
-    if (interval)
-      ua_warn("HID is already running; stop it first for --interval to take "
-              "effect.");
-    save_perm(perm, gid);
+  } else if (interval) {
+    ua_warn("HID is already running; stop it first for --interval to take "
+            "effect.");
   }
   return apply_perm(&g, 1) == 0 ? UA_EXIT_OK : UA_EXIT_FAIL;
 }

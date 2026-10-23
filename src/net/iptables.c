@@ -155,27 +155,6 @@ static void entry_view_ro(const struct xt_family *f, const void *e,
   entry_view(f, (void *)(uintptr_t)e, v);
 }
 
-/* CIDR helpers - parse_cidr is shared with network.c via the public header */
-
-void parse_cidr(const char *cidr, uint32_t *ip_out, uint32_t *mask_out) {
-  char buf[64];
-  safe_strncpy(buf, cidr, sizeof(buf));
-
-  char *slash = strchr(buf, '/');
-  int prefix = 24;
-  if (slash) {
-    *slash = '\0';
-    prefix = atoi(slash + 1);
-  }
-  if (prefix < 0)
-    prefix = 0;
-  if (prefix > 32)
-    prefix = 32;
-
-  *ip_out = inet_addr(buf);
-  *mask_out = (prefix == 0) ? 0u : htonl(0xffffffffu << (32 - prefix));
-}
-
 /* Either family, into 16-byte buffers of which the first addr_len bytes are
  * used. Returns 0, or -1 for a string that is not an address of this family.
  */
@@ -1473,20 +1452,6 @@ static void remove_iface_accepts(const struct xt_family *f, int fd,
               DS_IPT_MATCH_OUT, out_spec);
   remove_rule(f, fd, "filter", NF_INET_LOCAL_IN, "INPUT", NULL, NULL, iface,
               DS_IPT_MATCH_IN, in_spec);
-}
-
-int ds_ipt_remove_iface_rules(int family, const char *iface) {
-  if (!iface || !iface[0])
-    return 0;
-
-  const struct xt_family *f = xt_family_of(family);
-  ua_log("[IPT] remove_iface_rules: %s iface=%s", f->bin, iface);
-
-  int fd = open_raw_socket(f);
-  remove_iface_accepts(f, fd, iface);
-  if (fd >= 0)
-    close(fd);
-  return 0;
 }
 
 /* Public API: ds_ipt_remove_nat_rules

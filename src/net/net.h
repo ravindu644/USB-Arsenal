@@ -30,21 +30,14 @@ void ds_nl_close(ds_nl_ctx_t *ctx);
 int ds_nl_link_exists(ds_nl_ctx_t *ctx, const char *ifname);
 int ds_nl_get_ifindex(ds_nl_ctx_t *ctx, const char *ifname);
 int ds_nl_create_bridge(ds_nl_ctx_t *ctx, const char *name);
-int ds_nl_create_veth(ds_nl_ctx_t *ctx, const char *host, const char *peer);
-int ds_nl_create_macvlan(ds_nl_ctx_t *ctx, const char *name, int parent_index,
-                         int netns_fd, uint32_t mode, const uint8_t mac[6]);
 int ds_nl_create_veth_in(ds_nl_ctx_t *ctx, const char *host, const char *peer,
                          int peer_netns_fd, const uint8_t *peer_mac);
 int ds_nl_set_master(ds_nl_ctx_t *ctx, const char *ifname, const char *master);
 int ds_nl_link_up(ds_nl_ctx_t *ctx, const char *ifname);
-int ds_nl_link_down(ds_nl_ctx_t *ctx, const char *ifname);
 int ds_nl_del_link(ds_nl_ctx_t *ctx, const char *ifname);
-int ds_nl_rename(ds_nl_ctx_t *ctx, const char *ifname, const char *newname);
 int ds_nl_set_mac(ds_nl_ctx_t *ctx, const char *ifname, const uint8_t mac[6]);
 int ds_nl_add_addr4(ds_nl_ctx_t *ctx, const char *ifname, uint32_t ip_be,
                     uint8_t prefix);
-int ds_nl_add_route4(ds_nl_ctx_t *ctx, uint32_t dst_be, uint8_t dst_len,
-                     uint32_t gw_be, int oif_idx);
 int ds_nl_add_addr6(ds_nl_ctx_t *ctx, const char *ifname,
                     const struct in6_addr *ip, uint8_t prefix);
 int ds_nl_add_route6(ds_nl_ctx_t *ctx, const struct in6_addr *dst,
@@ -61,21 +54,16 @@ int ds_nl_add_rule4(ds_nl_ctx_t *ctx, uint32_t src_be, uint8_t src_len,
                     uint32_t dst_be, uint8_t dst_len, int table, int priority);
 int ds_nl_del_rule4(ds_nl_ctx_t *ctx, uint32_t src_be, uint8_t src_len,
                     uint32_t dst_be, uint8_t dst_len, int table, int priority);
-int ds_nl_count_ifaces_with_prefix(ds_nl_ctx_t *ctx, const char *prefix);
-int ds_nl_count_bridge_members_with_prefix(ds_nl_ctx_t *ctx, const char *bridge,
-                                           const char *prefix);
 int ds_nl_list_ifaces(ds_nl_ctx_t *ctx, char names[][IFNAMSIZ], int max);
 
 /* iptables.c: raw ip_tables socket first, the iptables binary as fallback */
 
-void parse_cidr(const char *cidr, uint32_t *ip_out, uint32_t *mask_out);
 int ds_ipt_ensure_masquerade(int family, const char *src_cidr);
 int ds_ipt_host_rules_present(int family, const char *iface,
                               const char *src_cidr, int expect_dnat);
 int ds_ipt_ensure_forward_accept(int family, const char *iface);
 int ds_ipt_ensure_input_accept(int family, const char *iface);
 int ds_ipt_ensure_mss_clamp(int family);
-int ds_ipt_remove_iface_rules(int family, const char *iface);
 int ds_ipt_remove_nat_rules(int family, const char *subnet, const char *iface);
 int ds_ipt6_available(void);
 int ds_ipt4_nat_available(void);

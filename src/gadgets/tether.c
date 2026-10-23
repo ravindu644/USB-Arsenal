@@ -35,12 +35,10 @@
 #define NAT6_CIDR "fd75:7361::/64"
 #define NAT6_GW_LL "fe80::1" /* the source of every RA ds_ra_build() sends */
 
-/* The profile in force for this run; MACs come from it when it sets them */
-static const struct ua_config *tether_cfg;
-
 struct tether {
-  const char *upstream; /* --upstream, or NULL for automatic */
-  const char *dns;      /* --dns, or NULL */
+  const char *upstream;           /* --upstream, or NULL for automatic */
+  const char *dns;                /* --dns, or NULL */
+  const char *dev_mac, *host_mac; /* the profile's, "" for stable_macs() */
   char iface[IFNAMSIZ];
   uint32_t ip_be, net_be, mask_be, offer_be;
   uint8_t prefix;
@@ -179,25 +177,29 @@ static int parse_address(const char *s, struct tether *t) {
   return 0;
 }
 
+/* A locally administered 02:55 MAC, FNV-1a hashed from key */
+static void gw_mac(const char *key, uint8_t mac[6]) {
+  uint32_t h = 2166136261u;
+  for (const char *k = key; *k; k++)
+    h = (h ^ (uint8_t)*k) * 16777619u;
+  mac[0] = 0x02;
+  mac[1] = 0x55;
+  mac[2] = (uint8_t)(h >> 24);
+  mac[3] = (uint8_t)(h >> 16);
+  mac[4] = (uint8_t)(h >> 8);
+  mac[5] = (uint8_t)h;
+}
+
 /* Fixed MACs per device: random ones make Windows add "Ethernet 7, 8, 9..."
  * every time tethering starts. Locally administered, derived from something
  * stable on this machine. */
 static void stable_macs(char *dev, char *host, size_t size) {
   char seed[128];
+  uint8_t m[6];
   ua_device_seed(seed, sizeof(seed));
-  uint32_t h = 2166136261u;
-  for (const char *p = seed; *p; p++)
-    h = (h ^ (uint8_t)*p) * 16777619u;
-  snprintf(dev, size, "02:55:%02x:%02x:%02x:%02x", h >> 24, (h >> 16) & 0xff,
-           (h >> 8) & 0xff, h & 0xff);
-  snprintf(host, size, "02:48:%02x:%02x:%02x:%02x", h >> 24, (h >> 16) & 0xff,
-           (h >> 8) & 0xff, h & 0xff);
-}
-
-static int write_in(const char *dir, const char *attr, const char *val) {
-  char p[PATH_MAX];
-  snprintf(p, sizeof(p), "%s/%s", dir, attr);
-  return write_file(p, val);
+  gw_mac(seed, m);
+  snprintf(dev, size, "02:55:%02x:%02x:%02x:%02x", m[2], m[3], m[4], m[5]);
+  snprintf(host, size, "02:48:%02x:%02x:%02x:%02x", m[2], m[3], m[4], m[5]);
 }
 
 /* Windows only loads its RNDIS driver unprompted when the device answers the
@@ -205,12 +207,12 @@ static int write_in(const char *dir, const char *attr, const char *val) {
 static void rndis_os_desc(const struct ua_gadget *g, const char *fdir) {
   char p[PATH_MAX];
   snprintf(p, sizeof(p), "%s/os_desc", g->path);
-  write_in(p, "use", "1");
-  write_in(p, "b_vendor_code", "0xcd");
-  write_in(p, "qw_sign", "MSFT100");
+  write_attr(p, "use", "1");
+  write_attr(p, "b_vendor_code", "0xcd");
+  write_attr(p, "qw_sign", "MSFT100");
   snprintf(p, sizeof(p), "%s/os_desc/interface.rndis", fdir);
-  write_in(p, "compatible_id", "RNDIS");
-  write_in(p, "sub_compatible_id", "5162001");
+  write_attr(p, "compatible_id", "RNDIS");
+  write_attr(p, "sub_compatible_id", "5162001");
   snprintf(p, sizeof(p), "%s/os_desc/" UA_CONFIG, g->path);
   if (symlink(g->config, p) < 0 && errno != EEXIST)
     ua_debug("os_desc link: %s", strerror(errno));
@@ -299,18 +301,6 @@ static int usb_on_bridge(const struct tether *t) {
   target[n] = '\0';
   const char *b = strrchr(target, '/');
   return !strcmp(b ? b + 1 : target, GW_BRIDGE);
-}
-
-static void gw_mac(const char *key, uint8_t mac[6]) {
-  uint32_t h = 2166136261u;
-  for (const char *k = key; *k; k++)
-    h = (h ^ (uint8_t)*k) * 16777619u;
-  mac[0] = 0x02;
-  mac[1] = 0x55;
-  mac[2] = (uint8_t)(h >> 24);
-  mac[3] = (uint8_t)(h >> 16);
-  mac[4] = (uint8_t)(h >> 8);
-  mac[5] = (uint8_t)h;
 }
 
 /* Keep the cable plugged into the container's current namespace. A host end
@@ -880,6 +870,22 @@ static int serve(struct tether *t, int ready_fd) {
   return 0;
 }
 
+/* serve() under a pid file, so `stop` from another shell reaches it too */
+static int serve_owned(struct tether *t, int ready_fd) {
+  char p[PATH_MAX];
+  FILE *f;
+  pid_path(p, sizeof(p));
+  if ((f = fopen(p, "we"))) {
+    fprintf(f, "%d\n", (int)getpid());
+    fclose(f);
+  }
+  int ret = serve(t, ready_fd);
+  unlink(p);
+  info_path(p, sizeof(p));
+  unlink(p);
+  return ret;
+}
+
 /* Fork the network side off and wait for it to say whether it came up, so
  * the user sees a failure here and not in a log they never read */
 static int spawn_daemon(struct tether *t) {
@@ -904,17 +910,7 @@ static int spawn_daemon(struct tether *t) {
       dup2(log, STDOUT_FILENO);
       dup2(log, STDERR_FILENO);
     }
-    FILE *f;
-    pid_path(p, sizeof(p));
-    if ((f = fopen(p, "we"))) {
-      fprintf(f, "%d\n", (int)getpid());
-      fclose(f);
-    }
-    int ret = serve(t, pfd[1]);
-    unlink(p);
-    info_path(p, sizeof(p));
-    unlink(p);
-    _exit(ret == 0 ? 0 : 1);
+    _exit(serve_owned(t, pfd[1]) == 0 ? 0 : 1);
   }
   close(pfd[1]);
   char c = '0';
@@ -969,10 +965,10 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
       return UA_EXIT_FAIL;
     }
     stable_macs(dev, host, sizeof(dev));
-    if (tether_cfg && tether_cfg->tether_dev_mac[0])
-      safe_strncpy(dev, tether_cfg->tether_dev_mac, sizeof(dev));
-    if (tether_cfg && tether_cfg->tether_host_mac[0])
-      safe_strncpy(host, tether_cfg->tether_host_mac, sizeof(host));
+    if (t->dev_mac[0])
+      safe_strncpy(dev, t->dev_mac, sizeof(dev));
+    if (t->host_mac[0])
+      safe_strncpy(host, t->host_mac, sizeof(host));
     /* Samsung's 4.x f_ncm creates its netdev only at bind, and its
      * u_ether_configfs stores dereference that NULL netdev: writing dev_addr
      * to an unbound instance panics the kernel (the f_ncm patch in
@@ -982,8 +978,8 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
     char cur[PATH_MAX + 16], mac[32];
     snprintf(cur, sizeof(cur), "%s/dev_addr", dir);
     if (read_file(cur, mac, sizeof(mac)) > 0) {
-      write_in(dir, "dev_addr", dev);
-      write_in(dir, "host_addr", host);
+      write_attr(dir, "dev_addr", dev);
+      write_attr(dir, "host_addr", host);
     } else {
       ua_debug("%s has no netdev before bind; the kernel picks the MACs", func);
     }
@@ -1018,20 +1014,8 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
   }
 
   if (fg) {
-    /* A pid file, so `stop` from another shell reaches us too */
-    char p[PATH_MAX];
-    pid_path(p, sizeof(p));
-    FILE *f = fopen(p, "we");
-    if (f) {
-      fprintf(f, "%d\n", (int)getpid());
-      fclose(f);
-    }
     ua_log("Sharing on %s; Ctrl-C to stop", t->iface);
-    int r = serve(t, -1);
-    unlink(p);
-    info_path(p, sizeof(p));
-    unlink(p);
-    return r == 0 ? UA_EXIT_OK : undo(&g, func, added);
+    return serve_owned(t, -1) == 0 ? UA_EXIT_OK : undo(&g, func, added);
   }
   if (spawn_daemon(t) < 0) {
     char p[PATH_MAX];
@@ -1166,7 +1150,8 @@ int ua_cmd_tether(int argc, char **argv) {
   t.upstream = cfg.tether_upstream[0] ? cfg.tether_upstream : NULL;
   rndis = !strcmp(cfg.tether_function, "rndis");
   t.gw_iface = "usb0";
-  tether_cfg = &cfg;
+  t.dev_mac = cfg.tether_dev_mac;
+  t.host_mac = cfg.tether_host_mac;
 
   if (argc < 2 || ua_want_help(argc, argv)) {
     ua_help_tether();

@@ -72,18 +72,13 @@ out:
   return ok;
 }
 
-static int need_root(void) {
-  if (geteuid() == 0)
-    return 0;
-  ua_error("Must be run as root");
-  return -1;
-}
-
 /* The quick gate in front of every action. Fails closed, and names the check
  * report for the details. */
 int ua_check_requirements(struct ua_gadget *g, int need) {
-  if (need_root() < 0)
+  if (geteuid() != 0) {
+    ua_error("Must be run as root");
     return -1;
+  }
   int missing = 0;
   if ((need & UA_NEED_STORAGE) && !ua_probe_function(g, "mass_storage", NULL)) {
     ua_error("This kernel has no mass_storage gadget function "
@@ -140,10 +135,6 @@ void ua_help_check(void) {
          "  " UA_NAME " check\n"
          "  " UA_NAME " check --json\n"
          "  " UA_NAME " --udc fe980000.usb check\n");
-}
-
-static void help_check_hint(void) {
-  printf("\nRun '" UA_NAME " check' as root for an accurate report.\n");
 }
 
 int ua_cmd_check(int argc, char **argv) {
@@ -283,6 +274,6 @@ int ua_cmd_check(int argc, char **argv) {
   else
     printf("  All required features found\n");
   if (!root)
-    help_check_hint();
+    printf("\nRun '" UA_NAME " check' as root for an accurate report.\n");
   return missing ? UA_EXIT_FAIL : UA_EXIT_OK;
 }

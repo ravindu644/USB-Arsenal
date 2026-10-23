@@ -52,11 +52,11 @@ static const struct command *find_command(const char *name) {
 
 static void usage(void) {
   /* Droidspaces' banner (print_usage), same layout */
-  printf(C_BOLD UA_PROJECT_NAME
-         " v" UA_VERSION
-         " - Composite USB gadget builder for Android/Linux" C_RESET "\n");
-  printf("by " C_CYAN UA_AUTHOR C_RESET "\n");
-  printf("\n" C_BLUE UA_REPO C_RESET "\n");
+  printf(C_BOLD "USB Arsenal v" UA_VERSION
+                " - Composite USB gadget builder for Android/Linux" C_RESET
+                "\n");
+  printf("by " C_CYAN "ravindu644" C_RESET "\n");
+  printf("\n" C_BLUE "https://github.com/ravindu644/USB-Arsenal" C_RESET "\n");
   printf(C_DIM "Built on: %s %s" C_RESET "\n\n", __DATE__, __TIME__);
   printf("Usage: " UA_NAME " [--udc NAME] [-v] <command> [<action>] "
          "[options]\n\n");
@@ -217,11 +217,6 @@ static int cmd_stop(int argc, char **argv) {
   struct ua_gadget g;
   if (ua_gadget_open(&g) < 0)
     return UA_EXIT_FAIL;
-  if (!ua_gadget_taken() && !ua_gadget_in_use(g.cfs)) {
-    ua_tether_kill();
-    ua_log("Nothing to stop");
-    return UA_EXIT_OK;
-  }
   /* The tether daemon owns NAT rules and a DHCP thread; let it clean those up
    * before the interface under it disappears */
   ua_tether_kill();

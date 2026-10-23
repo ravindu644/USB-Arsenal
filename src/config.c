@@ -68,7 +68,7 @@ static const struct key keys[] = {
 #define NKEYS (sizeof(keys) / sizeof(keys[0]))
 #define FIRST_DEFAULT 12 /* keys from storage_mode on are command defaults */
 
-void ua_config_defaults(struct ua_config *c) {
+static void ua_config_defaults(struct ua_config *c) {
   memset(c, 0, sizeof(*c));
   c->id_vendor = 0x1d6b; /* Linux Foundation multifunction composite */
   c->id_product = 0x0104;
@@ -204,7 +204,7 @@ static void get_key(const struct ua_config *c, const struct key *k, char *out,
 /* Returns the number of lines that were not taken (bad value, unknown key,
  * no '='), or -1 when the file cannot be read. Everything else keeps what
  * cfg held before, normally the defaults. */
-int ua_config_load(const char *path, struct ua_config *c) {
+static int ua_config_load(const char *path, struct ua_config *c) {
   FILE *f = fopen(path, "re");
   if (!f)
     return -1;

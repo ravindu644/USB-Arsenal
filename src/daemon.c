@@ -46,11 +46,7 @@ static char self_path[PATH_MAX];
 static gid_t ua_gid = UA_DAEMON_GID;
 
 void ua_socket_path(char *out, size_t size) {
-  const char *env = getenv("UA_SOCKET");
-  if (env && env[0])
-    safe_strncpy(out, env, size);
-  else
-    ua_ws_path("Run", "usb-arsenal.sock", out, size);
+  ua_ws_path("Run", "usb-arsenal.sock", out, size);
 }
 
 static socklen_t make_addr(struct sockaddr_un *addr) {
@@ -611,10 +607,10 @@ int ua_client_run(int argc, char **argv, const int *fds, int nfds) {
       uint32_t chunk = len < sizeof(buf) ? len : (uint32_t)sizeof(buf);
       if (read_exact(s, buf, chunk) < 0)
         goto lost;
-      if (write_all(fh[0] == MSG_ERR ? STDERR_FILENO : STDOUT_FILENO, buf,
-                    chunk) < 0) {
-        /* our reader went away; keep draining so the session can finish */
-      }
+      /* A reader that went away is ignored: keep draining so the session
+       * can finish */
+      (void)write_all(fh[0] == MSG_ERR ? STDERR_FILENO : STDOUT_FILENO, buf,
+                      chunk);
       len -= chunk;
     }
   }

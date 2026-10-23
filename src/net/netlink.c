@@ -315,52 +315,6 @@ int ds_nl_create_veth_in(ds_nl_ctx_t *ctx, const char *host, const char *peer,
   return ds_nl_talk(ctx, &req.n);
 }
 
-int ds_nl_create_veth(ds_nl_ctx_t *ctx, const char *host, const char *peer) {
-  return ds_nl_create_veth_in(ctx, host, peer, -1, NULL);
-}
-
-/* Create a macvlan on the NIC parent_index of the namespace ctx lives in.
- * With netns_fd >= 0 it is born inside that namespace, under `name` and with
- * `mac`, in one request, exactly like the far end of a veth.
- *
- * It cannot be born as eth0 when its parent is called eth0, whichever
- * namespace asks: the kernel checks the name, and with IFLA_LINK_NETNSID even
- * registers the device, in the parent's namespace before moving it. So the
- * caller creates it under a name the host does not have and renames it. */
-int ds_nl_create_macvlan(ds_nl_ctx_t *ctx, const char *name, int parent_index,
-                         int netns_fd, uint32_t mode, const uint8_t mac[6]) {
-  struct {
-    struct nlmsghdr n;
-    struct ifinfomsg i;
-    char buf[512];
-  } req;
-  uint32_t link = (uint32_t)parent_index;
-
-  memset(&req, 0, sizeof(req));
-  req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
-  req.n.nlmsg_type = RTM_NEWLINK;
-  req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL | NLM_F_ACK;
-  req.i.ifi_family = AF_UNSPEC;
-
-  nl_addattr(&req.n, (int)sizeof(req), IFLA_IFNAME, name,
-             (int)strlen(name) + 1);
-  nl_addattr(&req.n, (int)sizeof(req), IFLA_LINK, &link, sizeof(link));
-  if (netns_fd >= 0)
-    nl_addattr(&req.n, (int)sizeof(req), IFLA_NET_NS_FD, &netns_fd,
-               (int)sizeof(int));
-  nl_addattr(&req.n, (int)sizeof(req), IFLA_ADDRESS, mac, 6);
-
-  struct rtattr *linfo = nl_nest_begin(&req.n, (int)sizeof(req), IFLA_LINKINFO);
-  nl_addattr(&req.n, (int)sizeof(req), IFLA_INFO_KIND, "macvlan", 8);
-  struct rtattr *ldata =
-      nl_nest_begin(&req.n, (int)sizeof(req), IFLA_INFO_DATA);
-  nl_addattr(&req.n, (int)sizeof(req), IFLA_MACVLAN_MODE, &mode, sizeof(mode));
-  nl_nest_end(&req.n, ldata);
-  nl_nest_end(&req.n, linfo);
-
-  return ds_nl_talk(ctx, &req.n);
-}
-
 /* Attach an interface to a bridge (IFLA_MASTER) */
 
 int ds_nl_set_master(ds_nl_ctx_t *ctx, const char *ifname, const char *master) {
@@ -416,10 +370,6 @@ int ds_nl_link_up(ds_nl_ctx_t *ctx, const char *ifname) {
   return ds_nl_link_set_up(ctx, ifname, 1);
 }
 
-int ds_nl_link_down(ds_nl_ctx_t *ctx, const char *ifname) {
-  return ds_nl_link_set_up(ctx, ifname, 0);
-}
-
 /* Delete a link by name. Returns 1 when this call removed it, 0 when it was
  * already gone (so callers can log only what they actually did), negative on
  * any other error. */
@@ -444,32 +394,6 @@ int ds_nl_del_link(ds_nl_ctx_t *ctx, const char *ifname) {
   if (ret == 0)
     return 1;
   return (ret == -ENODEV || ret == -ENOENT) ? 0 : ret;
-}
-
-/* Rename an interface
- * Note: interface must be DOWN before rename; we bring it down first. */
-
-int ds_nl_rename(ds_nl_ctx_t *ctx, const char *ifname, const char *newname) {
-  ds_nl_link_down(ctx, ifname); /* must be down or EBUSY */
-
-  int idx = ds_nl_get_ifindex(ctx, ifname);
-  if (idx <= 0)
-    return -ENODEV;
-
-  struct {
-    struct nlmsghdr n;
-    struct ifinfomsg i;
-    char buf[256];
-  } req;
-  memset(&req, 0, sizeof(req));
-  req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
-  req.n.nlmsg_type = RTM_NEWLINK;
-  req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
-  req.i.ifi_family = AF_UNSPEC;
-  req.i.ifi_index = idx;
-  nl_addattr(&req.n, (int)sizeof(req), IFLA_IFNAME, newname,
-             (int)strlen(newname) + 1);
-  return ds_nl_talk(ctx, &req.n);
 }
 
 /* Set an interface's L2 hardware address (IFLA_ADDRESS).
@@ -534,38 +458,7 @@ int ds_nl_add_addr4(ds_nl_ctx_t *ctx, const char *ifname, uint32_t ip_be,
   return ds_nl_talk(ctx, &req.n);
 }
 
-/* Add an IPv4 route
- * dst_be=0 + dst_len=0 → default route.
- * gw_be=0               → connected/link-scope route. */
-
-int ds_nl_add_route4(ds_nl_ctx_t *ctx, uint32_t dst_be, uint8_t dst_len,
-                     uint32_t gw_be, int oif_idx) {
-  struct {
-    struct nlmsghdr n;
-    struct rtmsg r;
-    char buf[256];
-  } req;
-  memset(&req, 0, sizeof(req));
-  req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
-  req.n.nlmsg_type = RTM_NEWROUTE;
-  req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_REPLACE | NLM_F_ACK;
-  req.r.rtm_family = AF_INET;
-  req.r.rtm_dst_len = dst_len;
-  req.r.rtm_table = RT_TABLE_MAIN;
-  req.r.rtm_protocol = RTPROT_BOOT;
-  req.r.rtm_scope = (gw_be == 0) ? RT_SCOPE_LINK : RT_SCOPE_UNIVERSE;
-  req.r.rtm_type = RTN_UNICAST;
-
-  if (dst_len > 0)
-    nl_addattr(&req.n, (int)sizeof(req), RTA_DST, &dst_be, 4);
-  if (gw_be)
-    nl_addattr(&req.n, (int)sizeof(req), RTA_GATEWAY, &gw_be, 4);
-  nl_addattr(&req.n, (int)sizeof(req), RTA_OIF, &oif_idx, (int)sizeof(int));
-
-  return ds_nl_talk(ctx, &req.n);
-}
-
-/* IPv6 siblings of the two helpers above, for NAT66.
+/* IPv6 siblings of ds_nl_add_addr4, for NAT66.
  *
  * IFA_F_NODAD: these are our own router addresses on a link we created, so
  * there is nobody to collide with, and waiting out duplicate address detection
@@ -674,120 +567,6 @@ int ds_nl_list_ifaces(ds_nl_ctx_t *ctx, char names[][IFNAMSIZ], int max) {
   }
 
 list_ifaces_done:
-  return count;
-}
-
-/* Count how many interfaces with a given prefix currently exist.
- * Used by ds_net_cleanup() to decide whether to remove shared rules:
- * shared rules (MASQUERADE, FORWARD, Android policy) must only be removed
- * when the LAST container stops, not when one of many stops. */
-int ds_nl_count_ifaces_with_prefix(ds_nl_ctx_t *ctx, const char *prefix) {
-  struct {
-    struct nlmsghdr n;
-    struct ifinfomsg i;
-  } req;
-  memset(&req, 0, sizeof(req));
-  req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
-  req.n.nlmsg_type = RTM_GETLINK;
-  req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
-  req.i.ifi_family = AF_UNSPEC;
-  req.n.nlmsg_seq = ++ctx->seq;
-  req.n.nlmsg_pid = (uint32_t)ctx->pid;
-
-  if (send(ctx->fd, &req, req.n.nlmsg_len, 0) < 0)
-    return 0;
-
-  int count = 0;
-  size_t prefix_len = strlen(prefix);
-  uint8_t buf[NL_BUFSIZE];
-
-  for (;;) {
-    ssize_t n = recv(ctx->fd, buf, sizeof(buf), 0);
-    if (n <= 0)
-      break;
-    struct nlmsghdr *h = (struct nlmsghdr *)buf;
-    for (; NLMSG_OK(h, (uint32_t)n); h = NLMSG_NEXT(h, n)) {
-      if (h->nlmsg_type == NLMSG_DONE)
-        goto count_done;
-      if (h->nlmsg_type != RTM_NEWLINK)
-        continue;
-      struct ifinfomsg *ifi = NLMSG_DATA(h);
-      struct rtattr *rta = IFLA_RTA(ifi);
-      int rlen = (int)IFLA_PAYLOAD(h);
-      char ifname[IFNAMSIZ] = {0};
-      for (; RTA_OK(rta, rlen); rta = RTA_NEXT(rta, rlen)) {
-        if (rta->rta_type == IFLA_IFNAME) {
-          safe_strncpy(ifname, RTA_DATA(rta), IFNAMSIZ);
-          break;
-        }
-      }
-      if (ifname[0] && strncmp(ifname, prefix, prefix_len) == 0)
-        count++;
-    }
-  }
-
-count_done:
-  return count;
-}
-
-/* Count links enslaved to `bridge` whose name starts with `prefix`.
- *
- * Used by gateway-mode cleanup to refcount clients on a specific delegated
- * bridge (the global ds-v* count cannot tell ds-br0 from ds-lan clients).
- * Returns 0 if the bridge does not exist. */
-int ds_nl_count_bridge_members_with_prefix(ds_nl_ctx_t *ctx, const char *bridge,
-                                           const char *prefix) {
-  unsigned int br_idx = if_nametoindex(bridge);
-  if (br_idx == 0)
-    return 0;
-
-  struct {
-    struct nlmsghdr n;
-    struct ifinfomsg i;
-  } req;
-  memset(&req, 0, sizeof(req));
-  req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
-  req.n.nlmsg_type = RTM_GETLINK;
-  req.n.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
-  req.i.ifi_family = AF_UNSPEC;
-  req.n.nlmsg_seq = ++ctx->seq;
-  req.n.nlmsg_pid = (uint32_t)ctx->pid;
-
-  if (send(ctx->fd, &req, req.n.nlmsg_len, 0) < 0)
-    return 0;
-
-  int count = 0;
-  size_t prefix_len = strlen(prefix);
-  uint8_t buf[NL_BUFSIZE];
-
-  for (;;) {
-    ssize_t n = recv(ctx->fd, buf, sizeof(buf), 0);
-    if (n <= 0)
-      break;
-    struct nlmsghdr *h = (struct nlmsghdr *)buf;
-    for (; NLMSG_OK(h, (uint32_t)n); h = NLMSG_NEXT(h, n)) {
-      if (h->nlmsg_type == NLMSG_DONE)
-        goto member_done;
-      if (h->nlmsg_type != RTM_NEWLINK)
-        continue;
-      struct ifinfomsg *ifi = NLMSG_DATA(h);
-      struct rtattr *rta = IFLA_RTA(ifi);
-      int rlen = (int)IFLA_PAYLOAD(h);
-      char ifname[IFNAMSIZ] = {0};
-      int master = 0;
-      for (; RTA_OK(rta, rlen); rta = RTA_NEXT(rta, rlen)) {
-        if (rta->rta_type == IFLA_IFNAME)
-          safe_strncpy(ifname, RTA_DATA(rta), IFNAMSIZ);
-        else if (rta->rta_type == IFLA_MASTER)
-          master = (int)nl_rta_u32(rta);
-      }
-      if (master == (int)br_idx && ifname[0] &&
-          strncmp(ifname, prefix, prefix_len) == 0)
-        count++;
-    }
-  }
-
-member_done:
   return count;
 }
 
