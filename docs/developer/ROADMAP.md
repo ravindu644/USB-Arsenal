@@ -548,3 +548,8 @@ Tick a box only when the item is merged and verified as described in its phase.
 - 2026-10-23: Check plays `usb-arsenal check` in a shell, as Root and Backend do, its report the
   output (typed as one block, the marks as `[+]` and `[-]`); `check` prints CD-ROM and the HID
   interval only with the function they need. The panel layout it replaces is gone.
+- 2026-10-23: an over-engineering pass, no behaviour change meant. Dead code went (seven
+  netlink and two iptables functions, `run_command`, `grep_file`, the unset `UA_SOCKET`
+  override, the app's preview kit with ui-tooling), and duplicates became one helper each
+  (`write_attr` for four attribute writers, `ua_wait`, `bound()`, `Modifier.dashes`).
+  `.clang-format` is `BasedOnStyle: LLVM`, which formats `src/` byte for byte as the dump did.
