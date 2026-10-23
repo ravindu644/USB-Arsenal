@@ -99,7 +99,7 @@ fun Modifier.focusTick(): Modifier = composed {
 }
 
 /*
- * A part that only scrolls (a terminal, Check's list) still takes keys: focus reaches it, which
+ * A part that only scrolls (a terminal) still takes keys: focus reaches it, which
  * scrolls a short screen to it, Up and Down then step [state] 80dp at a time, and at either end
  * they move focus on as usual. Focused, it wears the dashed cursor in [cursor]. Off while
  * [enabled] is false, so a part with nothing to scroll is no extra stop.

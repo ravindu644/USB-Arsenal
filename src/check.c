@@ -218,20 +218,25 @@ int ua_cmd_check(int argc, char **argv) {
   if (!json_mode)
     printf("\n[FUNCTIONS]\n");
   if (have_backend) {
-    line("mass_storage", ua_probe_function(&g, "mass_storage", NULL), 0,
-         "mass_storage",
-         "CONFIG_USB_CONFIGFS_MASS_STORAGE; needed by 'storage'");
-    line("cdrom", ua_probe_function(&g, "mass_storage", "lun.0/cdrom"), 0,
-         "CD-ROM emulation (mass_storage)",
-         "Without lun.0/cdrom, non-hybrid ISOs (Windows) cannot boot");
+    /* A line that needs a function is reported only with that function; the
+     * JSON keeps its key, as 0 */
+    int ms = ua_probe_function(&g, "mass_storage", NULL);
+    line("mass_storage", ms, 0, "mass_storage",
+         "CONFIG_USB_CONFIGFS_MASS_STORAGE; needed by 'storage' (and CD-ROM)");
+    if (ms > 0 || json_mode)
+      line("cdrom",
+           ms > 0 && ua_probe_function(&g, "mass_storage", "lun.0/cdrom"), 0,
+           "CD-ROM emulation (mass_storage)",
+           "Without lun.0/cdrom, non-hybrid ISOs (Windows) cannot boot");
     int hid = ua_probe_function(&g, "hid", NULL);
     line("hid", hid, 0, "hid", "CONFIG_USB_CONFIGFS_F_HID; needed by 'hid'");
     /* Known before HID runs, so a client never offers an interval the
      * kernel would ignore */
-    line("hid_interval", hid > 0 && ua_probe_function(&g, "hid", "interval"), 0,
-         "HID poll interval (f_hid)",
-         "Stock f_hid polls the keyboard every 1 ms; the f_hid patch in "
-         "kernel-patches/ makes 'hid --interval' work");
+    if (hid > 0 || json_mode)
+      line("hid_interval", hid > 0 && ua_probe_function(&g, "hid", "interval"),
+           0, "HID poll interval (f_hid)",
+           "Stock f_hid polls the keyboard every 1 ms; the f_hid patch in "
+           "kernel-patches/ makes 'hid --interval' work");
     if (ua_ncm_unsafe())
       line("ncm", -1, 0,
            "ncm (unsafe on this Samsung kernel; tether uses rndis)",

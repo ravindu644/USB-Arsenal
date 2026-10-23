@@ -128,8 +128,6 @@ fun Screen(
     bottomBar: (@Composable () -> Unit)? = null,
     footer: (@Composable ColumnScope.() -> Unit)? = null,
     scroll: Boolean = true,
-    // Held by a screen whose body has a part that scrolls it from the keys (Check's list)
-    scrollState: ScrollState = rememberScrollState(),
     content: @Composable ScreenScope.() -> Unit,
 ) = Column(
     // The keyboard pushes the bar and the content up; the bar's own navigation-bar padding then gives way
@@ -154,7 +152,7 @@ fun Screen(
             .focusGroup(),
         verticalArrangement = Arrangement.spacedBy(Lcd.section),
     ) {
-        ScreenBody(Modifier.weight(1f).fillMaxWidth(), scroll, scrollState, content)
+        ScreenBody(Modifier.weight(1f).fillMaxWidth(), scroll, content)
         footer?.let { Column(Modifier.padding(horizontal = Lcd.gutter), verticalArrangement = Arrangement.spacedBy(Lcd.section), content = it) }
     }
     bottomBar?.invoke()
@@ -209,10 +207,10 @@ private data class Fill(val min: Dp, val weight: Float) : ParentDataModifier {
  * it left, as in a Column, so a part that sizes itself to its room (Keys + mouse) still can.
  */
 @Composable
-private fun ScreenBody(modifier: Modifier, scroll: Boolean, state: ScrollState, content: @Composable ScreenScope.() -> Unit) = Layout(
+private fun ScreenBody(modifier: Modifier, scroll: Boolean, content: @Composable ScreenScope.() -> Unit) = Layout(
     content = { ScreenScope.content() },
     modifier = modifier
-        .then(if (scroll) Modifier.lcdScroll(state, inset = 0.dp) else Modifier)
+        .then(if (scroll) Modifier.lcdScroll(rememberScrollState(), inset = 0.dp) else Modifier)
         .padding(start = Lcd.gutter, end = Lcd.gutter, top = Lcd.topInset),
 ) { parts, c ->
         val room = c.minHeight
@@ -552,8 +550,9 @@ fun LedDot(led: Led) {
 // The phone's codename, as adb shell's prompt shows it; no root needed to read it
 val host = listOf(Build.DEVICE, Build.PRODUCT).firstOrNull { !it.isNullOrBlank() && it != "unknown" } ?: "localhost"
 
-// One Enter's worth of a shell: the prompt, what is typed after it, and what that printed
-class ShellLine(val prompt: String, val typed: String = "", val out: List<String> = emptyList())
+// One Enter's worth of a shell: the prompt, what is typed after it, and what that printed. Output
+// that came as one piece ([block], check's report) types straight through, its beat only at the end
+class ShellLine(val prompt: String, val typed: String = "", val out: List<String> = emptyList(), val block: Boolean = false)
 
 /*
  * A shell session plays on the 40ms frame clock, one step a frame:
@@ -565,7 +564,8 @@ class ShellLine(val prompt: String, val typed: String = "", val out: List<String
  */
 private fun outSteps(line: String) = (line.length + 3) / 4
 
-private fun ShellLine.steps() = LINE_PAUSE + typeSteps(typed.length) + out.sumOf(::outSteps) + LINE_PAUSE * (out.size - 1).coerceAtLeast(0)
+private fun ShellLine.steps() =
+    LINE_PAUSE + typeSteps(typed.length) + out.sumOf(::outSteps) + if (block) 0 else LINE_PAUSE * (out.size - 1).coerceAtLeast(0)
 
 fun List<ShellLine>.steps() = sumOf { it.steps() }
 
@@ -581,7 +581,7 @@ fun List<ShellLine>.shownAt(step: Int): List<String> {
         left -= LINE_PAUSE + typeSteps(line.typed.length)
         if (left < 0) return shown
         line.out.forEachIndexed { k, out ->
-            if (k > 0) {
+            if (k > 0 && !line.block) {
                 left -= LINE_PAUSE
                 if (left < 0) return shown
             }
@@ -628,7 +628,7 @@ fun Shell(label: String, led: Led, lines: List<String>, modifier: Modifier = Mod
     }
 }
 
-// .kv: a label and its value. Facts nobody taps (.kv.fact) are 32dp, so long lists like Check fit
+// .kv: a label and its value. Facts nobody taps (.kv.fact) are 32dp, so long lists fit
 @Composable
 fun Kv(label: String, modifier: Modifier = Modifier, fact: Boolean = false, value: @Composable RowScope.() -> Unit) = Row(
     modifier.fillMaxWidth().heightIn(min = if (fact) 32.dp else Lcd.touch),

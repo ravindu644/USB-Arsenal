@@ -545,3 +545,6 @@ Tick a box only when the item is merged and verified as described in its phase.
   unless `--udc` names it, and the app leaves it out of the Controller step. On the M55
   (SM7450, 5.10) the real `a600000.dwc3` leaves the list while the port is a USB host (dwc3
   removes its gadget on the role switch), so `check` and the commands now say so.
+- 2026-10-23: Check plays `usb-arsenal check` in a shell, as Root and Backend do, its report the
+  output (typed as one block, the marks as `[+]` and `[-]`); `check` prints CD-ROM and the HID
+  interval only with the function they need. The panel layout it replaces is gone.

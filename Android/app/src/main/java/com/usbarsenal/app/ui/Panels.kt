@@ -165,7 +165,7 @@ fun FileRow(name: String, size: String, lun: String?, selected: Boolean, onPick:
     ) { Inverted(selected || focused, body) }
 }
 
-// .panel: a 2dp box over an inverted 40dp .face, as Identity's profile and Check's panels draw it
+// .panel: a 2dp box over an inverted 40dp .face, as Identity's profile draws it
 @Composable
 fun Panel(face: @Composable RowScope.() -> Unit, body: @Composable () -> Unit) {
     val ink = LocalLcd.current.ink
