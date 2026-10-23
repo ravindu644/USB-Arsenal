@@ -1,5 +1,20 @@
 package com.usbarsenal.app.ui
 
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
+import androidx.compose.foundation.systemGestureExclusion
+import android.provider.Settings
+import android.view.Surface
+import android.content.pm.ActivityInfo
+import androidx.activity.compose.LocalActivity
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.size
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -198,6 +213,77 @@ fun KbdMouseScreen(back: () -> Unit) {
 
     // Speed or Natural scroll has focus: A works them, as it does a key
     var setupFocused by remember { mutableStateOf(false) }
+
+    // A phone held sideways: the Mouse tab cannot fit, so the whole screen scrolls instead, by the
+    // title, the tabs or a label (the pad and L M R keep their own gestures)
+    val window = LocalConfiguration.current
+    val short = window.screenHeightDp < 600
+    // Full screen: the pad and L M R alone, landscape, the system bars hidden. Only while HID runs
+    var full by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(on) { if (!on) full = false }
+    // Turning the phone sideways on the Mouse tab is asking for the wide pad. Only on the turn, so
+    // leaving full screen while still sideways stays left (the page then scrolls)
+    LaunchedEffect(short) { if (short && on && tab == 0) full = true }
+    // The keys in and out of full screen have focus: A presses them, as it does any key
+    var fullKeyFocused by remember { mutableStateOf(false) }
+    // L M R are drawn anew on the way in or out, and a button held then would never let go; the
+    // key that had focus is gone too
+    LaunchedEffect(full) {
+        fullKeyFocused = false
+        if (buttons != 0) {
+            buttons = 0
+            pointer()
+        }
+    }
+    BackHandler(enabled = full) { full = false }
+    val activity = LocalActivity.current
+    val view = LocalView.current
+    // The screen gives back the orientation it found when it leaves
+    DisposableEffect(activity) {
+        val was = activity?.requestedOrientation
+        onDispose { if (activity != null && was != null) activity.requestedOrientation = was }
+    }
+    DisposableEffect(full) {
+        val window = activity?.window
+        if (!full || activity == null || window == null) return@DisposableEffect onDispose {}
+        val bars = WindowCompat.getInsetsController(window, view)
+        val was = activity.requestedOrientation
+        // How it was held: portrait or landscape, and which way up
+        val portrait = activity.resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
+        val flipped = view.display?.rotation.let { it == Surface.ROTATION_180 || it == Surface.ROTATION_270 }
+        // An edge swipe shows the bars for a moment over the pad, then they hide again
+        bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        bars.hide(WindowInsetsCompat.Type.systemBars())
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        onDispose {
+            bars.show(WindowInsetsCompat.Type.systemBars())
+            // With auto-rotate off, the landscape request moved the locked rotation, and giving
+            // the request back would leave the phone sideways: ask for the way it was held instead
+            val autoRotate = Settings.System.getInt(activity.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1
+            activity.requestedOrientation = when {
+                autoRotate -> was
+                portrait && flipped -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
+                portrait -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                flipped -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+                else -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            }
+        }
+    }
+    val pad = @Composable { modifier: Modifier, onFull: (() -> Unit)? ->
+        Trackpad(
+            modifier,
+            HidSetup.speed,
+            HidSetup.natural,
+            onMove = { dx, dy -> pointer(dx, dy) },
+            onTap = {
+                button(MOUSE_LEFT, true)
+                button(MOUSE_LEFT, false)
+            },
+            onWheel = { pointer(wheel = it) },
+            onFull = onFull,
+            onFullFocus = { fullKeyFocused = it },
+        )
+    }
     Box(
         Modifier.fillMaxSize().onPreviewKeyEvent {
             // A and X click on the host; B stays Back
@@ -207,12 +293,33 @@ fun KbdMouseScreen(back: () -> Unit) {
                 else -> return@onPreviewKeyEvent false
             }
             // On Keys, A presses the focused key instead
-            if (!on || tab != 0 || setupFocused) return@onPreviewKeyEvent false
+            if (!on || tab != 0 || setupFocused || fullKeyFocused) return@onPreviewKeyEvent false
             button(bit, it.type == KeyEventType.KeyDown)
             true
         },
     ) {
-        Screen(scroll = false) {
+        if (full) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .background(LocalLcd.current.ground)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(Lcd.gutter),
+                verticalArrangement = Arrangement.spacedBy(Lcd.tight),
+            ) {
+                // A drag from the side edges is the pad's, not the system's Back gesture
+                pad(Modifier.weight(1f).systemGestureExclusion(), null)
+                Row(horizontalArrangement = Arrangement.spacedBy(Lcd.tight), verticalAlignment = Alignment.CenterVertically) {
+                    Key(
+                        "Leave full screen",
+                        Modifier.width(56.dp).onFocusChanged { fullKeyFocused = it.isFocused },
+                        icon = Sprites.Collapse,
+                        padding = 0.dp,
+                    ) { full = false }
+                    Box(Modifier.weight(1f)) { MouseButtons { bit, down -> button(bit, down) } }
+                }
+            }
+        } else Screen(scroll = tab == 0 && short) {
             Top { BackKey() }
             Title("Keys + mouse")
             Segs(listOf("Mouse", "Keys"), tab, { tab = it })
@@ -221,19 +328,13 @@ fun KbdMouseScreen(back: () -> Unit) {
                     // The pad takes what L M R, the rule, Speed and Natural scroll leave, up to the
                     // Keys tab's height above its box; a short screen (landscape) gets the floor
                     val below = Lcd.touch + Lcd.pixel * 4 + Lcd.pixel + Lcd.touch * 2 + Lcd.section * 4
-                    val pad = KEYS_ABOVE_BOX.coerceAtMost(maxHeight - below).coerceAtLeast(120.dp)
+                    val padHeight = if (maxHeight == Dp.Infinity) {
+                        (window.screenHeightDp / 2).dp.coerceIn(120.dp, KEYS_ABOVE_BOX)
+                    } else {
+                        KEYS_ABOVE_BOX.coerceAtMost(maxHeight - below).coerceAtLeast(120.dp)
+                    }
                     Column(verticalArrangement = Arrangement.spacedBy(Lcd.section)) {
-                        Trackpad(
-                            pad,
-                            HidSetup.speed,
-                            HidSetup.natural,
-                            onMove = { dx, dy -> pointer(dx, dy) },
-                            onTap = {
-                                button(MOUSE_LEFT, true)
-                                button(MOUSE_LEFT, false)
-                            },
-                            onWheel = { pointer(wheel = it) },
-                        )
+                        pad(Modifier.height(padHeight), if (on) ({ full = true }) else null)
                         MouseButtons { bit, down -> button(bit, down) }
                         Rule()
                         Column(
@@ -260,7 +361,17 @@ fun KbdMouseScreen(back: () -> Unit) {
  * as DESIGN.md's haptics table says, so a drag is felt without buzzing.
  */
 @Composable
-private fun Trackpad(height: Dp, speed: Int, natural: Boolean, onMove: (Int, Int) -> Unit, onTap: () -> Unit, onWheel: (Int) -> Unit) {
+private fun Trackpad(
+    modifier: Modifier,
+    speed: Int,
+    natural: Boolean,
+    onMove: (Int, Int) -> Unit,
+    onTap: () -> Unit,
+    onWheel: (Int) -> Unit,
+    // Set: the key into full screen, in the pad's top-left corner
+    onFull: (() -> Unit)?,
+    onFullFocus: (Boolean) -> Unit = {},
+) {
     // The gestures outlive a recomposition; they must reach the writer, and use the setup, as it is now
     val quarters by rememberUpdatedState(speed)
     val follow by rememberUpdatedState(natural)
@@ -273,7 +384,7 @@ private fun Trackpad(height: Dp, speed: Int, natural: Boolean, onMove: (Int, Int
     val tickPx = with(density) { 8.dp.toPx() }
     val stepPx = with(density) { 16.dp.toPx() }
     var at by remember { mutableStateOf<Offset?>(null) }
-    Row(Modifier.fillMaxWidth().height(height).border(Lcd.pixel, ink)) {
+    Row(modifier.fillMaxWidth().border(Lcd.pixel, ink)) {
         Box(
             Modifier
                 .weight(1f)
@@ -308,6 +419,15 @@ private fun Trackpad(height: Dp, speed: Int, natural: Boolean, onMove: (Int, Int
                 SpriteIcon(
                     Sprites.Pointer, 2.dp,
                     Modifier.offset { IntOffset(p.x.roundToInt(), p.y.roundToInt()) }.background(LocalLcd.current.ground).padding(2.dp),
+                )
+            }
+            if (onFull != null) {
+                Key(
+                    "Full screen",
+                    Modifier.padding(6.dp).size(Lcd.touch).onFocusChanged { onFullFocus(it.isFocused) },
+                    icon = Sprites.Expand,
+                    padding = 0.dp,
+                    onClick = onFull,
                 )
             }
         }

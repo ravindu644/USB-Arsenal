@@ -168,6 +168,8 @@ body{margin:0}
 /* The trackpad: a .d25 panel with a 44px wheel strip on its right */
 .pad{position:relative;box-sizing:border-box;border:2px solid var(--ink);overflow:hidden}
 .pad .wheel{position:absolute;top:0;right:0;bottom:0;width:44px;border-left:2px solid var(--ink);display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:6px 0;box-sizing:border-box;background:var(--lcd)}
+/* The key into full screen, in the pad's top-left corner */
+.pad .full{position:absolute;left:6px;top:6px;width:44px;padding:0}
 .choice{display:flex;align-items:center;min-height:48px;padding:6px 10px;margin:0 -10px}
 .choice.on{background:var(--ink);color:var(--lcd)}
 .sheet{position:absolute;left:0;right:0;bottom:0;z-index:6;display:flex;flex-direction:column;gap:16px;padding:20px 20px 68px;background:var(--lcd);border-top:2px solid var(--ink);box-sizing:border-box;max-height:100%}

@@ -495,6 +495,22 @@ long as it is held. No report bytes are shown. Under L/M/R a rule, then `Speed` 
 DIP, on by default: the wheel strip moves content with the finger). On Keys + mouse the pad
 takes the height those leave, never more than the Keys tab's height above the `TYPE` box.
 
+While HID runs, a 44px key with the expand glyph sits in the pad's top-left corner. It makes
+the pad full screen: landscape, the system bars hidden, MOUSE | KEYS, the title, Speed and
+Natural scroll gone. The pad fills the window inside a 20px gutter, and under it a row holds
+the collapse key and L/M/R. The collapse key or Back leaves; HID stopping leaves too. An edge
+swipe shows the bars for a moment over the pad, and the pad claims its side edges from the
+system's Back gesture. Turning the phone sideways on the Mouse tab while HID runs enters full
+screen by itself; left while still sideways (a window under 600px tall), the Mouse tab
+scrolls as a whole, so nothing is squeezed, and the pad takes half the window.
+- **Platform:** `WindowInsetsControllerCompat` (androidx.core; API 30's `WindowInsetsController`,
+  the old system UI flags on API 26 to 29) hides `systemBars()` with
+  `BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`. The activity asks for
+  `SCREEN_ORIENTATION_SENSOR_LANDSCAPE` (API 9) and handles the rotation itself. With
+  auto-rotate off, that request moves the locked rotation, so leaving asks for the
+  orientation the phone was held in rather than giving the request back, and the screen gives
+  its original request back when it closes.
+
 ### Card (`.card`)
 A big way into a screen, in the drive panel's look: an inverted 40px face with the name and
 `>`, over a body with a 4x sprite and one VT323 line. The whole card is one key. Focused or
