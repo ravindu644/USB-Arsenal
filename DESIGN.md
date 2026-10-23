@@ -563,7 +563,18 @@ working or serving, and is hollow when there is nothing.
 
 ### Fact rows (`.kv.fact`) and group headings (`.grp`)
 A fact that cannot be tapped is 32px tall, not 44, so long lists like Check fit. A Silkscreen
-bold heading groups them (`MUST HAVE`, `FUNCTIONS`, `BACKEND`, `ABOUT`).
+bold heading groups them (`BACKEND`, `ABOUT`).
+
+### Check
+A device panel per function, `Lcd.section` apart: `MUST HAVE` (Root, configfs, Controller with
+the UDC's name, Gadget), `STORAGE` (Drives, CD-ROM), `TETHER` (NCM, RNDIS, NAT, NAT6) and `HID`
+(Keyboard and mouse, Interval). The face says the verdict: `ok`, `partial` (the function works,
+a line in it does not) or `missing`. A line that is not ok carries its tag (`missing`, `caveat`),
+what it costs, and `needs` the kernel option (`CONFIG_USB_CONFIGFS_NCM`), from check's own
+hints. A probe that needs another goes with it: a panel whose function is missing drops its
+lines for what that costs and its option (no CD-ROM without mass storage). The interval is our
+f_hid patch's, so a fixed one leaves HID `ok` and says what the patch gives. A must have line
+missing leaves only that panel, a warning above it and one line saying the rest needs it first.
 
 
 ### Rule (`.rule`)
@@ -672,7 +683,7 @@ Interaction motion:
 | Fault line | 1 | Appears with the error shake |
 | Tray | 6 (3 steps) | The drive tray slides out over the body on eject, and back in when a file is loaded, in 3 steps of 2 frames |
 | Shell session | 1 per step | A prompt appears at once and the cursor holds on it for a beat (7 frames, 280ms), then the command types at typing speed. Enter: the output types 4 characters a frame with a beat between its lines, and the next prompt comes the moment it ends. The work behind a command starts the moment it has typed. The keys appear one beat after the idle prompt |
-| Check answers | 4 per row | Check's cursors hold for at least one beat, then its rows resolve top to bottom, one every 4 frames. A probe that answers in 30ms would otherwise only flash. With reduced motion they all answer at once |
+| Check answers | 4 per row | Check's cursors hold for at least one beat, then its rows resolve top to bottom, one every 4 frames (a panel with only its note is one row); a panel's verdict comes with its last row. A probe that answers in 30ms would otherwise only flash. With reduced motion they all answer at once |
 
 Ambient loops:
 

@@ -59,7 +59,6 @@ import com.usbarsenal.app.BuildConfig
 import com.usbarsenal.app.backend.Backend
 import com.usbarsenal.app.backend.BackendState
 import com.usbarsenal.app.backend.Capabilities
-import com.usbarsenal.app.backend.Probe
 import com.usbarsenal.app.backend.RootInfo
 import com.usbarsenal.app.backend.deviceArch
 import com.usbarsenal.app.backend.installBackend
@@ -355,45 +354,6 @@ private fun RootScreen(back: () -> Unit, next: () -> Unit) {
 @Composable
 private fun NoRoot(light: Boolean = false) = Shade("Grant root, then\nreopen the app", light) { SpriteIcon(Sprites.PinSad, 3.dp) }
 
-/*
- * check --json's probes as Check.dc.html words them. A note says what a missing probe costs;
- * where check.c has more than one reason for a 0 or a -1, the note follows the same reason.
- */
-private class ProbeRow(
-    val label: String,
-    val of: (Capabilities) -> Probe,
-    val value: (Capabilities) -> String = { "ok" },
-    val note: (Capabilities, Probe) -> String,
-)
-
-private fun row(label: String, note: String, of: (Capabilities) -> Probe) = ProbeRow(label, of) { _, _ -> note }
-
-private val mustHave = listOf(
-    row("Root", "nothing works") { it.root },
-    row("configfs", "this kernel has no configfs usb gadget; it needs a custom kernel") { it.configfs },
-    // A 0 is no controller in /sys/class/udc, or the pick gone from it: a dual-role port in host mode lists none
-    ProbeRow("Controller", { it.udc }, { it.udcName }) { _, _ ->
-        "${Controller.picked?.let { "$it is not" } ?: "no usb device controller is"} listed now; the port may be in host mode (otg)"
-    },
-    ProbeRow("Gadget", { it.gadget }) { c, _ ->
-        if (c.root == Probe.OK && c.configfs == Probe.OK && c.udc == Probe.OK) "could not create a gadget"
-        else "needs the lines above first"
-    },
-)
-
-private val functions = listOf(
-    row("Storage", "no storage") { it.massStorage },
-    row("CD-ROM", "plain isos such as windows cannot boot as a cd-rom") { it.cdrom },
-    row("HID", "no keyboard and mouse") { it.hid },
-    // -1 is the Samsung kernel NCM would crash; 0 is a kernel without f_ncm. Tether falls back either way
-    ProbeRow("NCM", { it.ncm }) { _, p ->
-        if (p == Probe.CAVEAT) "unsafe on this samsung kernel; tether uses rndis" else "no ncm in this kernel; tether uses rndis"
-    },
-    row("RNDIS", "no tether on old windows hosts") { it.rndis },
-    row("NAT", "the host gets no internet through the phone") { it.nat },
-    row("NAT6", "the host gets ipv4 only") { it.nat6 },
-)
-
 // The bundled binary checks the kernel before anything is installed
 @Composable
 private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
@@ -414,7 +374,7 @@ private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
             bin?.let { readCheck(it.absolutePath) }
                 ?: Result.failure(IllegalStateException("no usb-arsenal binary for ${Build.SUPPORTED_ABIS.firstOrNull()}"))
         }
-        val rows = r.getOrNull()?.let { if (it.requirementsMet) mustHave.size + functions.size else mustHave.size } ?: 0
+        val rows = r.getOrNull()?.let { c -> checkPanels(c, Controller.picked).sumOf { it.steps } } ?: 0
         Setup.check = r
         r.getOrNull()?.let { Gadget.caps = it }
         // With reduced motion they all answer at once, as the shells type at once
@@ -460,33 +420,34 @@ private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
         if (settled) result.exceptionOrNull()?.let { Warn(it.message ?: "check failed") }
         if (blocked) Warn("usb arsenal cannot run on this kernel")
         // Nothing in the list takes focus, so on a short window the list itself does, to scroll it
-        Column(Modifier.keyScroll(body, LocalLcd.current.ink, enabled = body.maxValue in 1 until Int.MAX_VALUE)) {
-            if (result == null || caps != null) {
-                Group("Must have")
-                mustHave.forEachIndexed { i, row -> ProbeLine(row, caps.takeIf { i < shown }) }
-                Group("Functions")
-                if (blocked) {
-                    Note("skipped: needs every must have line first")
-                } else {
-                    functions.forEachIndexed { i, row -> ProbeLine(row, caps.takeIf { mustHave.size + i < shown }) }
+        Column(
+            Modifier.keyScroll(body, LocalLcd.current.ink, enabled = body.maxValue in 1 until Int.MAX_VALUE),
+            verticalArrangement = Arrangement.spacedBy(Lcd.section),
+        ) {
+            val panels = remember(caps, Controller.picked) { caps?.let { checkPanels(it, Controller.picked) } }
+            when {
+                result != null && caps == null -> {}
+                // Checking: every panel and row there is, each with its cursor
+                panels == null -> CHECK_SKELETON.forEach { p -> CheckPanel(p.label, null) { p.lines.forEach { Kv(it.label, fact = true) { Cursor() } } } }
+                else -> {
+                    // A panel answers row by row; its verdict comes with its last one
+                    var start = 0
+                    panels.forEachIndexed { i, p ->
+                        val first = start
+                        start += p.steps
+                        CheckPanel(p.label, p.verdict.takeIf { start <= shown }) {
+                            when {
+                                first >= shown -> CHECK_SKELETON[i].lines.forEach { Kv(it.label, fact = true) { Cursor() } }
+                                p.lines.isEmpty() -> CheckWhy(p.why, p.option)
+                                else -> p.lines.forEachIndexed { k, line -> CheckLine(line, first + k < shown) }
+                            }
+                        }
+                    }
+                    if (blocked) Note("skipped: storage, tether and hid need every must have line first")
                 }
             }
         }
     }
-}
-
-@Composable
-private fun ProbeLine(row: ProbeRow, caps: Capabilities?) {
-    val probe = caps?.let(row.of)
-    Kv(row.label, fact = true) {
-        when (probe) {
-            null -> Cursor()
-            Probe.OK -> Text(row.value(caps), LcdType.data)
-            Probe.CAVEAT -> Tag("caveat")
-            Probe.MISSING -> Tag("missing")
-        }
-    }
-    if (probe != null && probe != Probe.OK) Note(row.note(caps, probe))
 }
 
 // What the install looks like from the shell; the app runs the installer itself (backend/Installer.kt)

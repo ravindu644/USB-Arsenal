@@ -125,7 +125,8 @@ body{margin:0}
 .kv.fact{min-height:32px}
 .grp{padding-top:4px;font-weight:700}
 
-/* A device panel: the drive, the su probe. Inverted face with a LED, body below */
+/* A device panel: the drive, Identity's profile, Check's functions. Inverted face (a LED, or
+ * Check's verdict on the right), body below */
 .panel{position:relative;border:2px solid var(--ink);overflow:hidden}
 .face{display:flex;align-items:center;gap:10px;height:40px;padding:0 4px 0 12px;background:var(--ink);color:var(--lcd)}
 .led{width:8px;height:8px;box-sizing:border-box;border:2px solid var(--lcd)}
