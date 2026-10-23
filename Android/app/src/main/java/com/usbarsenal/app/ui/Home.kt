@@ -91,6 +91,7 @@ fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     val port = when {
+        busy?.stopping == true -> Port.Stopping("usb-arsenal ${busy.typed}")
         busy != null -> Port.Replugging("usb-arsenal ${busy.typed}")
         status?.bound == true -> Port.Bound(status.udc)
         else -> Port.Android
@@ -100,7 +101,8 @@ fun HomeScreen(open: (Fn) -> (() -> Unit)?, openLog: (() -> Unit)?, openSettings
     val barShake = rememberShake()
     val wholeFault = Gadget.fault?.takeIf { it.where == null }
     LaunchedEffect(wholeFault) { if (wholeFault != null) barShake.fire() }
-    Screen(bottomBar = { BottomBar(port, { Gadget.run(null, "stop") { if (it) Gadget.forgetStart() } }, Modifier.shake(barShake)) }) {
+    val stopAll = { Gadget.run(null, "stop") { if (it) Gadget.forgetStart() } }
+    Screen(bottomBar = { BottomBar(port, { stopAll() }, Modifier.shake(barShake), Gadget.binds, Gadget.fails) }) {
         Top {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Pin(2.dp)

@@ -93,11 +93,11 @@ internal fun KitRows() = Column(Modifier.bleed(10.dp), verticalArrangement = Arr
     FunctionRow(Sprites.Hid, "HID", "no hid in this kernel", "CONFIG_USB_CONFIGFS_F_HID", false, {}, {}, available = false)
 }
 
-// D5: the bottom bar's three states, switched from here
+// D5: the bottom bar's four states, switched from here
 @Composable
 internal fun KitPort(port: Port, onPort: (Port) -> Unit) {
-    val states = listOf(Port.Bound("11201000.usb0"), Port.Replugging("usb-arsenal storage start"), Port.Android)
-    Segs(listOf("bound", "replug", "android"), states.indexOfFirst { it::class == port::class }, { onPort(states[it]) })
+    val states = listOf(Port.Bound("11201000.usb0"), Port.Replugging("usb-arsenal storage start"), Port.Stopping("usb-arsenal stop"), Port.Android)
+    Segs(listOf("bound", "replug", "stop", "android"), states.indexOfFirst { it::class == port::class }, { onPort(states[it]) })
 }
 
 // D6: a drive serving a file read-write, the warning that goes with rw, and the files list. The folder is shown, never opened here

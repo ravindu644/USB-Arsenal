@@ -68,8 +68,12 @@ object Gadget {
     var profile by mutableStateOf<Map<String, String>>(emptyMap())
     var busy by mutableStateOf<Busy?>(null)
 
-    // How many times the port went from Android to the gadget: each one plays the bind moment
+    // How many times the port went from Android to the gadget: each one plugs Pin in with a thud
     var binds by mutableIntStateOf(0)
+        private set
+
+    // How many commands failed: each one runs Pin into the port's edge
+    var fails by mutableIntStateOf(0)
         private set
 
     // Bound or not as last seen with no command running; null until the first read, so a launch
@@ -167,6 +171,7 @@ object Gadget {
                     else -> r.err.lastOrNull()?.let(::plain) ?: "[-] Failed (exit ${r.code})"
                 }
                 fault = Fault(fn, why)
+                fails++
             }
             refresh()
             val stopping = busy?.stopping == true

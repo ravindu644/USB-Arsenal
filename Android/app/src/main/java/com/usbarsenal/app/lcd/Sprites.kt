@@ -79,6 +79,10 @@ object Sprites {
     val Pin = Sprite(pinTop + listOf("...#.##..##.#...", "...#.##..##.#...", "...#........#...") + pinBody)
     val PinBlink = Sprite(pinTop + listOf("...#........#...", "...#.##..##.#...", "...#........#...") + pinBody)
 
+    // Plugged in (^ ^) and after running into the port (x x), in the bottom bar
+    val PinHappy = Sprite(pinTop + listOf("...#.#....#.#...", "...##.#..#.##...", "...#........#...") + pinBody)
+    val PinDizzy = Sprite(pinTop + listOf("...##.#..#.##...", "...#.#....#.#...", "...##.#..#.##...") + pinBody)
+
     val Storage = Sprite(
         listOf(
             ".....######.....",

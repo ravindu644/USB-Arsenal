@@ -418,10 +418,21 @@ its value. It lives on Keys + mouse (`Speed`).
 `0`, `1`, ..., then `+`. Left-aligned, 40px cells, `+` hidden at eight LUNs.
 
 ### Bottom bar (`.strip`)
-Home only, flush to the screen edges, divided from the content by a 2px rule.
-- **Bound:** Pin, `BOUND`, the UDC name (`a600000.dwc3`), then `STOP ALL` full width below.
-- **Replugging:** inverted, Pin blinking, `REPLUGGING` with the cursor, the command running.
-- **Port with Android:** Pin, `PORT WITH ANDROID`. No key; flipping any switch binds again.
+Home only, flush to the screen edges, divided from the content by a 2px rule. One height in
+every state, so nothing above it moves: a 72px stage, then a row with the state, one detail
+line and a 140px `STOP ALL`, dashed (disabled) whenever there is nothing to stop. On the stage
+the host's port hangs from the top, a dotted floor runs along the bottom, and Pin acts out
+what the port is really doing:
+- **Port with Android:** Pin dozes at home on the left, a `z` rising. No detail line.
+- **Replugging:** inverted, `REPLUGGING` with the cursor and the command. Pin walks to the port,
+  hopping, and hops under it until the command ends; from bound he pops out first.
+- **Bound:** `BOUND`, the UDC name (`a600000.dwc3`), `STOP ALL` live. Pin is plugged in the
+  moment the gadget is bound, wherever he had got to, `^ ^` eyes, sparks now and then.
+- **Stopping:** inverted, `STOPPING` with the cursor and the command. Pin tugs at the plug; when
+  the port is Android's again he pops out and walks home.
+- **Failed:** after a command fails, for 2.4s or until the next command: `FAILED` (the fault
+  itself is the fault line, under its row or above the bar), Pin runs into the port's edge,
+  `x x` eyes and a star beside him. `STOP ALL` stays live if the gadget is still bound.
 
 ### Drive (`.drive`)
 150px box with an inverted 40px face: activity LED, `LUN0`, eject glyph. Its body shows the
@@ -573,8 +584,8 @@ Ten cells in a 2px box, filled in whole tenths, with the amount in VT323 below
 (`1.6G of 4.0G`) and the cursor while it runs. Only for work long enough to wait on.
 
 ### Pin's places
-Home top bar (32×36, blinking), the bottom bar, Welcome and the empty storage screen
-(128×144), the bind animation, the splash, the app icon.
+Home top bar (32×36, blinking), the bottom bar's stage, Welcome and the empty storage screen
+(128×144), the splash, the app icon.
 
 ### Splash
 Android's splash screen: the `lcd` ground and Pin at 6× (96×108dp), centred in the 288dp icon so
@@ -605,7 +616,8 @@ Interaction motion:
 | Rows typing on | 1 per row | On first entry to a list, rows appear one per frame, six at most, then the rest at once |
 | Error shake | 3 | 2px left, 2px right, home. Paired with the `Reject` haptic |
 | Number change | 1 | Digits flip to the new value. No counting up |
-| Bottom bar state | 2 | Bound, replugging and port with Android cut over in two bands |
+| Bottom bar state | 2 | The row's state, detail and key cut over in two bands. The stage never cuts, so Pin's moves run on |
+| Pin in the bottom bar | 4 per step | Pin walks 20px a step with a 6px hop on every other one, plugs in or pops out in one frame, hops 8px or tugs 4px every 5 frames, and runs into the port's edge in three cuts. With reduced motion he is put where each state leaves him |
 | Sheet | 4 | Rises from the bottom; its scrim appears on the first frame. Back plays it in reverse |
 | Fault line | 1 | Appears with the error shake |
 | Tray | 6 (3 steps) | The drive tray slides out over the body on eject, and back in when a file is loaded, in 3 steps of 2 frames |
@@ -621,7 +633,8 @@ Ambient loops:
 | Marquee | 8s, `steps(32)`, alternate | Text that does not fit its line (`.st`). Text that fits stays still |
 | Packets | 1.2s, `steps(4)` | Tether wires |
 | Activity LED | 1.2s blink pattern | The drive face while serving |
-| Bind | 4.5s, once | The Bind board's 5s loop played once: Pin climbs into the host port in four cuts, plugs in with sparks, one inverted flash frame, then `GADGET BOUND` and the bound functions hold 1s and it cuts back. A touch or Back ends it early; reduced motion shows the plugged frame for 1s |
+| Doze | 1.8s, `steps(3)` | The `z` beside Pin in the bottom bar while Android holds the port |
+| Sparks | 2.6s, on for the first 320ms | Either side of the port while Pin is plugged in |
 
 Rules:
 - Only stepped timing. Animate position, visibility and inversion; never opacity ramps,
@@ -634,8 +647,8 @@ Rules:
   `Settings.Global.ANIMATOR_DURATION_SCALE` and watches it with a `ContentObserver`, which
   works on every API level (`ValueAnimator.registerDurationScaleChangeListener` is API 33).
 - The marquee is the only motion applied to text.
-- One playful moment at a time. The bind animation plays each time the port goes from Android
-  to the gadget, over whatever screen started it, never on a replug.
+- The playful moments live in the bottom bar, tied to what the port really does, and never
+  cover the screen.
 
 ## Haptics
 
@@ -663,7 +676,7 @@ the rich ones go through the tiers below.
 | DIP switch on / off | `ToggleOn` / `ToggleOff` |
 | Segment change, LUN switch, slider step, D-pad or keyboard focus move | `SegmentTick` |
 | Trackpad drag | `SegmentFrequentTick`, at most one per 8px of travel |
-| Gadget bound (the bind animation) | Rich: three rising ticks as Pin climbs, a thud on the frame it plugs in |
+| Gadget bound (the port left Android) | Rich: a thud on that frame, from whatever screen started it; on Home it is the frame Pin plugs in. A replug ending is a `SegmentTick` |
 | Stop all, eject | `GestureEnd` |
 | Command refused or failed | `Reject`, with the error shake |
 | Save, image created, install finished | `Confirm` |
@@ -674,9 +687,9 @@ Device tiers for the rich effects, chosen once at start-up and cached:
 
 | Tier | When | How |
 | --- | --- | --- |
-| T1, flagship | API 36 and later, `Vibrator.areEnvelopeEffectsSupported()` and `PRIMITIVE_TICK` supported | The climb ticks as in T2. The thud is a `VibrationEffect.BasicEnvelopeBuilder` (API 36): low sharpness, up in 20ms, down in 60ms. An envelope starts and ends at zero intensity, with control points at least 20ms apart |
-| T2 | API 30 and later and `Vibrator.areAllPrimitivesSupported(...)` is true for every primitive used | `VibrationEffect.Composition`: `PRIMITIVE_TICK` (API 30) at scales 0.4, 0.6, 0.8, then `PRIMITIVE_THUD` (API 31; `PRIMITIVE_CLICK` at 1.0 where it is missing). One unsupported primitive silences the whole composition, so check first |
-| T3 | API 29 and later | Predefined effects: `EFFECT_TICK` for the climb, `EFFECT_HEAVY_CLICK` for the thud |
+| T1, flagship | API 36 and later, `Vibrator.areEnvelopeEffectsSupported()` and `PRIMITIVE_TICK` supported | The thud is a `VibrationEffect.BasicEnvelopeBuilder` (API 36): low sharpness, up in 20ms, down in 60ms. An envelope starts and ends at zero intensity, with control points at least 20ms apart |
+| T2 | API 30 and later and `Vibrator.areAllPrimitivesSupported(...)` is true for every primitive used | `VibrationEffect.Composition`: `PRIMITIVE_THUD` (API 31; `PRIMITIVE_CLICK` at 1.0 where it is missing). One unsupported primitive silences the whole composition, so check first |
+| T3 | API 29 and later | Predefined effects: `EFFECT_HEAVY_CLICK` for the thud |
 | T4 | Anything else | `View.performHapticFeedback` with `CONFIRM` (API 30) or `CONTEXT_CLICK` |
 
 - Amplitude scales only mean something when `Vibrator.hasAmplitudeControl()` is true; without

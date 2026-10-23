@@ -630,65 +630,214 @@ sealed interface Port {
     // [command] is what is running, as typed
     data class Replugging(val command: String) : Port
 
+    data class Stopping(val command: String) : Port
 
     data object Android : Port
 }
 
+// What the bar's row says for a while after a command fails; the fault itself is the fault line
+private data object Failed
+
 /*
  * .strip: Home's bottom bar, flush to the screen edges under a 2dp rule, its ground reaching
- * under the navigation bar. A new state cuts in over two bands.
+ * under the navigation bar. One height in every state, so nothing above it moves: Pin's stage,
+ * then a row with what holds the port and Stop all, dashed while there is nothing to stop. A
+ * new state cuts the row in over two bands; the stage never cuts, so Pin's moves run on.
+ * [binds] counts the times the port left Android (the app thuds for those, so a replug ending
+ * here only ticks); [failed] counts failed commands, each one running Pin into the port's edge
+ * while the row says Failed, for 2.4s or until the next command starts.
  */
 @Composable
-fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier = Modifier) = Redraw(
-    port,
-    back = false,
-    modifier = modifier.fillMaxWidth(),
-    frames = 2,
-    // A shorter state paints over the bottom of the old one, where it will sit, not over its top
-    contentAlignment = Alignment.BottomStart,
-) { shown ->
+fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier = Modifier, binds: Int = 0, failed: Int = 0) {
+    // A failure from before the bar was drawn (Home opened again) is not played
+    var seenFails by remember { mutableIntStateOf(failed) }
+    var bonking by remember { mutableStateOf(false) }
+    LaunchedEffect(failed) {
+        if (failed <= seenFails) return@LaunchedEffect
+        seenFails = failed
+        bonking = true
+        delay(BONK_MS)
+        bonking = false
+    }
+    val busy = port is Port.Replugging || port is Port.Stopping
+    val failing = bonking && !busy
+    val row: Any = if (failing) Failed else port
     val rule = LocalLcd.current.ink
-    val body = @Composable {
+    Inverted(busy) {
         Column(
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .background(LocalLcd.current.ground)
                 .drawBehind { drawRect(rule, size = Size(size.width, Lcd.pixel.toPx())) }
                 // Its content keeps clear of the navigation bar and a landscape cutout; its rule does not
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
                 .padding(start = Lcd.gutter, end = Lcd.gutter, top = 14.dp, bottom = Lcd.gutter),
-            verticalArrangement = Arrangement.spacedBy(Lcd.section),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
-                Modifier.heightIn(min = Lcd.touch),
-                horizontalArrangement = Arrangement.spacedBy(Lcd.tight),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                when (shown) {
-                    is Port.Bound -> {
-                        SpriteIcon(Sprites.Pin, 2.dp)
-                        Column(verticalArrangement = Arrangement.spacedBy(Lcd.lines)) {
-                            Text("Bound", LcdType.labelStrong)
-                            Text(shown.udc, LcdType.data)
-                        }
+            PinStage(port, failing, binds)
+            Redraw(row, back = false, modifier = Modifier.fillMaxWidth(), frames = 2) { shown ->
+                val (word, detail) = when (shown) {
+                    is Port.Bound -> "Bound" to shown.udc
+                    is Port.Replugging -> "Replugging" to shown.command
+                    is Port.Stopping -> "Stopping" to shown.command
+                    Failed -> "Failed" to ""
+                    else -> "Port with Android" to ""
+                }
+                Row(
+                    Modifier.fillMaxWidth().height(Lcd.touch + 4.dp).background(LocalLcd.current.ground),
+                    horizontalArrangement = Arrangement.spacedBy(Lcd.tight),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Lcd.lines)) {
+                        Text(word, LcdType.labelStrong, cursor = shown is Port.Replugging || shown is Port.Stopping)
+                        // Always there, empty with Android, so the row never changes height
+                        Marquee(detail, LcdType.data, Modifier.fillMaxWidth())
                     }
-                    is Port.Replugging -> {
-                        Pin(2.dp)
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Lcd.lines)) {
-                            Text("Replugging", LcdType.labelStrong, cursor = true)
-                            Marquee(shown.command, LcdType.data, Modifier.fillMaxWidth())
-                        }
-                    }
-                    Port.Android -> {
-                        SpriteIcon(Sprites.PinBlink, 2.dp)
-                        Text("Port with Android", LcdType.labelStrong)
-                    }
+                    // Live whenever the gadget really is bound, Failed showing or not
+                    Key("Stop all", Modifier.width(140.dp), enabled = port is Port.Bound, haptic = { gestureEnd() }, onClick = onStopAll)
                 }
             }
-            if (shown is Port.Bound) Key("Stop all", Modifier.fillMaxWidth(), haptic = { gestureEnd() }, onClick = onStopAll)
         }
     }
-    Inverted(shown is Port.Replugging, body)
+}
+
+// One failure's run at the port, as the bar's row says Failed
+private const val BONK_MS = 2400L
+
+/*
+ * Pin acts out the port on a 72dp stage under the host's port: he dozes at home while Android
+ * holds it, walks over and hops under it while a command runs, plugs in the moment the gadget
+ * is bound (a thud when the port left Android, a tick when a replug ends), tugs while a stop
+ * runs and pops out and walks home after it, and on a failure runs into the port's edge and
+ * sees stars. Every move is a cut on the frame clock; with reduced motion he is put straight
+ * where each state leaves him.
+ */
+@Composable
+private fun PinStage(port: Port, bonking: Boolean, binds: Int) {
+    val reduced = LocalReducedMotion.current
+    val haptics = LocalHaptics.current
+    val ink = LocalLcd.current.ink
+    val ground = LocalLcd.current.ground
+    BoxWithConstraints(Modifier.fillMaxWidth().height(72.dp)) {
+        val home = 4.dp
+        val mid = maxWidth / 2
+        // Under the port, so a plug-in is straight up
+        val dock = mid - 16.dp
+        var x by remember { mutableStateOf(if (port is Port.Android) home else dock) }
+        var lift by remember { mutableStateOf(0.dp) }
+        var plugged by remember { mutableStateOf(port is Port.Bound) }
+        var dozing by remember { mutableStateOf(port is Port.Android) }
+        var dizzy by remember { mutableStateOf(false) }
+        var seenBinds by remember { mutableIntStateOf(binds) }
+        val pace = 4L * FRAME_MS
+        // A failure is its own state, so the port settling under it does not restart the run
+        LaunchedEffect(if (bonking) Failed else port::class, dock) {
+            if (!bonking) dizzy = false
+            // 20dp a step, every 4 frames, hopping on every other one
+            suspend fun walk(to: Dp) {
+                dozing = false
+                if (reduced) {
+                    x = to
+                    return
+                }
+                var step = 0
+                while (x != to) {
+                    val d = (to - x).value
+                    x = if (kotlin.math.abs(d) <= 20f) to else x + (if (d > 0) 20.dp else (-20).dp)
+                    lift = if (step++ % 2 == 0) 6.dp else 0.dp
+                    delay(pace)
+                }
+                lift = 0.dp
+            }
+            suspend fun popOut() {
+                if (!plugged) return
+                plugged = false
+                lift = 0.dp
+                if (!reduced) delay(pace)
+            }
+            // Up and down on the spot until the state changes: hopping, or tugging at the plug
+            suspend fun bob(height: Dp) {
+                if (reduced) return
+                while (true) {
+                    lift = height
+                    delay(FRAME_MS * 5L)
+                    lift = 0.dp
+                    delay(FRAME_MS * 5L)
+                }
+            }
+            when {
+                // Dizzy until the bar's timer ends the failure, which restarts this as the real state
+                bonking -> {
+                    popOut()
+                    walk(mid - 52.dp)
+                    if (!reduced) {
+                        lift = 20.dp; delay(pace)
+                        lift = 14.dp; delay(pace)
+                        lift = 0.dp
+                    }
+                    dizzy = true
+                }
+                port is Port.Bound -> {
+                    if (!plugged) {
+                        // The moment the gadget is bound, wherever he got to
+                        dozing = false
+                        x = dock
+                        lift = 0.dp
+                        plugged = true
+                        // A real bind already thudded, from the app; a replug ending ticks
+                        if (binds <= seenBinds) haptics.tick()
+                    }
+                    seenBinds = binds
+                }
+                port is Port.Replugging -> {
+                    popOut()
+                    walk(dock)
+                    bob(8.dp)
+                }
+                port is Port.Stopping -> if (plugged) bob((-4).dp) else {
+                    walk(dock)
+                    bob(8.dp)
+                }
+                else -> {
+                    popOut()
+                    walk(home)
+                    dozing = true
+                }
+            }
+        }
+        val sprite = when {
+            dizzy -> Sprites.PinDizzy
+            plugged -> Sprites.PinHappy
+            dozing -> Sprites.PinBlink
+            else -> Sprites.Pin
+        }
+        SpriteIcon(sprite, Lcd.pixel, Modifier.offset(x, (if (plugged) 10.dp else 34.dp) - lift))
+        // The host's port, its slot filled once he is in it
+        Box(Modifier.offset(mid - 20.dp, 0.dp).size(40.dp, 16.dp).background(ink)) {
+            Box(Modifier.offset(6.dp, 5.dp).size(28.dp, 6.dp).background(if (plugged) ink else ground))
+        }
+        // The floor he walks on, dotted
+        Box(
+            Modifier.align(Alignment.BottomStart).fillMaxWidth().height(Lcd.pixel).drawBehind {
+                val dash = 4.dp.toPx()
+                var at = 0f
+                while (at < size.width) {
+                    drawRect(ink, Offset(at, 0f), Size(dash, size.height))
+                    at += dash * 2
+                }
+            },
+        )
+        // Off at rest, so reduced motion shows none
+        if (plugged && loop(2600) { it in 40 until 360 }) {
+            SpriteIcon(Sprites.Spark, Lcd.pixel, Modifier.offset(mid - 43.dp, 6.dp))
+            SpriteIcon(Sprites.Spark, Lcd.pixel, Modifier.offset(mid + 29.dp, 6.dp))
+        }
+        if (dizzy) SpriteIcon(Sprites.Spark, Lcd.pixel, Modifier.offset(x + loop(600) { if (it < 300) 0.dp else 14.dp }, 12.dp))
+        if (dozing) {
+            val rise = loop(1800) { it / 600 }
+            Text("z", LcdType.labelStrong, Modifier.offset(home + 34.dp + 4.dp * rise, 22.dp - 8.dp * rise))
+        }
+    }
 }
 
 /*
