@@ -579,10 +579,8 @@ fun ChoiceSheet(
     Sheet(open, onDismiss) {
         Text(title, LcdType.labelStrong)
         Column(Modifier.bleed(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            if (options.isEmpty()) {
-                val ground = LocalLcd.current.ground
-                Text(empty, LcdType.data, Modifier.padding(horizontal = 10.dp, vertical = 12.dp).ghost(ground))
-            }
+            // Plain: a ghost's dither knocks the thin VT323 strokes out until it cannot be read
+            if (options.isEmpty()) Text(empty, LcdType.data, Modifier.padding(horizontal = 10.dp, vertical = 12.dp))
             options.forEach { FileRow(it, detail(it), null, selected = it == chosen, onPick = { onPick(it) }) }
         }
     }

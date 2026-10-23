@@ -594,8 +594,8 @@ The profile picked here as a panel in the drive's look: an inverted face with an
 while the host sees the gadget) and the name, over the USB sprite, product, maker, `vid:pid · N
 mA` and its serial (`serial from this phone` when it has none). Under it, `PROFILES` and the folder, then the rows like
 `FILES`: `Built-in` first, then each profile with its `vid:pid`, the picked one inverted. `Edit`
-(dead on Built-in) and `Create` open one sheet in the Create sheet's look: Name (locked when
-editing), Product, Maker, Serial (empty: the phone's own), USB IDs as two four-digit inputs,
+(dead on Built-in) and `Create` open one sheet in the Create sheet's look: Name (locked when editing,
+its border dashed), Product, Maker, Serial (empty: the phone's own), USB IDs as two four-digit inputs,
 Power `100 / 250 / 500 mA`; each
 field says what is wrong under it, and the key waits until nothing is. With no gadget on the bus
 a pick is set at once; while the host sees it, a pick waits for the `Not applied` sheet on Back,
@@ -621,7 +621,8 @@ The app's own timeout reads `[-] Timed out (30s)`.
 ### Choice
 A choice from a list the phone has (a gateway's container). A `LinkRow` names it (`Container  OpenWrt >`), `none` until
 something is chosen, and opens a sheet of rows like the files list, the chosen one inverted.
-With nothing to choose, the sheet holds one ghosted line (`No containers are running`).
+With nothing to choose, the sheet holds one plain line (`No containers are running`, or `Cannot
+read Droidspaces' containers`). A ghost is for sprites: its dither knocks VT323's strokes out.
 
 ### Sheet (`.sheet`, `.scrim`)
 A bottom sheet for a short task (Create, a choice). It rises over the screen with a 2px top rule and the

@@ -45,6 +45,7 @@ import com.usbarsenal.app.lcd.SpriteIcon
 import com.usbarsenal.app.lcd.Sprites
 import com.usbarsenal.app.lcd.focusOutline
 import com.usbarsenal.app.lcd.focusTick
+import com.usbarsenal.app.lcd.dashedRect
 import com.usbarsenal.app.lcd.ghost
 import com.usbarsenal.app.lcd.lcdClickable
 import com.usbarsenal.app.lcd.loop
@@ -252,7 +253,8 @@ fun Input(
     modifier: Modifier = Modifier,
     placeholder: String = "",
     keyboard: KeyboardOptions = KeyboardOptions.Default,
-    // false locks it, ghosted: what it sets cannot change now
+    // false locks it, its border dashed as a disabled key's: what it sets cannot change now, and
+    // its value stays readable (a ghost's dither would knock the VT323 strokes out)
     enabled: Boolean = true,
     singleLine: Boolean = true,
 ) {
@@ -266,8 +268,7 @@ fun Input(
             .focusTick()
             .then(if (focused) Modifier.focusOutline(ink) else Modifier)
             .heightIn(min = Lcd.touch)
-            .border(Lcd.pixel, ink)
-            .then(if (enabled) Modifier else Modifier.ghost(LocalLcd.current.ground)),
+            .then(if (enabled) Modifier.border(Lcd.pixel, ink) else Modifier.dashedRect(ink, -Lcd.pixel)),
         enabled = enabled,
         textStyle = LcdType.data.copy(color = ink),
         singleLine = singleLine,
