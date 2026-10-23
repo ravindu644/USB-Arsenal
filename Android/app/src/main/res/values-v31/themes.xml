@@ -4,6 +4,7 @@
     <style name="Lcd" parent="android:Theme.DeviceDefault.Light.NoActionBar">
         <item name="android:windowBackground">#FFA62E</item>
         <item name="android:windowSplashScreenBackground">#FFA62E</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_pin</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_pin_blink</item>
+        <item name="android:windowSplashScreenAnimationDuration">600</item>
     </style>
 </resources>

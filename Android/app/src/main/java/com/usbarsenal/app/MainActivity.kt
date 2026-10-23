@@ -1,5 +1,6 @@
 package com.usbarsenal.app
 
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.graphics.Color
@@ -27,6 +28,9 @@ class MainActivity : ComponentActivity() {
         // The controller every command names, before the first one runs
         Controller.load(applicationContext)
         setContent { LcdTheme(switches) { App() } }
+        // The launch window's Pin (Android 8 to 11's splash) has done its job once Compose draws;
+        // left in place it would show wherever Compose does not paint, a resize or the keyboard
+        window.setBackgroundDrawable(ColorDrawable(getColor(R.color.lcd)))
     }
 
     private var hat = 0f to 0f

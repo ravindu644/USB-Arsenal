@@ -624,8 +624,14 @@ Home top bar (32×36, blinking), the bottom bar's stage, Welcome and the empty s
 Android's splash screen: the `lcd` ground and Pin at 6× (96×108dp), centred in the 288dp icon so
 it stays inside the 192dp circle the system shows (with no icon background colour the system
 lays the icon out at 288dp; a 240dp one is scaled up 1.2×). Pin blinks once, stepped (closed
-from 360 to 440ms of 600ms). It leaves in one cut, never the system's fade. No scanline grid:
-the system draws it, not us.
+from 360 to 440ms of 600ms), an animated vector that hides the top row of its eyes. It leaves in
+one cut, never the system's fade. No scanline grid: the system draws it, not us. Android 8 to 11
+have no splash screen API: the launch window is the same amber with the same Pin, still.
+
+### App icon
+An adaptive icon, Pin's App icon line below: its background the `lcd` amber, its foreground and
+Android 13's monochrome layer the splash's own Pin, its mask the launcher's. No scanline grid at
+icon sizes.
 
 ## Motion
 
@@ -801,8 +807,9 @@ Function icons are 16px sprites: `storage` (disc), `tether` (RJ45 jack), `hid` (
 Others: `usb` (trident), `eject`, `spark`, `pointer`, `duck` (Quacky's), and the four arrow
 keys. All of them are in the Pixel kit screen.
 
-App icon: Pin in ink on an `lcd` square, scaled to about 63% of the icon so a launcher mask
-never clips it (288×324 on 512, 96×108 on 192, 32×36 on 48). The themed icon inverts.
+App icon: Pin in ink on an `lcd` square at half the icon's width, 96×108 on a 192 icon (36dp of
+the 72dp an adaptive icon shows), so a launcher mask never clips it. The themed icon is the
+system's tint of the same Pin.
 
 ## Copy
 

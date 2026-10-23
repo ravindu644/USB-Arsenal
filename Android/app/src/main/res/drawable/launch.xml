@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 8 to 11 have no splash screen API: the launch window itself is the lcd ground with
+     Pin in the middle, the same Pin as Android 12's splash, until Compose draws its first frame -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/lcd" />
+    <item android:drawable="@drawable/splash_pin" android:gravity="center" />
+</layer-list>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DESIGN.md's lcd token, for what Compose does not draw: the icon and the launch window -->
+    <color name="lcd">#FFA62E</color>
+</resources>

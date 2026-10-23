@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12's splash icon: Pin blinks once, stepped, as DESIGN.md's Splash says: shut from 360
+     to 440ms of 600ms. Keyframes 1ms apart make each change a cut, never a fade -->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:drawable="@drawable/splash_pin">
+    <target android:name="lids">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:duration="600">
+                <propertyValuesHolder android:propertyName="fillAlpha" android:valueType="floatType">
+                    <keyframe android:fraction="0" android:value="1" />
+                    <keyframe android:fraction="0.599" android:value="1" />
+                    <keyframe android:fraction="0.6" android:value="0" />
+                    <keyframe android:fraction="0.732" android:value="0" />
+                    <keyframe android:fraction="0.733" android:value="1" />
+                    <keyframe android:fraction="1" android:value="1" />
+                </propertyValuesHolder>
+            </objectAnimator>
+        </aapt:attr>
+    </target>
+</animated-vector>

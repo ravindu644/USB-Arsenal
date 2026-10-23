@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The window behind Compose's first frame. #FFA62E is DESIGN.md's lcd token, lit in both system themes -->
+    <!-- The window behind Compose's first frame: the lcd ground with Pin, Android 8 to 11's splash.
+         #FFA62E is DESIGN.md's lcd token, lit in both system themes -->
     <style name="Lcd" parent="android:Theme.DeviceDefault.Light.NoActionBar">
-        <item name="android:windowBackground">#FFA62E</item>
+        <item name="android:windowBackground">@drawable/launch</item>
     </style>
 </resources>
