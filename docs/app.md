@@ -20,7 +20,7 @@ The first launch walks through setup:
 1. **Root.** Grant the app root when your root manager asks. If you deny it, grant it in the
    manager and reopen the app.
 2. **Controller.** Only on a phone with more than one USB device controller. Pick the one your
-   cable is in; the happy Pin marks the one a computer is talking to. Settings can change it later.
+   cable is in; the happy Pin marks the one a computer is using. Settings can change it later.
 3. **Check.** The bundled binary probes the kernel. A `missing` or `caveat` line says what it
    costs; a phone that cannot run USB Arsenal stops here, with the reason.
 4. **Backend.** Installs the binary to `/data/local/USB-Arsenal/bin/usb-arsenal` and the boot

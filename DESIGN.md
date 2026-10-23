@@ -251,8 +251,10 @@ Structure:
   controller. Root reads them once su says yes (the list needs root), and Controller's step
   joins Root's dots then: the row re-centres and the new LED blinks twice before it holds. `This phone has more than one USB controller. Pick the one your cable is in.`,
   then one Home-style row each: Pin happy (`^ ^`) on a `configured` controller and dozing on any
-  other, its name, its state, and what that state means (`a computer is talking to it`, `nothing
-  on the other end`). The picked row is inverted, and `Next` waits for a pick. Check then runs
+  other, its name, its state, and what that state means: `a computer is using it` (configured),
+  `plugged in, the computer is asleep` (suspended), `plugged in, not set up by a computer`
+  (attached, powered, default, addressed: a charger stops here), `nothing plugged in` (not
+  attached); any other state has no line. The picked row is inverted, and `Next` waits for a pick. Check then runs
   with that `--udc`, and every later command carries it; with one controller nothing is asked or
   passed. The controllers are read once a launch: a pick no longer listed is dropped, and a
   set-up app with several and no pick shows this step over Home, where Next goes back.

@@ -633,8 +633,11 @@ private fun ControllerRow(udc: Udc, picked: Boolean, rule: Boolean, onPick: () -
     val haptics = LocalHaptics.current
     val ink = LocalLcd.current.ink
     val hint = when (udc.state) {
-        "configured" -> "a computer is talking to it"
-        "not attached" -> "nothing on the other end"
+        // Only a computer configures a controller; a charger stops at powered
+        "configured" -> "a computer is using it"
+        "suspended" -> "plugged in, the computer is asleep"
+        "attached", "powered", "default", "addressed" -> "plugged in, not set up by a computer"
+        "not attached" -> "nothing plugged in"
         else -> null
     }
     Box(
