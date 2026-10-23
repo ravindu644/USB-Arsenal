@@ -581,7 +581,8 @@ private val GLYPH = Regex("^\\[.] ")
 fun Terminal(lines: List<String>, modifier: Modifier = Modifier, live: Boolean = true) {
     val cursor = LocalLcd.current.ink
     val scope = rememberCoroutineScope()
-    val list = rememberLazyListState()
+    // A log opens on its newest line; scrolling there after the first frame showed the top first
+    val list = rememberLazyListState(if (live) lines.lastIndex.coerceAtLeast(0) else 0)
     val page = rememberScrollState()
     val state: ScrollableState = if (live) list else page
     val step = with(LocalDensity.current) { 80.dp.toPx() }
