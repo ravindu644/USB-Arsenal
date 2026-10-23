@@ -93,7 +93,7 @@ components:
   dip-switch:
     backgroundColor: "{colors.lcd}"
     textColor: "{colors.ink}"
-    typography: "{typography.label-strong}"
+    typography: "{typography.data}"
     rounded: "{rounded.none}"
     width: 68px
     height: 32px
@@ -387,8 +387,10 @@ drives for the host`): the DIP already says off. While a function starts or stop
 read `starting` or `stopping` and the command.
 
 ### DIP switch (`.dip`)
-On or off for one function, 68×32 inside a 44px hit area. Knob right with `ON` printed is on;
-knob left is off. Flipping it runs `<function> start` with the screen's setup, or `stop`, at
+On or off for one function, 68×32 inside a 44px hit area. Knob right with `1` printed is on;
+knob left with `O` is off, both in VT323 like a status line. The knob is 30×36: it runs over
+the track's edge on its side and stands a dot past it above and below, so where it sits reads
+at a glance. Flipping it runs `<function> start` with the screen's setup, or `stop`, at
 once. It lives on Home's rows, and as a setting inside a screen (`Gateway`, `DHCP and NAT`).
 
 ### Key (`.key`, `.key.pri`)
