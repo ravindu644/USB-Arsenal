@@ -9,10 +9,10 @@ name: USB Arsenal CI
 # set, and with a debug key when they are not (a fork, a pull request).
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main" ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ "main" ]
   workflow_dispatch:
     inputs:
       tag_name:

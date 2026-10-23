@@ -54,6 +54,9 @@ CFLAGS += -fstack-protector-strong
 # A header edit rebuilds every object that includes it
 CFLAGS += -MMD -MP
 LDFLAGS = -static -no-pie -flto=auto -pthread
+ifeq ($(NO_STRIP),)
+  LDFLAGS += -s
+endif
 
 ARCH := $(shell $(CC) -dumpmachine 2>/dev/null | cut -d'-' -f1 | \
         sed 's/i.86/x86/; s/armv7l/armhf/; s/^arm.*/armhf/' || echo "x86_64")
@@ -62,12 +65,11 @@ OBJ_DIR = $(OUT_DIR)/.obj/$(ARCH)
 OBJS    = $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 -include $(OBJS:.o=.d)
 
-HOME_VAR := $(shell echo $$HOME)
 find-cc = $(shell \
 	if [ -n "$(MUSL_CROSS)" ] && [ -f "$(MUSL_CROSS)/$(1)-gcc" ]; then \
 		echo "$(MUSL_CROSS)/$(1)-gcc"; \
-	elif [ -f "$(HOME_VAR)/toolchains/$(1)-cross/bin/$(1)-gcc" ]; then \
-		echo "$(HOME_VAR)/toolchains/$(1)-cross/bin/$(1)-gcc"; \
+	elif [ -f "$(HOME)/toolchains/$(1)-cross/bin/$(1)-gcc" ]; then \
+		echo "$(HOME)/toolchains/$(1)-cross/bin/$(1)-gcc"; \
 	elif command -v $(1)-gcc >/dev/null 2>&1; then \
 		echo "$(1)-gcc"; \
 	elif [ -f "/opt/cross/bin/$(1)-gcc" ]; then \
@@ -97,7 +99,7 @@ help:
 	@echo "  make module    - Build every arch into a KernelSU/Magisk module zip"
 	@echo "  make bump NEW=x.y.z - Set the version (usbarsenal.h and module.prop)"
 	@echo "  make format    - Run clang-format over src/"
-	@echo "  make clean     - Remove build output (run after editing a header)"
+	@echo "  make clean     - Remove build output"
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(msg_cc)
@@ -108,12 +110,6 @@ $(BINARY_NAME): $(OBJS)
 	$(msg_ld)
 	$(Q)mkdir -p $(OUT_DIR)
 	$(Q)$(CC) $(OBJS) -o $(OUT_DIR)/$(BINARY_NAME) $(LDFLAGS)
-	@if [ -z "$(NO_STRIP)" ]; then \
-		STRIP_CMD=$$(echo $(CC) | sed 's/-gcc$$/-strip/; s/gcc$$/strip/'); \
-		if command -v $$STRIP_CMD >/dev/null 2>&1 || [ -f "$$STRIP_CMD" ]; then \
-			$$STRIP_CMD -s $(OUT_DIR)/$(BINARY_NAME) 2>/dev/null || true; \
-		fi; \
-	fi
 	@echo "[+] Built: $(OUT_DIR)/$(BINARY_NAME)"
 
 NATIVE_TRIPLET := $(shell $(CC) -dumpmachine 2>/dev/null)
@@ -128,25 +124,15 @@ native:
 	@if [ -n "$(NATIVE_CC)" ]; then $(MAKE) -j$(NPROC) $(BINARY_NAME) CC="$(NATIVE_CC)"; \
 	else echo "Error: $(NATIVE_ARCH)-linux-musl-gcc not found (set MUSL_CROSS)"; exit 1; fi
 
-x86_64:
-	@CROSS_CC="$(call find-cc,x86_64-linux-musl)"; \
-	if [ -n "$$CROSS_CC" ]; then $(MAKE) -j$(NPROC) $(BINARY_NAME) CC=$$CROSS_CC; \
-	else echo "Error: x86_64-linux-musl-gcc not found (set MUSL_CROSS)"; exit 1; fi
+triplet_x86_64  = x86_64-linux-musl
+triplet_aarch64 = aarch64-linux-musl
+triplet_x86     = i686-linux-musl
+triplet_armhf   = arm-linux-musleabihf
 
-aarch64:
-	@CROSS_CC="$(call find-cc,aarch64-linux-musl)"; \
+x86_64 aarch64 x86 armhf:
+	@CROSS_CC="$(call find-cc,$(triplet_$@))"; \
 	if [ -n "$$CROSS_CC" ]; then $(MAKE) -j$(NPROC) $(BINARY_NAME) CC=$$CROSS_CC; \
-	else echo "Error: aarch64-linux-musl-gcc not found (set MUSL_CROSS)"; exit 1; fi
-
-x86:
-	@CROSS_CC="$(call find-cc,i686-linux-musl)"; \
-	if [ -n "$$CROSS_CC" ]; then $(MAKE) -j$(NPROC) $(BINARY_NAME) CC=$$CROSS_CC; \
-	else echo "Error: i686-linux-musl-gcc not found (set MUSL_CROSS)"; exit 1; fi
-
-armhf:
-	@CROSS_CC="$(call find-cc,arm-linux-musleabihf)"; \
-	if [ -n "$$CROSS_CC" ]; then $(MAKE) -j$(NPROC) $(BINARY_NAME) CC=$$CROSS_CC; \
-	else echo "Error: arm-linux-musleabihf-gcc not found (set MUSL_CROSS)"; exit 1; fi
+	else echo "Error: $(triplet_$@)-gcc not found (set MUSL_CROSS)"; exit 1; fi
 
 # One zip for every device: customize.sh keeps the binary for the device ABI
 module:
