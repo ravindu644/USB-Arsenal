@@ -116,6 +116,7 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
                 // What runs above, what the next start brings up below
                 Rule()
                 Column {
+                    Group("Network")
                     // Without Droidspaces there is no container to hand the link to
                     if (ds?.installed != false) Kv("Gateway") { Dip(plan.gateway, { set(plan.copy(gateway = it)) }, "Gateway mode") }
                     if (plan.gateway) {

@@ -171,6 +171,8 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                 }
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text("No image loaded", LcdType.labelStrong) }
             } else {
+                // The drive above, how the host sees it below
+                Rule()
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Mode", LcdType.labelStrong)
                     Segs(MODE_LABELS, MODES.indexOf(mode).coerceAtLeast(0), { i ->
