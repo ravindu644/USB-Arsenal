@@ -514,7 +514,17 @@ fun LinkRow(label: String, value: String, onClick: (() -> Unit)?, modifier: Modi
  * one inverted. With nothing to choose, one ghosted line says why.
  */
 @Composable
-fun ChoiceSheet(open: Boolean, title: String, options: List<String>, chosen: String, empty: String, onPick: (String) -> Unit, onDismiss: () -> Unit) =
+// [detail] is a fact shown at each option's right (a controller's state)
+fun ChoiceSheet(
+    open: Boolean,
+    title: String,
+    options: List<String>,
+    chosen: String,
+    empty: String,
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit,
+    detail: (String) -> String = { "" },
+) =
     Sheet(open, onDismiss) {
         Text(title, LcdType.labelStrong)
         Column(Modifier.bleed(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -522,7 +532,7 @@ fun ChoiceSheet(open: Boolean, title: String, options: List<String>, chosen: Str
                 val ground = LocalLcd.current.ground
                 Text(empty, LcdType.data, Modifier.padding(horizontal = 10.dp, vertical = 12.dp).ghost(ground))
             }
-            options.forEach { FileRow(it, "", null, selected = it == chosen, onPick = { onPick(it) }) }
+            options.forEach { FileRow(it, detail(it), null, selected = it == chosen, onPick = { onPick(it) }) }
         }
     }
 

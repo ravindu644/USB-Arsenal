@@ -17,6 +17,8 @@ import androidx.compose.runtime.setValue
 import com.usbarsenal.app.backend.Backend
 import com.usbarsenal.app.backend.BackendState
 import com.usbarsenal.app.backend.CHANGE_TIMEOUT_MS
+import com.usbarsenal.app.backend.Controller
+import com.usbarsenal.app.backend.udcFlag
 import androidx.core.content.edit
 import com.usbarsenal.app.backend.Capabilities
 import com.usbarsenal.app.backend.GadgetStatus
@@ -178,9 +180,11 @@ object Gadget {
         busy = Busy(fn, typed, stopping = args.firstOrNull() == "stop" || args.getOrNull(1) == "stop", says = says(args.toList()))
         fault = null
         scope.launch {
-            val r = Root.change("$UA " + args.joinToString(" ", transform = ::shellQuote))
+            // The controller picked, if there is more than one, goes on every command
+            val udc = Controller.picked
+            val r = Root.change("$UA${udcFlag(udc)} " + args.joinToString(" ", transform = ::shellQuote))
             // Root's prompt: every command runs as root
-            cli += "# usb-arsenal $typed"
+            cli += "# usb-arsenal" + udc?.let { " --udc $it" }.orEmpty() + " $typed"
             (r.out + r.err).forEach { cli += plain(it) }
             cli.keepLast()
             if (!r.ok) {

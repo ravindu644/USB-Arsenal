@@ -1,5 +1,10 @@
 package com.usbarsenal.app.backend
 
+import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.core.content.edit
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -19,7 +24,62 @@ const val UA = "$WORKSPACE/bin/usb-arsenal"
 // Run here, never relayed to a daemon
 private const val NO_PROXY = "UA_NO_PROXY=1"
 
-private const val READ = "$NO_PROXY $UA"
+private fun read() = "$NO_PROXY $UA${udcFlag(Controller.picked)}"
+
+// A USB device controller as /sys/class/udc lists it, and its state ("configured": a host is
+// talking to it, "not attached": nothing is)
+data class Udc(val name: String, val state: String)
+
+// "<name> <state>" a line; a state can be several words
+fun parseUdcs(lines: List<String>): List<Udc> = lines.mapNotNull { line ->
+    val l = line.trim().ifEmpty { return@mapNotNull null }
+    val gap = l.indexOf(' ')
+    if (gap < 0) Udc(l, "") else Udc(l.substring(0, gap), l.substring(gap + 1).trim())
+}
+
+// " --udc NAME" while a controller is picked; it goes right after the binary on every command
+fun udcFlag(name: String?) = name?.let { " --udc " + shellQuote(it) }.orEmpty()
+
+/*
+ * The controller every command names. With more than one, the backend wants --udc on each and
+ * remembers none, so the app keeps the pick setup made (or Settings changed); with one there is
+ * no pick and no flag.
+ */
+object Controller {
+    var picked by mutableStateOf<String?>(null)
+        private set
+
+    // What /sys/class/udc listed at launch (setup and Settings read it from here); null until then
+    var udcs by mutableStateOf<List<Udc>?>(null)
+
+    fun load(context: Context) {
+        picked = prefs(context).getString("udc", null)
+    }
+
+    fun set(context: Context, name: String?) {
+        picked = name
+        prefs(context).edit { if (name == null) remove("udc") else putString("udc", name) }
+    }
+
+    // Null when the read itself failed, which is not the same as no controller (an empty list)
+    suspend fun list(): List<Udc>? =
+        Root.read("""for u in /sys/class/udc/*; do [ -e "${'$'}u" ] && echo "${'$'}{u##*/} ${'$'}(cat "${'$'}u/state" 2>/dev/null)"; done; true""")
+            .takeIf { it.ok }?.let { parseUdcs(it.out) }
+
+    /*
+     * Reads the controllers and squares the pick with them: with one or none no pick is needed,
+     * and a pick no longer listed (a driver gone) would fail every command, so it goes. Whether
+     * the user has to pick now comes back; a failed read changes nothing and asks nothing.
+     */
+    suspend fun refresh(context: Context): Boolean {
+        val found = list() ?: return false
+        udcs = found
+        if (found.size <= 1 || found.none { it.name == picked }) set(context, null)
+        return found.size > 1 && picked == null
+    }
+
+    private fun prefs(context: Context) = context.getSharedPreferences("usb", Context.MODE_PRIVATE)
+}
 
 /*
  * Setup checks with the binary it is about to install; UA_NO_PROXY keeps an older daemon from
@@ -27,7 +87,7 @@ private const val READ = "$NO_PROXY $UA"
  * live it goes through the change lane ([onLane]) and never races a command.
  */
 suspend fun readCheck(binary: String = UA, onLane: Boolean = false): Result<Capabilities> {
-    val cmd = "$NO_PROXY ${shellQuote(binary)} check --json"
+    val cmd = "$NO_PROXY ${shellQuote(binary)}${udcFlag(Controller.picked)} check --json"
     return (if (onLane) Root.change(cmd) else Root.read(cmd)).json(::parseCheck)
 }
 
@@ -37,7 +97,7 @@ suspend fun readCheck(binary: String = UA, onLane: Boolean = false): Result<Capa
  * as the "profile" key.
  */
 suspend fun readProfile(): Map<String, String> {
-    val out = Root.read("$READ identity show").out
+    val out = Root.read("${read()} identity show").out
     val keys = out.filter { it.startsWith("  ") }
         .mapNotNull { line -> line.trim().split(Regex("\\s+"), limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
         .filter { it.second != "(derived)" }
@@ -60,7 +120,7 @@ const val DROIDSPACES = "/data/local/Droidspaces/bin/droidspaces"
 fun parseContainers(json: String): List<String> =
     JSONObject(json).optJSONArray("running")?.let { a -> (0 until a.length()).map { a.getJSONObject(it).getString("name") } }.orEmpty()
 
-suspend fun readStatus(): Result<GadgetStatus> = Root.read("$READ status --json").json(::parseStatus)
+suspend fun readStatus(): Result<GadgetStatus> = Root.read("${read()} status --json").json(::parseStatus)
 
 // What su -v prints, as it prints it: "3.3.0:KernelSU" on the a166p
 data class RootInfo(val su: String)

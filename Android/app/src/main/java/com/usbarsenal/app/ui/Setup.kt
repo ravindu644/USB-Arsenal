@@ -1,5 +1,21 @@
 package com.usbarsenal.app.ui
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import com.usbarsenal.app.lcd.lcdClickable
+import com.usbarsenal.app.lcd.Inverted
+import com.usbarsenal.app.lcd.LocalLcd
+import com.usbarsenal.app.backend.Controller
+import com.usbarsenal.app.backend.Udc
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -65,7 +81,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 // Every screen; App keeps them as a back stack
-private enum class Step { WELCOME, ROOT, CHECK, INSTALL, HOME, LOG, SETTINGS, FONTS, STORAGE, TETHER, HID, KEYS, QUACKY, IDENTITY }
+private enum class Step { WELCOME, ROOT, CONTROLLER, CHECK, INSTALL, HOME, LOG, SETTINGS, FONTS, STORAGE, TETHER, HID, KEYS, QUACKY, IDENTITY }
 
 // TYPING: Install was pressed and the command is typing; the installer starts when it has
 private enum class Phase { BEFORE, TYPING, RUNNING, DONE, FAILED }
@@ -78,6 +94,7 @@ private object Setup {
     var root by mutableStateOf<Result<RootInfo>?>(null)
     var check by mutableStateOf<Result<Capabilities>?>(null)
     var staged: File? = null
+
 
     val log = mutableStateListOf<String>()
     var phase by mutableStateOf(Phase.BEFORE)
@@ -117,7 +134,8 @@ private object Setup {
  */
 @Composable
 fun App() {
-    val prefs = LocalContext.current.getSharedPreferences("setup", Context.MODE_PRIVATE)
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("setup", Context.MODE_PRIVATE)
     var stack by rememberSaveable { mutableStateOf(listOf(if (prefs.getBoolean("done", false)) Step.HOME else Step.WELCOME)) }
     var back by remember { mutableStateOf(false) }
     // The installed version when Install was opened to update it
@@ -158,6 +176,12 @@ fun App() {
             push(Step.INSTALL)
         }
     }
+    // The controllers once a launch. A set-up app on a phone with several and no pick (set up
+    // before the step existed, or its pick gone) is asked for one before anything else
+    var listing by remember { mutableStateOf<Job?>(null) }
+    LaunchedEffect(Unit) {
+        if (stack.first() == Step.HOME && Controller.refresh(context)) push(Step.CONTROLLER)
+    }
     // A real bind (the port left Android) thuds wherever it was started; Home's Pin plugs in on it
     val haptics = LocalHaptics.current
     var thudded by remember { mutableIntStateOf(Gadget.binds) }
@@ -169,7 +193,18 @@ fun App() {
         when (it) {
             Step.WELCOME -> Welcome { push(Step.ROOT) }
             // Opened from Home, Root goes back there once granted; in setup it leads on to Check
-            Step.ROOT -> RootScreen(back = ::pop) { if (setup) push(Step.CHECK) else pop() }
+            Step.ROOT -> RootScreen(back = ::pop) {
+                if (!setup) {
+                    pop()
+                    return@RootScreen
+                }
+                // More than one controller: the user picks theirs before Check runs with it. With
+                // one, no pick and no step. One read at a time, so a second tap pushes nothing
+                if (listing?.isActive == true) return@RootScreen
+                listing = scope.launch { push(if (Controller.refresh(context)) Step.CONTROLLER else Step.CHECK) }
+            }
+            // In setup it leads on to Check; asked for at a launch, it goes back to Home
+            Step.CONTROLLER -> ControllerScreen(back = ::pop) { if (setup) push(Step.CHECK) else pop() }
             Step.CHECK -> CheckScreen(back = ::pop) { push(Step.INSTALL) }
             Step.INSTALL -> InstallScreen(update = update, back = ::pop, home = home)
             Step.HOME -> HomeScreen(
@@ -537,5 +572,80 @@ private fun InstallScreen(update: String?, back: () -> Unit, home: () -> Unit) {
         Top { if (phase == Phase.BEFORE || (phase == Phase.FAILED && finished)) BackKey() }
         Title("Backend")
         Shell("sh", led, session.shownAt(step), Modifier.fill(min = 200.dp))
+    }
+}
+
+/*
+ * Controller: this phone has more than one USB device controller, and the backend needs to be
+ * told which on every command. Each is a row with Pin: happy where a host is talking to it,
+ * dozing where nothing is, which is the clue to the one the cable is in. Next keeps the pick
+ * and runs Check with it.
+ */
+@Composable
+private fun ControllerScreen(back: () -> Unit, next: () -> Unit) {
+    BackHandler(onBack = back)
+    val context = LocalContext.current
+    // Read again when the process was killed on this step, so its rows come back
+    LaunchedEffect(Unit) { if (Controller.udcs == null) Controller.refresh(context) }
+    val udcs = Controller.udcs.orEmpty()
+    var picked by rememberSaveable { mutableStateOf(Controller.picked) }
+    Screen(
+        footer = {
+            KeyRow {
+                Key("Next", Modifier.weight(1f), primary = true, enabled = udcs.any { it.name == picked }) {
+                    Controller.set(context, picked)
+                    // Check's answer is for the controller it ran with
+                    Setup.check = null
+                    next()
+                }
+            }
+        },
+    ) {
+        Top { BackKey() }
+        Title("Controller")
+        Text("This phone has more than one USB controller. Pick the one your cable is in.", LcdType.data)
+        Column(Modifier.bleed(10.dp).selectableGroup()) {
+            udcs.forEachIndexed { i, udc -> ControllerRow(udc, udc.name == picked, rule = i > 0) { picked = udc.name } }
+        }
+    }
+}
+
+// A controller as a Home-style row: Pin, its name, its state and what that means. Inverted while picked
+@Composable
+private fun ControllerRow(udc: Udc, picked: Boolean, rule: Boolean, onPick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    val pressed by interaction.collectIsPressedAsState()
+    val haptics = LocalHaptics.current
+    val ink = LocalLcd.current.ink
+    val hint = when (udc.state) {
+        "configured" -> "a computer is talking to it"
+        "not attached" -> "nothing on the other end"
+        else -> null
+    }
+    Box(
+        Modifier
+            // The 2dp rule between rows, as Home's
+            .then(if (rule) Modifier.drawWithContent { drawContent(); drawRect(ink, size = Size(size.width, Lcd.pixel.toPx())) } else Modifier)
+            .lcdClickable(interaction, outline = false, role = Role.RadioButton) {
+                haptics.tick()
+                onPick()
+            }
+            .semantics { selected = picked },
+    ) {
+        Inverted(picked || focused || pressed) {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = Lcd.row).background(LocalLcd.current.ground).padding(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(Lcd.tight),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SpriteIcon(if (udc.state == "configured") Sprites.PinHappy else Sprites.PinBlink, 2.dp)
+                Column(verticalArrangement = Arrangement.spacedBy(Lcd.lines)) {
+                    Text(udc.name, LcdType.labelStrong)
+                    Text(udc.state.ifEmpty { "-" }, LcdType.data)
+                    if (hint != null) Text(hint, LcdType.data)
+                }
+            }
+        }
     }
 }

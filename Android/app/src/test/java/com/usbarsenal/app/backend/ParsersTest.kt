@@ -48,6 +48,23 @@ class ParsersTest {
         assertEquals(true, c.requirementsMet)
     }
 
+    // /sys/class/udc, a controller a line with its state, which can be several words
+    @Test
+    fun controllers() {
+        assertEquals(
+            listOf(Udc("a600000.dwc3", "configured"), Udc("dummy_udc.0", "not attached"), Udc("bare", "")),
+            parseUdcs(listOf("a600000.dwc3 configured", "dummy_udc.0 not attached", "", "  bare  ")),
+        )
+    }
+
+    // The flag goes right after the binary, quoted, and is nothing without a pick
+    @Test
+    fun udcFlagOnlyWithAPick() {
+        assertEquals("", udcFlag(null))
+        assertEquals(" --udc 'a600000.dwc3'", udcFlag("a600000.dwc3"))
+        assertEquals(" --udc 'it'\\''s'", udcFlag("it's"))
+    }
+
     @Test(expected = org.json.JSONException::class)
     fun aMissingKeyIsAMismatchedBackend() {
         parseStatus("""{"version":"1.1.0","udc":"x","udc_state":"configured","bound":0}""")

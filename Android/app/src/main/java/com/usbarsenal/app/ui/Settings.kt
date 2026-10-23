@@ -1,5 +1,8 @@
 package com.usbarsenal.app.ui
 
+import com.usbarsenal.app.backend.Controller
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.BackHandler
@@ -64,6 +67,9 @@ fun SettingsScreen(back: () -> Unit, openIdentity: (() -> Unit)?, openFonts: () 
     // A switch whose write failed shakes, and stderr's last line sits under it
     var fault by remember { mutableStateOf<String?>(null) }
     val shake = rememberShake()
+    // The controllers as read at launch, so the USB section is there from the first frame
+    val udcs = Controller.udcs.orEmpty()
+    var choosingUdc by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         // Reads only, none behind the change lane; the profile is re-read, an identity may have changed
         backend = backendState(context)
@@ -82,43 +88,65 @@ fun SettingsScreen(back: () -> Unit, openIdentity: (() -> Unit)?, openFonts: () 
         }
     }
     val installed = backend?.state == BackendState.READY || backend?.state == BackendState.UPDATE_AVAILABLE
-    Screen {
-        Top { BackKey() }
-        Title("Settings")
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Group("App")
-            Kv("Motion") { Dip(switches.motion, { switches.motion = it }, "Motion") }
-            Kv("Haptics") { Dip(switches.haptics, { switches.haptics = it }, "Haptics") }
+    Box(Modifier.fillMaxSize()) {
+        Screen {
+            Top { BackKey() }
+            Title("Settings")
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Group("App")
+                Kv("Motion") { Dip(switches.motion, { switches.motion = it }, "Motion") }
+                Kv("Haptics") { Dip(switches.haptics, { switches.haptics = it }, "Haptics") }
 
-            Section("Identity")
-            LinkRow(profileName(Gadget.profile), "", openIdentity)
+                Section("Identity")
+                LinkRow(profileName(Gadget.profile), "", openIdentity)
 
-            Section("Backend")
-            // Both write a file the boot module reads; a switch that cannot be read is dead
-            Column(Modifier.shake(shake)) {
-                Kv("Daemon mode") {
-                    Dip(daemon == true, { on -> scope.launch { write(setDaemonMode(on)) { daemon = on } } }, "Daemon mode", enabled = daemon != null)
+                // Every command names it. The backend keeps the controller it holds while bound,
+                // so a change waits until nothing is
+                if (udcs.size > 1) {
+                    Section("USB")
+                    val bound = Gadget.status?.bound == true
+                    LinkRow("Controller", Controller.picked ?: "none", if (bound) null else ({ choosingUdc = true }))
+                    if (bound) Note("stop all to change it")
                 }
-                // The link lives in the module, so it needs one installed
-                Kv("System path") {
-                    Dip(linked == true, { on -> scope.launch { write(setPathLinked(on)) { linked = on } } }, "System path", enabled = linked != null && installed)
+
+                Section("Backend")
+                // Both write a file the boot module reads; a switch that cannot be read is dead
+                Column(Modifier.shake(shake)) {
+                    Kv("Daemon mode") {
+                        Dip(daemon == true, { on -> scope.launch { write(setDaemonMode(on)) { daemon = on } } }, "Daemon mode", enabled = daemon != null)
+                    }
+                    // The link lives in the module, so it needs one installed
+                    Kv("System path") {
+                        Dip(linked == true, { on -> scope.launch { write(setPathLinked(on)) { linked = on } } }, "System path", enabled = linked != null && installed)
+                    }
                 }
-            }
-            fault?.let { Fault(it, onLog = null) }
-            if (changed) Warn("both apply from the next boot")
-            Key("Reinstall", Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp), enabled = backend != null) {
-                backend?.let(fix)
-            }
+                fault?.let { Fault(it, onLog = null) }
+                if (changed) Warn("both apply from the next boot")
+                Key("Reinstall", Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp), enabled = backend != null) {
+                    backend?.let(fix)
+                }
 
-            Section("Credits")
-            LinkRow("Fonts", "SIL OFL 1.1", openFonts)
+                Section("Credits")
+                LinkRow("Fonts", "SIL OFL 1.1", openFonts)
 
-            Section("About")
-            Kv("App", fact = true) { Text(BuildConfig.VERSION_NAME, LcdType.data) }
-            LinkRow("Source", SOURCE, onClick = {
-                context.startActivity(Intent(Intent.ACTION_VIEW, "https://$SOURCE".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            })
+                Section("About")
+                Kv("App", fact = true) { Text(BuildConfig.VERSION_NAME, LcdType.data) }
+                LinkRow("Source", SOURCE, onClick = {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, "https://$SOURCE".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                })
+            }
         }
+        ChoiceSheet(
+            choosingUdc, "Controller", udcs.map { it.name }, Controller.picked.orEmpty(), "No controllers",
+            onPick = {
+                Controller.set(context, it)
+                // What the kernel can do is asked again, of this controller, when Home next loads
+                Gadget.caps = null
+                choosingUdc = false
+            },
+            onDismiss = { choosingUdc = false },
+            detail = { name -> udcs.firstOrNull { it.name == name }?.state.orEmpty() },
+        )
     }
 }
 

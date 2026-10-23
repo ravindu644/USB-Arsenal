@@ -244,6 +244,14 @@ Structure:
   Settings. Identity lives inside Settings, because it is configuration.
 - **First launch** runs Welcome, Root, Check and Install, then Home. Later launches open Home,
   which leads back to Root or Install only when the backend needs it.
+- **Controller** comes between Root and Check, only when `/sys/class/udc` lists more than one
+  controller. `This phone has more than one USB controller. Pick the one your cable is in.`,
+  then one Home-style row each: Pin happy (`^ ^`) on a `configured` controller and dozing on any
+  other, its name, its state, and what that state means (`a computer is talking to it`, `nothing
+  on the other end`). The picked row is inverted, and `Next` waits for a pick. Check then runs
+  with that `--udc`, and every later command carries it; with one controller nothing is asked or
+  passed. The controllers are read once a launch: a pick no longer listed is dropped, and a
+  set-up app with several and no pick shows this step over Home, where Next goes back.
 - **What setup finds lasts until the app leaves recents.** Back never asks su or the kernel
   again; only Retry and Recheck do. A result that was already there shows at once; only one
   that arrives on screen types or resolves.
@@ -552,7 +560,10 @@ cards from `Interval`. Nowhere else: the setup flow, Log and Fonts are one block
 In sections, a rule between each: `APP` (Motion, Haptics), `IDENTITY` (one row, the profile in
 force by its name, `Built-in` with none, opening Identity), `BACKEND` (Daemon mode, System path,
 Reinstall), `CREDITS` (Fonts) and `ABOUT` (App, Source), last. Once Daemon mode or System path
-has been changed, a warning line under them says `both apply from the next boot`.
+has been changed, a warning line under them says `both apply from the next boot`. With more than
+one controller a `USB` section after Identity holds `Controller`, the pick, opening a choice
+sheet with each controller's state; while the gadget is bound it is held, noted `stop all to
+change it`, as the backend keeps the controller it holds.
 
 ### Identity
 The profile picked here as a panel in the drive's look: an inverted face with an LED (blinking
@@ -832,6 +843,7 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | Function names in the bind screen | `mass_storage.ua`, `ncm.ua`, `hid.ua_kbd`, `hid.ua_mouse` |
 | Root screen | `id -u; su -v` (prints `3.3.0:KernelSU` or `<version>:MAGISK`), shown as a shell session; its `#` comments are the app's narration |
 | Check screen | `check --json`, run with the bundled binary before anything is installed |
+| Controller step, Settings' Controller | `/sys/class/udc/*` and each one's `state`; the pick is app-side and goes as `--udc NAME` on every command |
 | Backend screen | the ported installer: the binary to `/data/local/USB-Arsenal/bin`, `module/` to `/data/adb/modules/usb-arsenal`, each step printing what it really printed, then `[+] Installed`, and `[!] Reboot to load the SELinux rule` only when the module had no rule before. The daemon is Settings' daemon mode, never the install's. `./install-backend.sh` is how the session shows it; there is no such script. The version is the app's own, never asked of root |
 | Home attention key | the installer's backend check: not installed, module missing, corrupted, update available, no root |
 | Home status, live rows | `status --json` |

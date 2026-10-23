@@ -6,6 +6,7 @@ import android.graphics.Color
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import com.usbarsenal.app.backend.Controller
 import androidx.activity.enableEdgeToEdge
 import com.usbarsenal.app.lcd.LcdTheme
 import com.usbarsenal.app.lcd.Switches
@@ -23,6 +24,8 @@ class MainActivity : ComponentActivity() {
         val bars = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
         enableEdgeToEdge(bars, bars)
         val switches = Switches(applicationContext)
+        // The controller every command names, before the first one runs
+        Controller.load(applicationContext)
         setContent { LcdTheme(switches) { App() } }
     }
 
