@@ -545,6 +545,15 @@ fun List<ShellLine>.shownAt(step: Int): List<String> {
 @Composable
 fun Shell(label: String, led: Led, lines: List<String>, modifier: Modifier = Modifier) {
     val ink = LocalLcd.current.ink
+    val haptics = LocalHaptics.current
+    // A typewriter: a tick on each frame that lands characters, none in the beat between lines.
+    // A session that opens already typed starts from its count, so it stays quiet
+    val chars = lines.sumOf { it.length }
+    var last by remember { mutableIntStateOf(chars) }
+    LaunchedEffect(chars) {
+        if (chars > last) haptics.frequentTick()
+        last = chars
+    }
     Column(modifier.fillMaxWidth().border(Lcd.pixel, ink).padding(Lcd.pixel)) {
         Row(
             Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 10.dp),

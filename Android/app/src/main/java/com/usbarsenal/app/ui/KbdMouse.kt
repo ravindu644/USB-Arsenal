@@ -410,7 +410,7 @@ private fun Trackpad(
                         travel += d.getDistance()
                         if (travel >= tickPx) {
                             travel = 0f
-                            haptics.dragTick()
+                            haptics.frequentTick()
                         }
                     }
                 },
@@ -449,7 +449,7 @@ private fun Trackpad(
                             val up = acc < 0
                             acc += if (up) stepPx else -stepPx
                             wheel(if (up != follow) 1 else -1)
-                            haptics.dragTick()
+                            haptics.frequentTick()
                         }
                     }
                 }

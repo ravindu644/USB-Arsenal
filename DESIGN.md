@@ -715,6 +715,8 @@ the rich ones go through the tiers below.
 | DIP switch on / off | `ToggleOn` / `ToggleOff` |
 | Segment change, LUN switch, slider step, D-pad or keyboard focus move | `SegmentTick` |
 | Trackpad drag | `SegmentFrequentTick`, at most one per 8px of travel |
+| Shell typing (Root, Backend) | `SegmentFrequentTick`, one per frame that adds characters; none in the beat between lines |
+| Check row resolving | `SegmentTick` |
 | Gadget bound (the port left Android) | Rich: a thud on that frame, from whatever screen started it; on Home it is the frame Pin plugs in. A replug ending is a `SegmentTick` |
 | Stop all, eject | `GestureEnd` |
 | Command refused or failed | `Reject`, with the error shake |

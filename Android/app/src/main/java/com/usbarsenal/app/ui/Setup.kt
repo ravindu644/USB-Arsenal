@@ -402,6 +402,7 @@ private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
         for (i in 1..rows) {
             delay(4L * FRAME_MS)
             shown = i
+            haptics.tick()
         }
         shown = Int.MAX_VALUE
         if (r.getOrNull()?.requirementsMet != true) haptics.reject()

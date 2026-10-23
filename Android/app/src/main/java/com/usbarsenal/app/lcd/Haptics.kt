@@ -65,8 +65,8 @@ class Haptics(private val view: View, private val feedback: HapticFeedback, priv
     // Segment change, LUN switch, and every D-pad or keyboard focus move
     fun tick() = simple(HapticFeedbackType.SegmentTick)
 
-    // The caller spaces these at least 8px of trackpad travel apart
-    fun dragTick() = simple(HapticFeedbackType.SegmentFrequentTick)
+    // Trackpad travel, spaced 8px apart by the caller, and a shell landing characters
+    fun frequentTick() = simple(HapticFeedbackType.SegmentFrequentTick)
 
     // Stop all and eject
     fun gestureEnd() = simple(HapticFeedbackType.GestureEnd)
