@@ -48,13 +48,15 @@ class ParsersTest {
         assertEquals(true, c.requirementsMet)
     }
 
-    // /sys/class/udc, a controller a line with its state, which can be several words
+    // /sys/class/udc, a controller a line with its state, which can be several words. GKI's
+    // dummy_udc.0 never counts
     @Test
     fun controllers() {
         assertEquals(
-            listOf(Udc("a600000.dwc3", "configured"), Udc("dummy_udc.0", "not attached"), Udc("bare", "")),
+            listOf(Udc("a600000.dwc3", "configured"), Udc("bare", "")),
             parseUdcs(listOf("a600000.dwc3 configured", "dummy_udc.0 not attached", "", "  bare  ")),
         )
+        assertEquals(emptyList<Udc>(), parseUdcs(listOf("dummy_udc.0 not attached")))
     }
 
     // The flag goes right after the binary, quoted, and is nothing without a pick

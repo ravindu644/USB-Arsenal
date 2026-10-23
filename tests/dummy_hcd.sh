@@ -25,8 +25,8 @@ trap 'rm -rf "$TMP"' EXIT
 modprobe dummy_hcd
 modprobe libcomposite
 [ -e /sys/class/udc/$UDC ] || die "dummy_hcd gave no $UDC"
-# With other controllers present, the tool must refuse to guess
-[ "$(ls /sys/class/udc | wc -l)" = 1 ] && A="" || A="--udc $UDC"
+# A dummy controller is never picked by itself, so it is always named
+A="--udc $UDC"
 
 "$B" $A check >/dev/null || die "check reports missing MUST HAVE features"
 ok "check passes"

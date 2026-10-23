@@ -191,11 +191,22 @@ int ua_cmd_check(int argc, char **argv) {
   }
   snprintf(desc, sizeof(desc), "USB device controller%s%s%s", nudc ? " (" : "",
            have_udc ? udc : list, nudc ? ")" : "");
-  line("udc", have_udc, 1, desc,
-       nudc > 1 ? "More than one controller; pick one with --udc"
-       : nudc   ? "No such controller as the one --udc names"
-                : "No peripheral-mode controller in /sys/class/udc (on a "
-                  "Raspberry Pi: dtoverlay=dwc2)");
+  /* A dual-role controller leaves /sys/class/udc while its port is a host:
+   * dwc3 removes its gadget on the switch (__dwc3_set_mode) */
+  char why[PATH_MAX];
+  if (ua_udc_opt)
+    snprintf(why, sizeof(why),
+             "%s is not in /sys/class/udc now: a typo, or a dual-role port in "
+             "host mode (OTG), which lists none until it is a device again",
+             ua_udc_opt);
+  else
+    snprintf(why, sizeof(why), "%s",
+             nudc > 1 ? "More than one controller; pick one with --udc"
+                      : "No peripheral-mode controller in /sys/class/udc now. "
+                        "A dual-role port in host mode (OTG) lists none, and "
+                        "dummy_udc.* counts only when --udc names it; on a "
+                        "Raspberry Pi: dtoverlay=dwc2");
+  line("udc", have_udc, 1, desc, why);
   missing += !have_udc;
 
   int have_backend = have_cfs && have_udc && root && ua_gadget_open(&g) == 0;

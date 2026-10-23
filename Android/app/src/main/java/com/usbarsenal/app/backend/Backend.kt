@@ -35,7 +35,7 @@ fun parseUdcs(lines: List<String>): List<Udc> = lines.mapNotNull { line ->
     val l = line.trim().ifEmpty { return@mapNotNull null }
     val gap = l.indexOf(' ')
     if (gap < 0) Udc(l, "") else Udc(l.substring(0, gap), l.substring(gap + 1).trim())
-}
+}.filterNot { it.name.startsWith("dummy_udc.") } // GKI's built-in dummy_hcd reaches no host; the backend skips it too
 
 // " --udc NAME" while a controller is picked; it goes right after the binary on every command
 fun udcFlag(name: String?) = name?.let { " --udc " + shellQuote(it) }.orEmpty()

@@ -6,7 +6,9 @@ the hand-back first, and keep the evidence.
 ## Without a phone
 
 `sudo tests/dummy_hcd.sh` runs storage, a CD-ROM swap, HID, NCM, `status` and `stop`
-against the kernel's `dummy_hcd` virtual controller, whose host side is the same PC.
+against the kernel's `dummy_hcd` virtual controller, whose host side is the same PC. A
+`dummy_udc.*` is never picked by itself (every GKI phone has one), so the script names it with
+`--udc`; do the same when running commands against it by hand.
 
 ## On a phone
 

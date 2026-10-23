@@ -540,3 +540,8 @@ Tick a box only when the item is merged and verified as described in its phase.
   HID's interval as fixed before HID first runs; before, a fresh launch on a stock kernel
   offered the steppers until a running keyboard said otherwise (S10, 4.14). Setup shows its
   steps as dots in place of `< BACK`, and the Controller step's hints cover every UDC state.
+- 2026-10-23: GKI kernels build `dummy_hcd` in (`gki_defconfig`), so `/sys/class/udc` lists a
+  `dummy_udc.0` beside the real controller on nearly every 5.10+ phone; it is never picked
+  unless `--udc` names it, and the app leaves it out of the Controller step. On the M55
+  (SM7450, 5.10) the real `a600000.dwc3` leaves the list while the port is a USB host (dwc3
+  removes its gadget on the role switch), so `check` and the commands now say so.
