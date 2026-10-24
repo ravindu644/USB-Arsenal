@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -17,18 +18,46 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.usbarsenal.app.backend.Cache
 import com.usbarsenal.app.backend.readDroidspaces
+import com.usbarsenal.app.backend.readUplinks
 import com.usbarsenal.app.lcd.Lcd
 import com.usbarsenal.app.lcd.LcdType
 
-// A setting typed in: its input on the right, and under it what is wrong with it, if anything
+/*
+ * A setting typed in: its input on the right, and under it [problem] while what is typed is not
+ * [valid]. [filter] drops what the value cannot hold, so it never shows. The text stays here
+ * until it is valid, or empty (the default), and only then goes to the setup: one left invalid
+ * is dropped on the way out and never applied. A change to the setup (Discard) resets it.
+ */
 @Composable
-private fun TypedRow(label: String, value: String, placeholder: String, problem: String?, onChange: (String) -> Unit) {
-    Kv(label) { Input(value, onChange, Modifier.width(200.dp).padding(vertical = 4.dp), placeholder = placeholder) }
-    if (problem != null) Warn(problem)
+private fun TypedRow(
+    label: String,
+    value: String,
+    placeholder: String,
+    problem: String,
+    valid: (String) -> Boolean,
+    keyboard: KeyboardOptions,
+    filter: (String) -> String,
+    onChange: (String) -> Unit,
+) {
+    var text by remember(value) { mutableStateOf(value) }
+    val ok = text.isBlank() || valid(text)
+    Kv(label) {
+        Input(text, {
+            text = filter(it)
+            if (text.isBlank() || valid(text)) onChange(text)
+        }, Modifier.width(200.dp).padding(vertical = 4.dp), placeholder = placeholder, keyboard = keyboard)
+    }
+    if (!ok) Warn(problem)
 }
+
+// The URI keyboard has the digits, '.' and '/' an address needs
+private val ADDRESS_KEYS = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false)
+private val NAME_KEYS = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false)
 
 /*
  * Tether: what the next start brings up, every option `tether start` takes, around the live
@@ -56,6 +85,12 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
     val fault = Gadget.fault?.takeIf { it.where == Fn.TETHER }
     LaunchedEffect(fault) { if (fault != null) shake.fire() }
     var choosing by rememberSaveable { mutableStateOf(false) }
+    // The uplinks as last listed, re-read each time the sheet opens: they come and go with Wi-Fi and data
+    var pickingUp by rememberSaveable { mutableStateOf(false) }
+    var uplinks by remember { mutableStateOf(Cache.uplinks.orEmpty()) }
+    LaunchedEffect(pickingUp) { if (pickingUp) readUplinks()?.let { uplinks = it; Cache.uplinks = it } }
+    // An empty upstream is the profile's, or the backend's own pick
+    val auto = profile["tether_upstream"] ?: "auto"
 
     // The chain shows what runs; the rows show what the next start brings up
     val gatewayLive = live?.gateway ?: plan.gateway
@@ -110,7 +145,7 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
                     if (plan.gateway) {
                         val stopped = containers != null && plan.container !in containers
                         LinkRow("Container", if (stopped) "${plan.container} · not running" else plan.container, { choosing = true }, Modifier.opener("tether/container"))
-                        TypedRow("Its iface", plan.iface, "usb0", "an interface name, up to 15 characters".takeUnless { plan.iface.isBlank() || validIface(plan.iface) }) {
+                        TypedRow("Its iface", plan.iface, "usb0", "an interface name, up to 15 characters", ::validIface, NAME_KEYS, ::ifaceInput) {
                             set(plan.copy(iface = it))
                         }
                         Kv("Host IPv4") { Text("by the container", LcdType.data) }
@@ -123,18 +158,17 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
                         if (plan.net) {
                             TypedRow(
                                 "Address", plan.address, profile["tether_address"] ?: DEFAULT_ADDRESS,
-                                "a host address with a /8 to /30 prefix".takeUnless { plan.address.isBlank() || validAddress(plan.address) },
+                                "a host address with a /8 to /30 prefix", ::validAddress, ADDRESS_KEYS,
+                                { it.filter { c -> c.isDigit() || c in "./" }.take(18) },
                             ) { set(plan.copy(address = it)) }
                             Kv("Host IPv4") { Text(hostOf(address.trim()) ?: "-", LcdType.data) }
                             Kv("Host IPv6") { Text(live?.ipv6?.ifEmpty { null } ?: "-", LcdType.data) }
                             TypedRow(
                                 "DNS", plan.dns, profile["tether_dns"]?.replace(",", ", ") ?: "1.1.1.1, 8.8.8.8",
-                                "IPv4 addresses, comma-separated, 127 characters at most".takeUnless { plan.dns.isBlank() || validDns(plan.dns) },
+                                "IPv4 addresses, comma-separated, 127 characters at most", ::validDns, ADDRESS_KEYS,
+                                { it.filter { c -> c.isDigit() || c in ".," }.take(127) },
                             ) { set(plan.copy(dns = it)) }
-                            TypedRow(
-                                "Upstream", plan.upstream, profile["tether_upstream"] ?: "auto",
-                                "an interface name, up to 15 characters".takeUnless { plan.upstream.isBlank() || validIface(plan.upstream) },
-                            ) { set(plan.copy(upstream = it)) }
+                            LinkRow("Upstream", plan.upstream.ifBlank { auto }, { pickingUp = true }, Modifier.opener("tether/upstream"))
                         }
                     }
                 }
@@ -149,6 +183,15 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
                 choosing = false
             },
             onDismiss = { choosing = false },
+        )
+        // What is set stays listed while it is down, or when the command line set it
+        ChoiceSheet(
+            pickingUp, "Upstream", (listOf(auto) + listOfNotNull(plan.upstream.ifBlank { null }) + uplinks).distinct(), plan.upstream.ifBlank { auto }, "",
+            onPick = {
+                set(plan.copy(upstream = if (it == auto) "" else it))
+                pickingUp = false
+            },
+            onDismiss = { pickingUp = false },
         )
     }
 }

@@ -77,6 +77,10 @@ object Cache {
         get() = text("images")?.let { parseImages(it.lines()) }
         set(v) = put("images", v?.joinToString("\n") { "${it.bytes} ${it.path}" })
 
+    var uplinks: List<String>?
+        get() = text("uplinks")?.lines()?.filter { it.isNotEmpty() }
+        set(v) = put("uplinks", v?.joinToString("\n"))
+
     var free: Long?
         get() = text("free")?.toLongOrNull()
         set(v) = put("free", v?.toString())

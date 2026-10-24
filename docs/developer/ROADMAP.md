@@ -608,3 +608,7 @@ Tick a box only when the item is merged and verified as described in its phase.
   A shade on a negative theme is 25%, not 50%: the ink is the light colour there, and
   half of it lit the whole screen (seen on Plasma's Keys + mouse page).
   The box over a shade is plain there too, not inverted: the dark colour of the pair.
+- 2026-10-25: images live in `/sdcard/USB-Arsenal/Disks`; Storage lists and Pick image takes
+  only `.iso .img .bin .raw .ima .dd`, and Create gives a bare name `.img`. Tether's Upstream
+  is picked from the interfaces with a default route (Droidspaces' rule); text fields keep only
+  what their value can hold, and an invalid Tether value is never sent, so Back drops it.

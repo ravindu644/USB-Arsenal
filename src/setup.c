@@ -329,7 +329,7 @@ void ua_help_setup(void) {
   printf("\nThe files are <workspace>/Gadget/setup.conf and running.conf.\n\n"
          "Examples:\n"
          "  " UA_NAME
-         " setup set storage_lun0=auto:/sdcard/USB-Arsenal/win.iso\n"
+         " setup set storage_lun0=auto:/sdcard/USB-Arsenal/Disks/win.iso\n"
          "  " UA_NAME " setup set tether_function=rndis tether_dns=9.9.9.9\n"
          "  " UA_NAME " storage start\n"
          "  " UA_NAME " setup show\n");

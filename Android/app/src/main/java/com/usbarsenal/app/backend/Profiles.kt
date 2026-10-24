@@ -3,8 +3,8 @@ package com.usbarsenal.app.backend
 import org.json.JSONArray
 import org.json.JSONObject
 
-// Identity's profiles, files `identity set` takes, kept beside the images
-const val PROFILES = "$IMAGES/Profiles"
+// Identity's profiles, files `identity set` takes, kept beside the images' folder
+const val PROFILES = "$FOLDER/Profiles"
 
 /*
  * A profile as Identity shows and edits it: the keys the host sees by name. The file holds every

@@ -166,6 +166,10 @@ object Gadget {
             (r.out + r.err).forEach { cli += plain(it) }
             fault = Fault(null, r.err.lastOrNull()?.let(::plain) ?: "[-] setup set failed (exit ${r.code})")
             fails++
+            // Refused, they are dropped: the setup stays what the backend holds, and a batch it
+            // refused would otherwise fail every flush after it, the one before a start too
+            batch.forEach { (k, v) -> if (edits[k] == v) edits.remove(k) }
+            Cache.edits = edits
         }
     }
 
@@ -524,6 +528,12 @@ fun validDns(s: String) = s.trim().length <= 127 && s.split(',').filter { it.isN
 // An interface name the kernel takes, as dev_valid_name: 1 to 15 characters, not . or .., no
 // slash, colon or space
 fun validIface(s: String) = s.trim().let { n -> n.length in 1..15 && n != "." && n != ".." && n.none { it == '/' || it == ':' || it.isWhitespace() } }
+
+// What an interface field keeps as it is typed or pasted: Droidspaces' ifaceNameInput, ASCII only
+fun ifaceInput(s: String) = s.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it in "_-." }.take(15)
+
+// What a USB string field keeps: config.c's printable ASCII, without the '#' it reads as a comment
+fun usbText(s: String) = s.filter { it in ' '..'~' && it != '#' }.take(126)
 
 /*
  * Identity's pick: the profile the screen has chosen, a canonical path, or null for the built-in

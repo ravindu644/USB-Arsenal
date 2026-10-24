@@ -33,8 +33,9 @@ starts or stops it with what its screen set up. The bar at the bottom says who h
 Android, or the gadget and which controller. **Stop all** stops everything and gives the port
 back to Android, so ADB and MTP return.
 
-**Storage** serves image files from `/sdcard/USB-Arsenal`. Pick a LUN on the strip (up to
-eight), a file for it, and how the host sees it:
+**Storage** serves images from `/sdcard/USB-Arsenal/Disks`: files ending in `.iso`, `.img`,
+`.bin`, `.raw`, `.ima` or `.dd`. Other files are not listed, and **Pick image** refuses them.
+Pick a LUN on the strip (up to eight), an image for it, and how the host sees it:
 
 | Mode | The host sees |
 |---|---|
@@ -51,7 +52,8 @@ image** opens the system picker; a picker that gives no real file path is refuse
 image into the folder instead.
 
 **Tether** shares the phone's internet with the host: NCM, or RNDIS for older Windows, with
-the address, DNS and upstream you set. With [Droidspaces](https://github.com/ravindu644/Droidspaces-OSS)
+the address and DNS you set, and the upstream picked from the phone's uplinks (every
+interface with a default route), or `auto`. With [Droidspaces](https://github.com/ravindu644/Droidspaces-OSS)
 installed, gateway mode hands the link to one of its running containers instead
 ([tethering.md](tethering.md)).
 

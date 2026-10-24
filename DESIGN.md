@@ -948,7 +948,7 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | NCM / RNDIS | `tether start --ncm` / `tether start --rndis` |
 | Tether chain, Tx, Rx | `status --json`: `tether`'s `iface`, `upstream`, `gateway_*`, `tx_bytes`, `rx_bytes` |
 | Gateway, container, its iface | `--gateway CONTAINER`, `--gateway-iface IFACE`; the containers are `droidspaces show --json`'s `running`, and the gateway shows only with `/data/local/Droidspaces/bin/droidspaces` installed |
-| Tether address, DNS, upstream, DHCP and NAT | `--address CIDR`, `--dns IP[,IP]` (127 characters at most), `--upstream IFACE`, `--no-net` |
+| Tether address, DNS, upstream, DHCP and NAT | `--address CIDR`, `--dns IP[,IP]` (127 characters at most), `--upstream IFACE`, `--no-net`; the upstream's list is app-side, the interfaces a default route leaves by in `ip route show table all` (Droidspaces' rule) |
 | Not applied sheet, Apply, Discard | `status --json`'s `pending`; `storage apply`, `tether apply`, `hid apply`; `setup revert <function>` |
 | Each function's setup | `setup set KEY=VALUE` on every edit (one write a beat later), read back as `status --json`'s `setup`; the picks are `storage_lunN=MODE:PATH`, Tether's rows the `tether_*` keys, the interval `hid_interval` |
 | HID interval | `hid start --interval N`, period 2^(N-1)×125µs, set at start; without the f_hid patch (`check`'s `hid_interval` is 0) it is `1 ms, fixed by this kernel` and the steppers are dead |
@@ -973,7 +973,8 @@ every screen draws the last known world and a live read replaces only what chang
 read keeps the last value, and after three in a row Home's bar says `no answer from usb-arsenal`.
 
 App-side features, done by the app itself: the Not applied sheet's asking (what it asks about is
-the backend's `pending`), the `/sdcard/USB-Arsenal` file list, Create (a sparse
+the backend's `pending`), the `/sdcard/USB-Arsenal/Disks` image list (by extension: `.iso`,
+`.img`, `.bin`, `.raw`, `.ima`, `.dd`; Pick image refuses any other), Create (a sparse
 image, as `truncate -s` does, or a full one with progress), HID input written to `/dev/hidgN`,
 the Motion and Haptics switches and the Theme pick in Settings, and the profiles folder,
 `/sdcard/USB-Arsenal/Profiles`, which Identity lists and writes. Settings' System path makes or

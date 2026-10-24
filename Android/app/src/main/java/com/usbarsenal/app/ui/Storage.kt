@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.usbarsenal.app.backend.Cache
 import com.usbarsenal.app.backend.IMAGES
 import com.usbarsenal.app.backend.ImageFile
+import com.usbarsenal.app.backend.NOT_IMAGE
 import com.usbarsenal.app.backend.NO_PATH
 import com.usbarsenal.app.backend.Root
 import com.usbarsenal.app.backend.shellQuote
@@ -43,6 +44,7 @@ import com.usbarsenal.app.backend.createSparse
 import com.usbarsenal.app.backend.fileBytes
 import com.usbarsenal.app.backend.freeBytes
 import com.usbarsenal.app.backend.imagesDir
+import com.usbarsenal.app.backend.isImage
 import com.usbarsenal.app.backend.listImages
 import com.usbarsenal.app.backend.realPath
 import com.usbarsenal.app.backend.removeFile
@@ -98,13 +100,14 @@ fun modeHint(mode: String): String = when (mode) {
     else -> "writable disk, the host can change it"
 }
 
-// The Create sheet's size, in bytes; null for anything that is not a whole number above 0
-fun createBytes(size: String, gb: Boolean): Long? = size.trim().toLongOrNull()?.takeIf { it > 0 }?.times(if (gb) GIB else MIB)
+// The Create sheet's size, in bytes; null for anything that is not a whole number from 1 to the
+// field's six digits, which also keeps the product inside a Long
+fun createBytes(size: String, gb: Boolean): Long? = size.trim().toLongOrNull()?.takeIf { it in 1..999_999 }?.times(if (gb) GIB else MIB)
 
 /*
  * Storage: a drive per LUN. The strip picks the LUN, the drive shows what is picked for it
  * (its LED, whether that LUN is live), the mode segments say how the host will see it, and
- * the files in /sdcard/USB-Arsenal load into it. It only builds the setup Home's switch
+ * the images in /sdcard/USB-Arsenal/Disks load into it. It only builds the setup Home's switch
  * starts, every LUN in one start; a change while storage runs is applied, or discarded, on the way back.
  */
 @Composable
@@ -154,7 +157,7 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
         if (uri != null) {
             scope.launch {
                 realPath(context, uri)
-                    .onSuccess { serve(it, mode) }
+                    .onSuccess { if (isImage(it)) serve(it, mode) else Gadget.fault = Fault(Fn.STORAGE, NOT_IMAGE) }
                     .onFailure { Gadget.fault = Fault(Fn.STORAGE, it.message ?: NO_PATH) }
             }
         }
@@ -249,7 +252,8 @@ private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, fre
     var written by remember { mutableStateOf<Pair<Long, Long>?>(null) }
     var failed by remember { mutableStateOf<String?>(null) }
     var job by remember { mutableStateOf<Job?>(null) }
-    val target = name.trim().ifEmpty { "disk.img" }
+    // A name without an image's extension gets .img, so the image is listed once it exists
+    val target = name.trim().ifEmpty { "disk.img" }.let { if (isImage(it)) it else "$it.img" }
     val bytes = createBytes(size, gb)
     // Each opening starts with no name, so the last image's name is never shown as taken
     LaunchedEffect(open) {
@@ -335,7 +339,7 @@ private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, fre
     ) {
         Title("Create")
         if (progress == null) {
-            Field("Name") { Input(name, { name = it }, Modifier.fillMaxWidth(), placeholder = "disk.img") }
+            Field("Name") { Input(name, { name = it.filter { c -> c != '/' && !c.isISOControl() }.take(255) }, Modifier.fillMaxWidth(), placeholder = "disk.img") }
             if (taken) Warn("name taken")
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(Modifier.fillMaxWidth()) {
@@ -343,7 +347,7 @@ private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, fre
                     if (free != null) Text("free ${sizeText(free)}", LcdType.data)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(Lcd.tight), verticalAlignment = Alignment.CenterVertically) {
-                    Input(size, { size = it.filter(Char::isDigit) }, Modifier.weight(1f), keyboard = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    Input(size, { size = it.filter(Char::isDigit).take(6) }, Modifier.weight(1f), keyboard = KeyboardOptions(keyboardType = KeyboardType.Number))
                     Segs(listOf("MB", "GB"), if (gb) 1 else 0, { gb = it == 1 }, Modifier.width(140.dp))
                 }
             }

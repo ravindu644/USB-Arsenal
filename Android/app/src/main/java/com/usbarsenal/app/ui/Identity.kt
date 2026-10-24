@@ -50,6 +50,8 @@ private val POWERS = listOf(100, 250, 500)
 private val HEX4 = Regex("[0-9a-fA-F]{4}")
 
 // What is wrong with a profile's fields, each by its field; nothing when it can be written
+private fun hexInput(s: String) = s.filter { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }.take(4)
+
 fun profileProblems(name: String, product: String, maker: String, vid: String, pid: String, taken: Boolean, serial: String = ""): Map<String, String> {
     val out = mutableMapOf<String, String>()
     val n = name.trim()
@@ -314,20 +316,20 @@ private fun ProfileSheet(open: Boolean, profile: Profile?, dir: String, names: L
         },
     ) {
         Title(if (editing == null) "Create" else "Edit")
-        Field("Name") { Input(name, { name = it }, Modifier.fillMaxWidth(), placeholder = "pixel-8", enabled = editing == null) }
+        Field("Name") { Input(name, { name = it.filter { c -> c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c in " ._-" }.take(64) }, Modifier.fillMaxWidth(), placeholder = "pixel-8", enabled = editing == null) }
         problems["name"]?.takeIf { name.isNotEmpty() }?.let { Warn(it) }
-        Field("Product") { Input(product, { product = it }, Modifier.fillMaxWidth(), placeholder = "USB Arsenal") }
+        Field("Product") { Input(product, { product = usbText(it) }, Modifier.fillMaxWidth(), placeholder = "USB Arsenal") }
         problems["product"]?.takeIf { product.isNotEmpty() }?.let { Warn(it) }
-        Field("Maker") { Input(maker, { maker = it }, Modifier.fillMaxWidth(), placeholder = "USB Arsenal") }
+        Field("Maker") { Input(maker, { maker = usbText(it) }, Modifier.fillMaxWidth(), placeholder = "USB Arsenal") }
         problems["maker"]?.takeIf { maker.isNotEmpty() }?.let { Warn(it) }
         // Left empty, the host sees the phone's own serial
-        Field("Serial") { Input(serial, { serial = it }, Modifier.fillMaxWidth(), placeholder = "from this phone") }
+        Field("Serial") { Input(serial, { serial = usbText(it) }, Modifier.fillMaxWidth(), placeholder = "from this phone") }
         problems["serial"]?.let { Warn(it) }
         Field("USB IDs") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Input(vid, { vid = it.take(4) }, Modifier.width(96.dp), placeholder = "1d6b", keyboard = ids)
+                Input(vid, { vid = hexInput(it) }, Modifier.width(96.dp), placeholder = "1d6b", keyboard = ids)
                 Text(":", LcdType.data)
-                Input(pid, { pid = it.take(4) }, Modifier.width(96.dp), placeholder = "0104", keyboard = ids)
+                Input(pid, { pid = hexInput(it) }, Modifier.width(96.dp), placeholder = "0104", keyboard = ids)
             }
         }
         problems["ids"]?.let { Warn(it) }

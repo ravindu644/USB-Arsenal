@@ -67,6 +67,14 @@ class AuditTest {
         assertTrue(validDns("1.1.1.1,8.8.8.8"))
     }
 
+    // A field keeps only what its value can hold, typed or pasted
+    @Test
+    fun inputsDropWhatTheyCannotHold() {
+        assertEquals("wlan0rm", ifaceInput("wlan0 ;rm"))
+        assertEquals("abcdefghijklmno", ifaceInput("abcdefghijklmnop"))
+        assertEquals("ab", usbText("a#b\n"))
+    }
+
     // A drive says its kind once: rw is a disk, its tag says the access
     @Test
     fun driveKind() {

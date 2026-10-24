@@ -41,7 +41,7 @@ The same binary runs on a Linux board with a USB device port, and inside a privi
 
 1. Install the APK from the [latest release](https://github.com/ravindu644/USB-Arsenal/releases/latest),
    grant it root, and let it install the backend.
-2. Put an ISO or a disk image in `/sdcard/USB-Arsenal`, open **Storage** and pick it.
+2. Put an ISO or a disk image in `/sdcard/USB-Arsenal/Disks`, open **Storage** and pick it.
 3. Flip the switch on Home and plug the phone into a computer.
 
 Everything the app does, a root shell can do with `usb-arsenal` ([usage](docs/usage.md)).

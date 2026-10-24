@@ -130,6 +130,14 @@ suspend fun readDroidspaces(): Droidspaces {
     return Droidspaces(true, if (r.ok) runCatching { parseContainers(r.out.joinToString("\n")) }.getOrNull() else null)
 }
 
+// The interfaces a default route leaves by, in any table: the phone's uplinks (Droidspaces' rule);
+// null when they could not be read
+suspend fun readUplinks(): List<String>? = Root.read("ip route show table all").takeIf { it.ok }?.out
+    ?.filter { it.startsWith("default") }
+    ?.mapNotNull { it.trim().split(Regex("\\s+")).zipWithNext().firstOrNull { (k, _) -> k == "dev" }?.second }
+    ?.filterNot { it.startsWith("ds-") || it.startsWith("dummy") }
+    ?.distinct()?.sorted()
+
 // The folder's files as `stat -c '%s %n'` prints them
 fun parseImages(lines: List<String>): List<ImageFile> = lines.mapNotNull { line ->
     val bytes = line.substringBefore(' ').toLongOrNull() ?: return@mapNotNull null

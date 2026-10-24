@@ -7,10 +7,25 @@ import android.system.Os
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-// The folder Storage lists and Create writes to, as root sees it in the global mount namespace,
-// which is where every path here is opened; the app's own view of storage is not involved
+// The app's folder on shared storage, as root sees it in the global mount namespace, which is
+// where every path here is opened; the app's own view of storage is not involved
 @SuppressLint("SdCardPath")
-const val IMAGES = "/sdcard/USB-Arsenal"
+const val FOLDER = "/sdcard/USB-Arsenal"
+
+// The folder Storage lists and Create writes to
+const val IMAGES = "$FOLDER/Disks"
+
+// What Storage serves: an image by its name, as the folder lists it and the picker takes it.
+// A name that is only the extension (.iso) is a hidden file with none
+private val IMAGE_EXTS = setOf("iso", "img", "bin", "raw", "ima", "dd")
+
+fun isImage(path: String): Boolean {
+    val name = path.substringAfterLast('/')
+    val ext = name.substringAfterLast('.', "")
+    return ext.lowercase() in IMAGE_EXTS && name.length > ext.length + 1
+}
+
+const val NOT_IMAGE = "[-] Not a disk image or ISO (.iso .img .bin .raw .ima .dd)"
 
 // An image the folder holds: where it is, and how big
 data class ImageFile(val path: String, val bytes: Long) {
@@ -21,10 +36,10 @@ data class ImageFile(val path: String, val bytes: Long) {
 // form the kernel reports a LUN's file in, so a file and the LUN serving it compare equal
 suspend fun imagesDir(): String = Root.read("mkdir -p $IMAGES && readlink -f $IMAGES").out.firstOrNull() ?: IMAGES
 
-// The folder's files; stat prints "<bytes> <path>"
+// The folder's images; stat prints "<bytes> <path>"
 suspend fun listImages(dir: String): List<ImageFile> = parseImages(
     Root.read("for f in ${shellQuote(dir)}/*; do [ -f \"\$f\" ] && stat -c '%s %n' \"\$f\"; done; true").out,
-)
+).filter { isImage(it.path) }
 
 // What the folder's filesystem has left for a new image
 suspend fun freeBytes(): Long? = Root.read("stat -f -c '%a %S' $IMAGES").out.firstOrNull()?.split(' ')?.let { (a, s) ->

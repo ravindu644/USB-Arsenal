@@ -1,7 +1,10 @@
 package com.usbarsenal.app.ui
 
+import com.usbarsenal.app.backend.isImage
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 // Storage says sizes, warnings and the Create size the way the boards and storage.c do
@@ -39,5 +42,17 @@ class StorageTest {
         assertNull(createBytes("0", gb = true))
         assertNull(createBytes("", gb = true))
         assertNull(createBytes("4.5", gb = true))
+        // Past the field's six digits it would overflow a Long
+        assertNull(createBytes("99999999999", gb = true))
+    }
+
+    // Only an image is listed or picked, by its extension in any case
+    @Test
+    fun imagesByExtension() {
+        assertTrue(isImage("/x/Win11.ISO"))
+        assertTrue(isImage("/x/pen drive.img"))
+        assertFalse(isImage("/x/movie.mp4"))
+        assertFalse(isImage("/x/img"))
+        assertFalse(isImage("/x/.iso"))
     }
 }
