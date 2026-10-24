@@ -50,12 +50,13 @@ private fun Section(label: String) {
 }
 
 /*
- * Settings, in sections parted by rules: App (motion, haptics), Identity (the profile in force,
- * opening Identity), Backend (the PATH link, read at the next boot, and Reinstall), Credits (the
- * fonts) and About. The PATH link is Droidspaces' switch, done the same way.
+ * Settings, in sections parted by rules: Identity (the profile in force, opening Identity),
+ * Backend (the PATH link, read at the next boot, Requirements, which runs Check again after a
+ * kernel update, and Reinstall), App (motion, haptics), Credits (the fonts) and About. The PATH
+ * link is Droidspaces' switch, done the same way.
  */
 @Composable
-fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> Unit, fix: (Backend) -> Unit) {
+fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> Unit, openCheck: () -> Unit, fix: (Backend) -> Unit) {
     BackHandler(onBack = back)
     val context = LocalContext.current
     val switches = LocalSwitches.current
@@ -93,12 +94,8 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
             Top { BackKey() }
             Title("Settings")
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Group("App")
-                Kv("Motion") { Dip(switches.motion, { switches.motion = it }, "Motion", Modifier.focusRequester(focusOn())) }
-                Kv("Haptics") { Dip(switches.haptics, { switches.haptics = it }, "Haptics") }
-
-                Section("Identity")
-                LinkRow("Profile", profileName(Gadget.profile), openIdentity, Modifier.opener("settings/identity"))
+                Group("Identity")
+                LinkRow("Profile", profileName(Gadget.profile), openIdentity, Modifier.opener("settings/identity").focusRequester(focusOn()))
 
                 // Every command names it. The backend keeps the controller it holds while bound,
                 // so a change waits until nothing is
@@ -123,9 +120,14 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
                         changed -> Warn("applies from the next boot")
                     }
                 }
-                Key("Reinstall", Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp).opener("settings/reinstall"), enabled = backend != null) {
+                Key("Requirements", Modifier.fillMaxWidth().padding(top = 6.dp).opener("settings/check"), onClick = openCheck)
+                Key("Reinstall", Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 10.dp).opener("settings/reinstall"), enabled = backend != null) {
                     backend?.let(fix)
                 }
+
+                Section("App")
+                Kv("Motion") { Dip(switches.motion, { switches.motion = it }, "Motion") }
+                Kv("Haptics") { Dip(switches.haptics, { switches.haptics = it }, "Haptics") }
 
                 Section("Credits")
                 LinkRow("Fonts", "SIL OFL 1.1", openFonts, Modifier.opener("settings/fonts"))

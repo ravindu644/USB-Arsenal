@@ -599,3 +599,5 @@ Tick a box only when the item is merged and verified as described in its phase.
   status read said it was pending; the edit now counts until that read lands. Tether's settings
   are back under Configure. `tests/device.sh` drives the whole app on a phone: 63 checks pass
   on the a16xm, the OpenWrt gateway included.
+- 2026-10-25: Settings' Requirements runs Check again, with Back and Done, so a kernel
+  update can be checked without reinstalling; App moved below Backend.
