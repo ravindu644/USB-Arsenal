@@ -36,6 +36,7 @@ import com.usbarsenal.app.backend.setPathLinked
 import com.usbarsenal.app.lcd.Lcd
 import com.usbarsenal.app.lcd.LcdType
 import com.usbarsenal.app.lcd.LocalSwitches
+import com.usbarsenal.app.lcd.Theme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -73,6 +74,7 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
     // The controllers as read at launch, so the USB section is there from the first frame
     val udcs = Controller.udcs.orEmpty()
     var choosingUdc by remember { mutableStateOf(false) }
+    var choosingTheme by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         // Reads only, none behind the change lane; each replaces its cached value when it answers
         backendState(context).let { Gadget.backend = it; Cache.backend = it }
@@ -128,6 +130,7 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
                 Section("App")
                 Kv("Motion") { Dip(switches.motion, { switches.motion = it }, "Motion") }
                 Kv("Haptics") { Dip(switches.haptics, { switches.haptics = it }, "Haptics") }
+                LinkRow("Theme", switches.theme.label, { choosingTheme = true }, Modifier.opener("settings/theme"))
 
                 Section("Credits")
                 LinkRow("Fonts", "SIL OFL 1.1", openFonts, Modifier.opener("settings/fonts"))
@@ -156,6 +159,16 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
             },
             onDismiss = { choosingUdc = false },
             detail = { name -> udcs.firstOrNull { it.name == name }?.state.orEmpty() },
+        )
+        // The pick cuts the whole screen over in one frame, as an LCD would
+        ChoiceSheet(
+            choosingTheme, "Theme", Theme.entries.map { it.label }, switches.theme.label, "",
+            onPick = { label ->
+                choosingTheme = false
+                switches.theme = Theme.entries.first { it.label == label }
+            },
+            onDismiss = { choosingTheme = false },
+            detail = { label -> if (Theme.entries.first { it.label == label }.lit) "lit" else "negative" },
         )
     }
 }

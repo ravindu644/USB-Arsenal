@@ -37,9 +37,9 @@ private fun Density.pattern(cell: Dp, cells: Int, color: Color, lit: List<Pair<I
     return ShaderBrush(ImageShader(bitmap, TileMode.Repeated, TileMode.Repeated))
 }
 
-// The LCD pixel grid: a line every second dp both ways, over everything, the one translucent colour
-fun Modifier.scanlines() = drawWithCache {
-    val grid = pattern(1.dp, 2, Lcd.Scanline, listOf(0 to 0, 1 to 0, 0 to 0, 0 to 1))
+// The LCD pixel grid: a line every second dp both ways, over everything, the one translucent colour: ink at 6%
+fun Modifier.scanlines(ink: Color) = drawWithCache {
+    val grid = pattern(1.dp, 2, ink.copy(alpha = 0x0F / 255f), listOf(0 to 0, 1 to 0, 0 to 0, 0 to 1))
     onDrawWithContent {
         drawContent()
         drawRect(grid)

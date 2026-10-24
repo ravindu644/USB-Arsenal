@@ -63,7 +63,8 @@ stick moves the pointer; A and X click.
 
 **Log** shows every command the app ran this session and what it printed. Clear empties it.
 
-**Settings**: motion and haptics, the identity profile ([identity.md](identity.md); profiles
+**Settings**: motion, haptics and the theme (eleven two-colour LCD looks, Amber by default),
+the identity profile ([identity.md](identity.md); profiles
 live in `/sdcard/USB-Arsenal/Profiles`), the controller on phones with several,
 `usb-arsenal` on PATH for root shells, Requirements (the kernel check again, after a kernel
 update) and Reinstall.

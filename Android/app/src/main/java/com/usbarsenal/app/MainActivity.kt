@@ -1,7 +1,6 @@
 package com.usbarsenal.app
 
 import android.annotation.SuppressLint
-import androidx.core.graphics.drawable.toDrawable
 import android.os.Build
 import android.os.Bundle
 import android.graphics.Color
@@ -24,17 +23,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // The splash leaves in one cut, as an LCD would, not the system's fade
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) splashScreen.setOnExitAnimationListener { it.remove() }
-        // The LCD is lit in both system themes, so the bar icons are always dark
+        // The bars are see-through; LcdTheme sets their icons' colour, as the theme, not the system, decides it
         val bars = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
         enableEdgeToEdge(bars, bars)
         val switches = Switches(applicationContext)
         // The last reads and the trackpad's settings, so the first frame draws from them
         Cache.init(applicationContext)
         HidSetup.init(applicationContext)
+        // The launch window's Pin (Android 8 to 11's splash) has done its job once Compose draws: LcdTheme replaces it
         setContent { LcdTheme(switches) { App() } }
-        // The launch window's Pin (Android 8 to 11's splash) has done its job once Compose draws;
-        // left in place it would show wherever Compose does not paint, a resize or the keyboard
-        window.setBackgroundDrawable(getColor(R.color.lcd).toDrawable())
     }
 
     /*
