@@ -243,31 +243,31 @@ fun LunStrip(count: Int, selected: Int, onSelect: (Int) -> Unit, onAdd: () -> Un
  * its row. A function this kernel lacks gets a dithered track with no knob, which focus skips.
  * [held] is the other dead look: the knob stays where it is, the track's border is dashed as a
  * disabled key's, and it keeps focus but takes no flip (a command running, a value not read yet).
- * The haptic plays on the frame the knob moves, which for a function is when its command ends.
+ * The knob moves on the tap, with its haptic, and shows that flip while the command holds the
+ * switch; then it shows what is really on, so a failure snaps it back under the error shake.
  */
 @Composable
 fun Dip(on: Boolean, onToggle: (Boolean) -> Unit, label: String, modifier: Modifier = Modifier, enabled: Boolean = true, held: Boolean = false) {
     val interaction = remember { MutableInteractionSource() }
     val haptics = LocalHaptics.current
     val ink = LocalLcd.current.ink
-    // A flip asked for and not yet drawn; a knob moved by anyone else plays nothing
-    var asked by remember { mutableStateOf(false) }
-    LaunchedEffect(on) {
-        if (asked) haptics.toggle(on)
-        asked = false
-    }
-    LaunchedEffect(held) { if (!held) asked = false }
+    // The flip asked for, until [on] changes or the hold it caused lifts
+    var flipped by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(on) { flipped = null }
+    LaunchedEffect(held) { if (!held) flipped = null }
+    val shown = flipped ?: on
     Box(
         modifier
             .heightIn(min = Lcd.touch)
             .lcdClickable(interaction, outline = true, role = Role.Switch, enabled = enabled) {
                 if (held) return@lcdClickable
-                asked = true
+                flipped = !on
+                haptics.toggle(!on)
                 onToggle(!on)
             }
             .semantics {
                 contentDescription = label
-                toggleableState = ToggleableState(on && enabled)
+                toggleableState = ToggleableState(shown && enabled)
             }
             .padding(horizontal = 2.dp),
         contentAlignment = Alignment.Center,
@@ -286,18 +286,18 @@ fun Dip(on: Boolean, onToggle: (Boolean) -> Unit, label: String, modifier: Modif
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (!enabled) return@Row
-            val mark = @Composable { Box(Modifier.weight(1f).clearAndSetSemantics {}, contentAlignment = Alignment.Center) { Text(if (on) "1" else "O", LcdType.data) } }
-            if (on) mark()
+            val mark = @Composable { Box(Modifier.weight(1f).clearAndSetSemantics {}, contentAlignment = Alignment.Center) { Text(if (shown) "1" else "O", LcdType.data) } }
+            if (shown) mark()
             // It runs over the track's edge on its side and a dot past it above and below, so
             // where it sits reads at a glance
             Box(
                 Modifier.width(26.dp).fillMaxHeight().drawBehind {
                     val edge = (Lcd.pixel * 2).toPx()
                     val rise = (Lcd.pixel * 3).toPx()
-                    drawRect(ink, Offset(if (on) 0f else -edge, -rise), Size(size.width + edge, size.height + rise * 2))
+                    drawRect(ink, Offset(if (shown) 0f else -edge, -rise), Size(size.width + edge, size.height + rise * 2))
                 },
             )
-            if (!on) mark()
+            if (!shown) mark()
         }
     }
 }

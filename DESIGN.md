@@ -453,8 +453,9 @@ It has two dead looks. `disabled` (a `.d50` track, no knob, skipped by focus) is
 the phone lacks: a function the kernel did not build, Droidspaces not installed, no NAT. `held`
 (`.dip.held`) keeps the knob where it is and dashes the track's border, as a disabled key's: it
 keeps focus but takes no flip, for a command running, a value not read yet, a backend that needs
-fixing, or storage with nothing picked. Its haptic plays on the frame the knob moves, which for
-a function is when its command ends.
+fixing, or storage with nothing picked. The knob moves on the tap, with its haptic, and the
+switch is held while the command runs; it stays if the command succeeds, and a failure puts the
+knob back under the error shake.
 
 ### Key (`.key`, `.key.pri`)
 The only button. Plain keys are amber; the primary action of a screen (`Create`, `Save`,

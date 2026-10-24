@@ -64,6 +64,8 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
     val scope = rememberCoroutineScope()
     val backend = Gadget.backend
     var linked by remember { mutableStateOf(Cache.pathLinked) }
+    // Held while the link is written, so its Dip shows the flip until the write answers
+    var linking by remember { mutableStateOf(false) }
     // The switch away from what it was first read as in this process, the closest the app knows
     // to what the boot read: then it takes effect at the next boot, which is worth saying
     // ponytail: a change made in an earlier run since the boot reads as the boot's value
@@ -112,7 +114,7 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
                 // The link lives in the module, so it is held until read, and without a backend
                 // installed: it would name a binary not there
                 Kv("System path", Modifier.shake(shake)) {
-                    Dip(linked == true, { on -> scope.launch { write(setPathLinked(on)) { linked = on } } }, "System path", held = linked == null || !installed)
+                    Dip(linked == true, { on -> linking = true; scope.launch { write(setPathLinked(on)) { linked = on }; linking = false } }, "System path", held = linking || linked == null || !installed)
                 }
                 // One line kept for its fault or its warning, so the sections below never move
                 Box(Modifier.heightIn(min = Lcd.touch)) {
