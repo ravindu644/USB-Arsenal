@@ -293,8 +293,8 @@ static void handle_conn(int conn) {
     if (r.argv[i][0] == '-' || (i > 1 && !strcmp(r.argv[i - 1], "--udc")))
       continue;
     quiet = !strcmp(r.argv[i], "status") ||
-            (!strcmp(r.argv[i], "identity") && i + 1 < r.argc &&
-             !strcmp(r.argv[i + 1], "show"));
+            ((!strcmp(r.argv[i], "identity") || !strcmp(r.argv[i], "setup")) &&
+             i + 1 < r.argc && !strcmp(r.argv[i + 1], "show"));
     break;
   }
   if (!quiet)

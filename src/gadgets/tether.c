@@ -15,8 +15,8 @@
 #include <linux/rtnetlink.h>
 #include <sys/signalfd.h>
 
-#define NCM "ncm.ua"
-#define RNDIS "rndis.ua"
+#define NCM UA_F_NCM
+#define RNDIS UA_F_RNDIS
 
 /* Below Android's VPN rules (10000+) so tethered traffic never gets pulled
  * into a VPN, above the OEM reserved range (< 1000). Same values Droidspaces
@@ -71,7 +71,11 @@ void ua_help_tether(void) {
       "The host gets a network adapter, an address by DHCP, and a route out\n"
       "through whatever connection this device is using.\n\n"
       "Actions:\n"
-      "  start   Add the network function and start sharing\n"
+      "  start   Add the network function and start sharing. The options\n"
+      "          given are saved as the setup (see `setup`); with none, the\n"
+      "          saved setup starts.\n"
+      "  apply   Restart with the setup if it changed since the start, in\n"
+      "          one replug; start if not running\n"
       "  stop    Stop sharing and remove the network function\n\n"
       "Options:\n"
       "      --rndis            Use RNDIS instead of NCM. NCM works out of\n"
@@ -88,6 +92,7 @@ void ua_help_tether(void) {
       "                         1.1.1.1,8.8.8.8)\n"
       "      --no-net           Only add the network function: no address,\n"
       "                         DHCP or NAT. For bringing your own setup.\n"
+      "                         Forgets a saved gateway.\n"
       "  -f, --foreground       Stay in the foreground instead of running\n"
       "                         the network side as a daemon\n"
       "  -G, --gateway NAME     Gateway mode: hand the link to a Droidspaces\n"
@@ -998,8 +1003,10 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
     return undo(&g, func, added);
   }
   ua_log("%s is up on %s", !strcmp(func, NCM) ? "NCM" : "RNDIS", t->iface);
-  if (no_net)
+  if (no_net) {
+    ua_running_take(UA_FN_TETHER, 0);
     return UA_EXIT_OK;
+  }
   /* The kernel creates the interface in the initial network namespace. A
    * container with its own (Droidspaces NAT or gateway mode) cannot see it,
    * so nothing below could work from here. */
@@ -1015,6 +1022,7 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
 
   if (fg) {
     ua_log("Sharing on %s; Ctrl-C to stop", t->iface);
+    ua_running_take(UA_FN_TETHER, 0);
     return serve_owned(t, -1) == 0 ? UA_EXIT_OK : undo(&g, func, added);
   }
   if (spawn_daemon(t) < 0) {
@@ -1023,6 +1031,7 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
     ua_error("The network side did not come up; see %s", p);
     return undo(&g, func, added);
   }
+  ua_running_take(UA_FN_TETHER, 0);
   if (t->gateway) {
     ua_log("%s is bridged to the container as %s; it serves the host", t->iface,
            t->gw_iface);
@@ -1051,7 +1060,40 @@ static int do_stop(void) {
   if (ua_gadget_commit(&g) < 0)
     return UA_EXIT_FAIL;
   ua_log("Tethering stopped");
+  ua_running_clear(UA_FN_TETHER);
   return UA_EXIT_OK;
+}
+
+/* Bring tethering to its setup. Running and unchanged: nothing. Changed: the
+ * function is swapped inside one critical section, so the gadget stays bound,
+ * the other functions keep serving and the port never goes back to Android
+ * between the stop and the start. Not running: a start. */
+static int do_apply(struct tether *t, int rndis, int no_net) {
+  struct ua_setup s, r;
+  struct ua_gadget g;
+  ua_setup_load(&s);
+  ua_running_load(&r);
+  if (ua_gadget_open(&g) < 0)
+    return UA_EXIT_FAIL;
+  if (!(live_func(&g) && ua_gadget_live(&g)))
+    return do_start(t, rndis, no_net, 0);
+  if (!ua_setup_pending(UA_FN_TETHER, &s, &r)) {
+    ua_log("Tethering already runs its setup");
+    return UA_EXIT_OK;
+  }
+  ua_tether_kill();
+  if (ua_gadget_begin(&g) < 0)
+    return UA_EXIT_FAIL;
+  ua_gadget_remove(&g, NCM);
+  ua_gadget_remove(&g, RNDIS);
+  int ret = do_start(t, rndis, no_net, 0);
+  /* do_start committed (and left the lock once) when it got that far; a
+   * failure before that leaves the gadget unbound, so bind what is left */
+  if (ua_gadget_live(&g))
+    ua_gadget_leave();
+  else
+    ua_gadget_commit(&g);
+  return ret;
 }
 
 /* JSON: one object, or null with no tether function in the gadget */
@@ -1138,40 +1180,43 @@ int ua_cmd_tether(int argc, char **argv) {
       {"help", no_argument, NULL, 'h'},
       {NULL, 0, NULL, 0},
   };
-  /* static: t.dns and t.upstream point into it for the daemon's lifetime */
+  /* static: t points into both for the daemon's lifetime */
   static struct ua_config cfg;
-  struct tether t;
-  int rndis, no_net = 0, fg = 0, c;
+  static struct ua_setup s;
+  struct tether t, probe;
+  int rndis, no_net, fg = 0, c, edited = 0;
+  pid_t gw_pid = 0;
+  const char *gw_path = NULL;
   memset(&t, 0, sizeof(t));
   ua_config_active(&cfg);
-  if (parse_address(cfg.tether_address, &t) < 0)
-    parse_address("192.168.42.129/24", &t);
-  t.dns = cfg.tether_dns[0] ? cfg.tether_dns : NULL;
-  t.upstream = cfg.tether_upstream[0] ? cfg.tether_upstream : NULL;
-  rndis = !strcmp(cfg.tether_function, "rndis");
-  t.gw_iface = "usb0";
-  t.dev_mac = cfg.tether_dev_mac;
-  t.host_mac = cfg.tether_host_mac;
+  ua_setup_load(&s);
 
   if (argc < 2 || ua_want_help(argc, argv)) {
     ua_help_tether();
     return UA_EXIT_OK;
   }
+  /* Each option is checked as before, then goes into the setup: a start
+   * with options saves them (Droidspaces' rule), a bare one runs the setup */
+  char kv[UA_LUN_SPEC];
+#define SET(fmt, ...)                                                          \
+  (snprintf(kv, sizeof(kv), fmt, __VA_ARGS__), edited = 1,                     \
+   ua_setup_set(&s, kv, 1))
   while ((c = getopt_long(argc, argv, ":u:a:d:fG:h", opts, NULL)) != -1) {
     switch (c) {
     case OPT_RNDIS:
-      rndis = 1;
+      SET("tether_function=%s", "rndis");
       break;
     case OPT_NCM: /* still RNDIS where NCM is missing or unsafe: the probe
                      decides */
-      rndis = 0;
+      SET("tether_function=%s", "ncm");
       break;
-    case OPT_NO_NET:
-      no_net = 1;
+    case OPT_NO_NET: /* a saved gateway would win over it */
+      SET("tether_net=%d", 0);
+      SET("tether_gateway=%s", "");
       break;
     case 'G':
-      t.gateway = 1;
-      t.gw_name = optarg;
+      if (SET("tether_gateway=%s", optarg) < 0)
+        return UA_EXIT_USAGE;
       break;
     case OPT_GW_PID: {
       char *end;
@@ -1180,36 +1225,39 @@ int ua_cmd_tether(int argc, char **argv) {
         ua_usage_error("tether", "--gateway-pid takes a process id");
         return UA_EXIT_USAGE;
       }
-      t.gateway = 1;
-      t.gw_pid = (pid_t)v;
+      gw_pid = (pid_t)v;
       break;
     }
     case OPT_GW_NETNS:
-      t.gateway = 1;
-      t.gw_path = optarg;
+      gw_path = optarg;
       break;
     case OPT_GW_IFACE:
       if (!*optarg || strlen(optarg) >= IFNAMSIZ) {
         ua_usage_error("tether", "Bad interface name '%s'", optarg);
         return UA_EXIT_USAGE;
       }
-      t.gw_iface = optarg;
+      SET("tether_gateway_iface=%s", optarg);
       break;
     case 'u':
       if (strlen(optarg) >= IFNAMSIZ) {
         ua_usage_error("tether", "Interface name too long: %s", optarg);
         return UA_EXIT_USAGE;
       }
-      t.upstream = optarg;
+      SET("tether_upstream=%s", optarg);
       break;
-    case 'a':
-      if (parse_address(optarg, &t) < 0) {
+    case 'a': {
+      /* Saved in its full form, so the file's reader need not know that a
+       * bare address is a /24 */
+      if (parse_address(optarg, &probe) < 0) {
         ua_usage_error("tether",
                        "--address takes a host address with a /8../30 "
                        "prefix, like 192.168.42.129/24");
         return UA_EXIT_USAGE;
       }
+      struct in_addr a = {probe.ip_be};
+      SET("tether_address=%s/%u", inet_ntoa(a), probe.prefix);
       break;
+    }
     case 'd':
       /* Handed to the DHCP server as is, so it is checked here like the
        * profile's tether_dns */
@@ -1217,7 +1265,7 @@ int ua_cmd_tether(int argc, char **argv) {
         ua_usage_error("tether", "--dns takes IPv4 addresses, comma-separated");
         return UA_EXIT_USAGE;
       }
-      t.dns = optarg;
+      SET("tether_dns=%s", optarg);
       break;
     case 'f':
       fg = 1;
@@ -1233,13 +1281,45 @@ int ua_cmd_tether(int argc, char **argv) {
       return UA_EXIT_USAGE;
     }
   }
+#undef SET
   if (argc - optind != 1) {
     ua_usage_error("tether",
                    argc - optind ? "Too many arguments" : "Missing action");
     return UA_EXIT_USAGE;
   }
+  if (edited && ua_setup_save(&s) < 0)
+    return UA_EXIT_FAIL;
+  /* The setup, then the profile where the setup leaves a value empty */
+  rndis = !strcmp(
+      s.tether_function[0] ? s.tether_function : cfg.tether_function, "rndis");
+  if (parse_address(s.tether_address[0] ? s.tether_address : cfg.tether_address,
+                    &t) < 0)
+    parse_address("192.168.42.129/24", &t);
+  t.dns = s.tether_dns[0]     ? s.tether_dns
+          : cfg.tether_dns[0] ? cfg.tether_dns
+                              : NULL;
+  t.upstream = s.tether_upstream[0]     ? s.tether_upstream
+               : cfg.tether_upstream[0] ? cfg.tether_upstream
+                                        : NULL;
+  t.gw_iface = s.tether_gateway_iface[0] ? s.tether_gateway_iface : "usb0";
+  t.dev_mac = cfg.tether_dev_mac;
+  t.host_mac = cfg.tether_host_mac;
+  if (s.tether_gateway[0]) {
+    t.gateway = 1;
+    t.gw_name = s.tether_gateway;
+  }
+  /* A pid or a netns names a container the setup cannot: this start only */
+  if (gw_pid || gw_path) {
+    t.gateway = 1;
+    t.gw_pid = gw_pid;
+    t.gw_path = gw_path;
+  }
+  /* A gateway is the network side: tether_net only says whether we serve one */
+  no_net = !s.tether_net && !t.gateway;
   if (!strcmp(argv[optind], "start"))
     return do_start(&t, rndis, no_net, fg);
+  if (!strcmp(argv[optind], "apply"))
+    return do_apply(&t, rndis, no_net);
   if (!strcmp(argv[optind], "stop"))
     return do_stop();
   ua_usage_error("tether", "Unknown action '%s'", argv[optind]);

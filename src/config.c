@@ -19,21 +19,12 @@
 #define PROFILE_LEAF "identity.conf"
 #define COPY_TAG "# copied from "
 
-enum kind { K_HEX16, K_UINT, K_STR, K_MAC, K_CHOICE, K_CIDR, K_DNS, K_OCTAL };
-
-struct key {
-  const char *name;
-  enum kind kind;
-  size_t off, size; /* field in struct ua_config; size for strings */
-  unsigned max;     /* K_UINT, K_OCTAL upper bound; K_STR max length */
-  const char *choices, *comment;
-};
-
 #define F(field) offsetof(struct ua_config, field)
 #define S(field) sizeof(((struct ua_config *)0)->field)
 
-/* One table drives loading, validation, `generate` and `show` */
-static const struct key keys[] = {
+/* One table drives loading, validation, `generate` and `show`. setup.c has a
+ * second table for the same machinery. */
+static const struct ua_key keys[] = {
     {"id_vendor", K_HEX16, F(id_vendor), 0, 0, NULL, NULL},
     {"id_product", K_HEX16, F(id_product), 0, 0, NULL, NULL},
     {"bcd_device", K_HEX16, F(bcd_device), 0, 0, NULL, NULL},
@@ -129,7 +120,7 @@ int ua_valid_dns(const char *v) {
   return n > 0;
 }
 
-static int in_choices(const char *v, const char *choices) {
+int ua_in_choices(const char *v, const char *choices) {
   size_t n = strlen(v);
   for (const char *c = choices; n && (c = strstr(c, v)); c += n)
     if ((c == choices || c[-1] == ' ') && (c[n] == ' ' || !c[n]))
@@ -137,10 +128,22 @@ static int in_choices(const char *v, const char *choices) {
   return 0;
 }
 
+/* A setup LUN: MODE:PATH with an absolute path, or empty for no drive */
+static int valid_lun(const char *v, size_t size) {
+  const char *colon = strchr(v, ':');
+  char mode[8];
+  if (!colon || (size_t)(colon - v) >= sizeof(mode) || colon[1] != '/' ||
+      strlen(v) >= size)
+    return 0;
+  memcpy(mode, v, (size_t)(colon - v));
+  mode[colon - v] = '\0';
+  return ua_in_choices(mode, "auto cdrom dvd disk rw");
+}
+
 /* Store val into the key's field. Empty clears a string (back to "derive
  * it"); a numeric key cannot be empty. 0 ok, -1 rejected. */
-static int set_key(struct ua_config *c, const struct key *k, const char *val) {
-  char *field = (char *)c + k->off;
+int ua_key_set(void *base, const struct ua_key *k, const char *val) {
+  char *field = (char *)base + k->off;
   char *end;
   unsigned long v;
   switch (k->kind) {
@@ -169,11 +172,18 @@ static int set_key(struct ua_config *c, const struct key *k, const char *val) {
       return -1;
     break;
   case K_CHOICE:
-    if (!in_choices(val, k->choices))
+    /* Empty means the default (the setup leaves it to the profile) */
+    if (*val && !ua_in_choices(val, k->choices))
+      return -1;
+    break;
+  case K_LUN:
+    if (*val && !valid_lun(val, k->size))
       return -1;
     break;
   case K_CIDR:
-    if (!valid_cidr(val))
+    /* Empty: the setup leaves it to the profile, and a profile without one
+     * gets the built-in address */
+    if (*val && !valid_cidr(val))
       return -1;
     break;
   case K_DNS:
@@ -185,9 +195,9 @@ static int set_key(struct ua_config *c, const struct key *k, const char *val) {
   return 0;
 }
 
-static void get_key(const struct ua_config *c, const struct key *k, char *out,
-                    size_t size) {
-  const char *field = (const char *)c + k->off;
+void ua_key_get(const void *base, const struct ua_key *k, char *out,
+                size_t size) {
+  const char *field = (const char *)base + k->off;
   unsigned v = (k->kind == K_HEX16 || k->kind == K_UINT || k->kind == K_OCTAL)
                    ? *(const unsigned *)(const void *)field
                    : 0;
@@ -203,8 +213,9 @@ static void get_key(const struct ua_config *c, const struct key *k, char *out,
 
 /* Returns the number of lines that were not taken (bad value, unknown key,
  * no '='), or -1 when the file cannot be read. Everything else keeps what
- * cfg held before, normally the defaults. */
-static int ua_config_load(const char *path, struct ua_config *c) {
+ * base held before, normally the defaults. */
+int ua_table_load(const char *path, const struct ua_key *table, size_t nkeys,
+                  void *base) {
   FILE *f = fopen(path, "re");
   if (!f)
     return -1;
@@ -233,13 +244,13 @@ static int ua_config_load(const char *path, struct ua_config *c) {
         break;
       }
     size_t i;
-    for (i = 0; i < NKEYS; i++)
-      if (!strcmp(key, keys[i].name))
+    for (i = 0; i < nkeys; i++)
+      if (!strcmp(key, table[i].name))
         break;
-    if (i == NKEYS) {
+    if (i == nkeys) {
       ua_warn("%s:%d: unknown key '%s', ignored", path, n, key);
       bad++;
-    } else if (set_key(c, &keys[i], val) < 0) {
+    } else if (ua_key_set(base, &table[i], val) < 0) {
       ua_warn("%s:%d: bad value '%s' for %s, keeping the default", path, n, val,
               key);
       bad++;
@@ -265,7 +276,7 @@ void ua_config_active(struct ua_config *c) {
   if (S_ISLNK(st.st_mode)) {
     ssize_t n = readlink(p, target, sizeof(target) - 1);
     target[n > 0 ? n : 0] = '\0';
-    if (ua_config_load(p, c) < 0) {
+    if (ua_table_load(p, keys, NKEYS, c) < 0) {
       ua_warn("Profile %s is gone; using the built-in defaults", target);
       ua_config_defaults(c);
       return;
@@ -273,7 +284,7 @@ void ua_config_active(struct ua_config *c) {
     safe_strncpy(c->source, target, sizeof(c->source));
     return;
   }
-  if (ua_config_load(p, c) < 0)
+  if (ua_table_load(p, keys, NKEYS, c) < 0)
     return;
   c->copied = 1;
   safe_strncpy(c->source, p, sizeof(c->source));
@@ -289,8 +300,8 @@ void ua_config_active(struct ua_config *c) {
 
 /* mkstemp next to path, write, fsync, rename, fsync the directory: the
  * Droidspaces ds_config_save sequence. body(f, arg) writes the content. */
-static int write_atomic(const char *path, mode_t mode,
-                        void (*body)(FILE *, const void *), const void *arg) {
+int ua_write_atomic(const char *path, mode_t mode,
+                    void (*body)(FILE *, const void *), const void *arg) {
   char tmp[PATH_MAX + 8];
   snprintf(tmp, sizeof(tmp), "%s.XXXXXX", path);
   int fd = mkstemp(tmp);
@@ -334,7 +345,7 @@ static void template_body(FILE *f, const void *arg) {
     char v[160], line[200];
     if (i == FIRST_DEFAULT)
       fprintf(f, "\n# Defaults for commands\n");
-    get_key(c, &keys[i], v, sizeof(v));
+    ua_key_get(c, &keys[i], v, sizeof(v));
     snprintf(line, sizeof(line), "%s=%s", keys[i].name, v);
     if (keys[i].comment)
       fprintf(f, "%-32s # %s\n", line, keys[i].comment);
@@ -425,7 +436,7 @@ static int do_set(const char *file, int fd, const char *from) {
   }
 
   ua_config_defaults(&c);
-  int bad = ua_config_load(fd >= 0 ? src : real, &c);
+  int bad = ua_table_load(fd >= 0 ? src : real, keys, NKEYS, &c);
   if (bad != 0) {
     ua_error(bad < 0 ? "Cannot read %s" : "%s has errors (see above); not set",
              real[0] ? real : file);
@@ -444,7 +455,7 @@ static int do_set(const char *file, int fd, const char *from) {
     ua_log("Active profile: %s", real);
   } else {
     struct copy_arg ca = {fd, real};
-    if (write_atomic(active, 0644, copy_body, &ca) < 0) {
+    if (ua_write_atomic(active, 0644, copy_body, &ca) < 0) {
       ua_error("Cannot write %s: %s", active, strerror(errno));
       return UA_EXIT_FAIL;
     }
@@ -462,7 +473,7 @@ static int do_show(void) {
          c.copied ? " (copy)" : "");
   for (size_t i = 0; i < NKEYS; i++) {
     char v[160];
-    get_key(&c, &keys[i], v, sizeof(v));
+    ua_key_get(&c, &keys[i], v, sizeof(v));
     printf("  %-16s %s\n", keys[i].name, v[0] ? v : "(derived)");
   }
   return UA_EXIT_OK;
@@ -538,7 +549,7 @@ int ua_cmd_identity(int argc, char **argv) {
       ua_error("%s exists; use --force to overwrite it", file);
       return UA_EXIT_FAIL;
     }
-    if (write_atomic(file, 0644, template_body, &d) < 0) {
+    if (ua_write_atomic(file, 0644, template_body, &d) < 0) {
       ua_error("Cannot write %s: %s", file, strerror(errno));
       return UA_EXIT_FAIL;
     }

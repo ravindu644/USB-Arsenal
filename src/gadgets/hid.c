@@ -13,8 +13,8 @@
 #include "usbarsenal.h"
 #include <grp.h>
 
-#define KBD "hid.ua_kbd"
-#define MOUSE "hid.ua_mouse"
+#define KBD UA_F_KBD
+#define MOUSE UA_F_MOUSE
 
 /* Standard boot keyboard: modifiers, reserved, 6 keycodes, 5 LED outputs.
  * 8-byte input report. */
@@ -55,7 +55,10 @@ void ua_help_hid(void) {
       "What you write there is up to you.\n\n"
       "Actions:\n"
       "  start   Create the keyboard and mouse and print which /dev/hidgN\n"
-      "          is which\n"
+      "          is which. --interval is saved as the setup (see `setup`);\n"
+      "          without it, the saved one applies.\n"
+      "  apply   Restart with the setup's interval if it changed, in one\n"
+      "          replug; start if not running\n"
       "  stop    Remove them\n\n"
       "Options:\n"
       "  -p, --perm MODE    Octal permissions for the nodes (default: 0660)\n"
@@ -239,10 +242,23 @@ static int do_start(mode_t perm, gid_t gid, unsigned interval) {
     if (ua_gadget_commit(&g) < 0)
       return UA_EXIT_FAIL;
   } else if (interval) {
-    ua_warn("HID is already running; stop it first for --interval to take "
-            "effect.");
+    /* Already running: the interval only changes with a restart, so a start
+     * that asked for another one has not done what it was asked. The app
+     * reads the exit code, not the warning. */
+    char dir[PATH_MAX], p[PATH_MAX + 16], v[16] = "";
+    ua_gadget_func_dir(&g, KBD, dir, sizeof(dir));
+    snprintf(p, sizeof(p), "%s/interval", dir);
+    if (read_file(p, v, sizeof(v)) > 0 && strtoul(v, NULL, 10) != interval) {
+      ua_error("HID is already running with interval %s; '" UA_NAME
+               " hid apply' restarts it with %u",
+               v, interval);
+      return UA_EXIT_FAIL;
+    }
   }
-  return apply_perm(&g, 1) == 0 ? UA_EXIT_OK : UA_EXIT_FAIL;
+  if (apply_perm(&g, 1) < 0)
+    return UA_EXIT_FAIL;
+  ua_running_take(UA_FN_HID, 0);
+  return UA_EXIT_OK;
 }
 
 static int do_stop(void) {
@@ -260,7 +276,36 @@ static int do_stop(void) {
   if (ua_gadget_commit(&g) < 0)
     return UA_EXIT_FAIL;
   ua_log("HID removed");
+  ua_running_clear(UA_FN_HID);
   return UA_EXIT_OK;
+}
+
+/* Bring HID to its setup: nothing when it runs unchanged, a swap inside one
+ * critical section when the interval changed (the gadget stays bound, the
+ * other functions keep serving), a start when it is not running */
+static int do_apply(mode_t perm, gid_t gid, unsigned interval) {
+  struct ua_setup s, r;
+  struct ua_gadget g;
+  ua_setup_load(&s);
+  ua_running_load(&r);
+  if (ua_gadget_open(&g) < 0)
+    return UA_EXIT_FAIL;
+  if (!(ua_gadget_has(&g, KBD) && ua_gadget_live(&g)))
+    return do_start(perm, gid, interval);
+  if (!ua_setup_pending(UA_FN_HID, &s, &r)) {
+    ua_log("HID already runs its setup");
+    return UA_EXIT_OK;
+  }
+  if (ua_gadget_begin(&g) < 0)
+    return UA_EXIT_FAIL;
+  ua_gadget_remove(&g, KBD);
+  ua_gadget_remove(&g, MOUSE);
+  int ret = do_start(perm, gid, interval);
+  if (ua_gadget_live(&g))
+    ua_gadget_leave();
+  else
+    ua_gadget_commit(&g);
+  return ret;
 }
 
 /* JSON: the elements of an array, one object per live node */
@@ -306,12 +351,13 @@ int ua_cmd_hid(int argc, char **argv) {
       {NULL, 0, NULL, 0},
   };
   struct ua_config cfg;
-  int c, ok;
+  struct ua_setup s;
+  int c, ok, edited = 0;
   char *end;
   ua_config_active(&cfg);
+  ua_setup_load(&s);
   mode_t perm = (mode_t)cfg.hid_perm;
   gid_t gid = (gid_t)cfg.hid_group;
-  unsigned interval = 0; /* 0 = leave the kernel's default */
 
   if (argc < 2 || ua_want_help(argc, argv)) {
     ua_help_hid();
@@ -334,7 +380,9 @@ int ua_cmd_hid(int argc, char **argv) {
                    "speed the period is 2^(N-1) x 125us, so 1 is 125us)");
         return UA_EXIT_USAGE;
       }
-      interval = (unsigned)v;
+      /* Saved as the setup, so a bare start keeps it */
+      s.hid_interval = (unsigned)v;
+      edited = 1;
       break;
     }
     case 'g':
@@ -360,8 +408,13 @@ int ua_cmd_hid(int argc, char **argv) {
                    argc - optind ? "Too many arguments" : "Missing action");
     return UA_EXIT_USAGE;
   }
+  if (edited && ua_setup_save(&s) < 0)
+    return UA_EXIT_FAIL;
+  unsigned interval = s.hid_interval; /* 0 = leave the kernel's default */
   if (!strcmp(argv[optind], "start"))
     return do_start(perm, gid, interval);
+  if (!strcmp(argv[optind], "apply"))
+    return do_apply(perm, gid, interval);
   if (!strcmp(argv[optind], "stop"))
     return do_stop();
   ua_usage_error("hid", "Unknown action '%s'", argv[optind]);

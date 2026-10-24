@@ -11,16 +11,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.usbarsenal.app.backend.Droidspaces
+import com.usbarsenal.app.backend.Cache
 import com.usbarsenal.app.backend.readDroidspaces
 import com.usbarsenal.app.lcd.Lcd
 import com.usbarsenal.app.lcd.LcdType
@@ -40,28 +37,14 @@ private fun TypedRow(label: String, value: String, placeholder: String, problem:
  */
 @Composable
 fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
-    val context = LocalContext.current
-    LaunchedEffect(Unit) { TetherSetup.load(context) }
-    val plan = TetherSetup.plan
-    fun set(next: TetherPlan) = TetherSetup.set(context, next)
+    val plan = tetherPlan()
+    fun set(next: TetherPlan) = setPlan(next)
 
-    // Null until read. Without Droidspaces there is nothing to hand the link to, so a saved
-    // gateway goes at once; until then the gateway rows stay as saved, so nothing jumps
-    var ds by remember { mutableStateOf<Droidspaces?>(null) }
-    LaunchedEffect(Unit) {
-        val read = readDroidspaces()
-        ds = read
-        if (!read.installed && TetherSetup.plan.gateway) set(TetherSetup.plan.copy(gateway = false))
-    }
+    // Droidspaces as last read, re-read on each visit: its containers change
+    val ds = Gadget.droidspaces
+    LaunchedEffect(Unit) { readDroidspaces().let { Gadget.droidspaces = it; Cache.droidspaces = it } }
     val containers = ds?.running
-    // Leaving with no running container chosen turns the gateway off; a list that could not be
-    // read is not taken to mean none
-    val leaving by rememberUpdatedState {
-        if (plan.gateway && containers != null && plan.container !in containers) set(plan.copy(gateway = false))
-    }
-    DisposableEffect(Unit) { onDispose { leaving() } }
     BackHandler(onBack = back)
-    PollStatus()
 
     val caps = Gadget.caps
     val profile = Gadget.profile
@@ -75,7 +58,7 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
 
     // The chain shows what runs; the rows show what the next start brings up
     val gatewayLive = live?.gateway ?: plan.gateway
-    val address = plan.address.ifBlank { profile["tether_address"] ?: DEFAULT_ADDRESS }
+    val address = live?.address?.ifEmpty { null } ?: plan.address.ifBlank { profile["tether_address"] ?: DEFAULT_ADDRESS }
     Box(Modifier.fillMaxSize()) {
         Screen {
             Top { BackKey() }
@@ -116,16 +99,25 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
                 // What the next start brings up
                 Column {
                     Group("Configure")
-                    // Without Droidspaces there is no container to hand the link to
-                    if (ds?.installed != false) Kv("Gateway") { Dip(plan.gateway, { set(plan.copy(gateway = it)) }, "Gateway mode") }
+                    // A gateway is a container: switching it on picks one, off forgets it. Without
+                    // Droidspaces there is no container to hand the link to, so the switch is held
+                    Kv("Gateway") {
+                        if (ds?.installed == false) Text("no droidspaces", LcdType.data)
+                        Dip(plan.gateway, { if (it) choosing = true else set(plan.copy(container = "")) }, "Gateway mode", enabled = ds?.installed != false)
+                    }
                     if (plan.gateway) {
-                        LinkRow("Container", plan.container.takeIf { containers == null || it in containers }?.ifEmpty { null } ?: "none", { choosing = true }, Modifier.opener("tether/container"))
+                        LinkRow("Container", plan.container, { choosing = true }, Modifier.opener("tether/container"))
+                        if (containers != null && plan.container !in containers) Note("not running")
                         TypedRow("Its iface", plan.iface, "usb0", "an interface name, up to 15 characters".takeUnless { validIface(plan.iface) }) {
                             set(plan.copy(iface = it))
                         }
                         Kv("Host IPv4") { Text("by ${plan.container.ifEmpty { "the container" }}", LcdType.data) }
                     } else {
-                        Kv("DHCP and NAT") { Dip(plan.net, { set(plan.copy(net = it)) }, "DHCP and NAT") }
+                        // Without NAT in the kernel only --no-net can start
+                        Kv("DHCP and NAT") {
+                            if (!caps.natOk()) Text("no nat in this kernel", LcdType.data)
+                            Dip(plan.net && caps.natOk(), { set(plan.copy(net = it)) }, "DHCP and NAT", enabled = caps.natOk())
+                        }
                         if (plan.net) {
                             TypedRow(
                                 "Address", plan.address, profile["tether_address"] ?: DEFAULT_ADDRESS,
@@ -149,7 +141,7 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
         UnappliedSheet(Fn.TETHER, back)
         ChoiceSheet(
             choosing, "Container", containers.orEmpty(), plan.container,
-            if (containers == null && ds != null) "Cannot read Droidspaces' containers" else "No containers are running",
+            if (ds == null) "Reading Droidspaces' containers" else if (containers == null) "Cannot read Droidspaces' containers" else "No containers are running",
             onPick = {
                 set(plan.copy(container = it))
                 choosing = false

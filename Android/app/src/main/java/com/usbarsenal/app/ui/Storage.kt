@@ -32,6 +32,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.usbarsenal.app.backend.Cache
 import com.usbarsenal.app.backend.IMAGES
 import com.usbarsenal.app.backend.ImageFile
 import com.usbarsenal.app.backend.createFull
@@ -98,26 +99,24 @@ fun createBytes(size: String, gb: Boolean): Long? = size.trim().toLongOrNull()?.
 @Composable
 fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
     BackHandler(onBack = back)
-    PollStatus()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val live = Gadget.status?.storage.orEmpty().filter { it.file.isNotEmpty() }
-    LaunchedEffect(Unit) { Picks.load(context) }
-    var dir by remember { mutableStateOf(IMAGES) }
-    var files by remember { mutableStateOf<List<ImageFile>?>(null) }
-    var free by remember { mutableStateOf<Long?>(null) }
+    // The folder as last listed, so the screen has its final layout from the first frame; a
+    // fresh listing replaces it
+    var dir by remember { mutableStateOf(Cache.imagesDir ?: IMAGES) }
+    var files by remember { mutableStateOf(Cache.images) }
+    var free by remember { mutableStateOf(Cache.free) }
     var reload by remember { mutableIntStateOf(0) }
     LaunchedEffect(reload) {
-        dir = imagesDir()
-        files = listImages(dir)
-        free = freeBytes()
+        dir = imagesDir().also { Cache.imagesDir = it }
+        files = listImages(dir).also { Cache.images = it }
+        free = freeBytes().also { Cache.free = it }
     }
-    val picks = Picks.all
+    val picks = picks()
     var lun by rememberSaveable { mutableIntStateOf(0) }
-    // Every LUN with a pick, and the one being added: the setup, not what still serves. Storage
-    // the app did not start (the CLI) has no setup to compare, so its live LUNs show too
-    val shownLive = if (Gadget.startedPicks == null) live.map { it.lun } else emptyList()
-    val count = ((picks.map { it.lun } + shownLive + lun).max() + 1).coerceAtMost(8)
+    // Every LUN set up, every LUN that runs, and the one being added
+    val count = ((picks.map { it.lun } + runningPicks().map { it.lun } + live.map { it.lun } + lun).max() + 1).coerceAtMost(LUNS)
     val served = live.firstOrNull { it.lun == lun }
     val pick = picks.firstOrNull { it.lun == lun }
     val path = pick?.path
@@ -131,7 +130,7 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
     val fault = Gadget.fault?.takeIf { it.where == Fn.STORAGE }
     LaunchedEffect(fault) { if (fault != null) shake.fire() }
 
-    fun serve(p: String, m: String) = Picks.set(context, Pick(lun, m, p))
+    fun serve(p: String, m: String) = setPick(Pick(lun, m, p))
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             scope.launch {
@@ -153,12 +152,12 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
             Top { BackKey() }
             Title("Storage")
             fault?.let { Fault(it.message, onLog = openLog, modifier = Modifier.shake(shake).opener("storage/fault")) }
-            LunStrip(count, lun, { lun = it }, { lun = count })
+            LunStrip(count, lun, { lun = it }, { if (count < LUNS) lun = count })
             Drive(
                 lun,
                 image = name?.let { DriveImage(it, file?.bytes?.let(::sizeText).orEmpty(), mode, if (mode == "rw") "rw" else "ro") },
                 serving = served != null,
-                onEject = { Picks.drop(context, lun) },
+                onEject = { dropPick(lun) },
             )
             if (path == null && files?.isEmpty() == true) {
                 // Nothing loaded and nothing to load: Pin asks for an image

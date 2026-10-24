@@ -71,64 +71,29 @@ class GadgetTest {
         assertEquals("ncm usb0" to "gateway OpenWrt", rowLines(Fn.TETHER, gateway, caps(), null))
     }
 
-    // Tether's setup starts as it says, and Home's off line says the same
+    // Tether's setup is the setup's keys and back, and a setup the backend would refuse cannot start
     @Test
     fun tetherSetup() {
-        assertEquals(listOf("tether", "start", "--ncm"), tetherArgs(TetherPlan(), "ncm"))
-        assertEquals(listOf("tether", "start", "--rndis"), tetherArgs(TetherPlan(function = "rndis"), "rndis"))
-        assertEquals(
-            listOf("tether", "start", "--ncm", "--gateway", "OpenWrt", "--gateway-iface", "usb0"),
-            tetherArgs(TetherPlan(gateway = true, container = " OpenWrt ", address = "10.0.0.1/24"), "ncm"),
-        )
-        assertEquals(
-            listOf("tether", "start", "--ncm", "--address", "10.42.0.1/24", "--dns", "9.9.9.9", "--upstream", "wlan0"),
-            tetherArgs(TetherPlan(address = "10.42.0.1/24", dns = "9.9.9.9", upstream = " wlan0"), "ncm"),
-        )
-        assertEquals(listOf("tether", "start", "--ncm", "--no-net"), tetherArgs(TetherPlan(net = false, address = "10.42.0.1/24"), "ncm"))
-        // A setup the backend would refuse cannot be started
-        assertEquals(false, TetherPlan(address = "10.42.0.1/33").ready())
-        assertEquals(false, TetherPlan(dns = "1.1.1.1; reboot").ready())
-        assertEquals(false, TetherPlan(gateway = true).ready())
-        assertEquals(true, TetherPlan(dns = "1.1.1.1, 8.8.8.8").ready())
+        val plan = TetherPlan(function = "rndis", address = "10.42.0.1/24", dns = "9.9.9.9", upstream = " wlan0", net = true)
+        assertEquals(plan.copy(upstream = "wlan0"), tetherPlanOf(plan.keys().toMap()))
+        val gateway = TetherPlan(container = "OpenWrt", iface = "eth1")
+        assertEquals(gateway, tetherPlanOf(gateway.keys().toMap()))
+        assertEquals(TetherPlan(), tetherPlanOf(emptyMap()))
+        assertEquals("", TetherPlan().keys().toMap()["tether_gateway_iface"])
+        assertEquals(false, TetherPlan(address = "10.42.0.1/33").ready(null))
+        assertEquals(false, TetherPlan(dns = "1.1.1.1; reboot").ready(null))
+        assertEquals(true, TetherPlan(dns = "1.1.1.1, 8.8.8.8").ready(null))
         // --no-net sends no address, so a half-typed one left behind cannot hold the start
-        assertEquals(true, TetherPlan(net = false, address = "10.42.0.").ready())
+        assertEquals(true, TetherPlan(net = false, address = "10.42.0.").ready(null))
+        // No NAT in the kernel: only a gateway or --no-net can start
+        assertEquals(false, TetherPlan().ready(caps().copy(nat = Probe.MISSING)))
+        assertEquals(true, TetherPlan(net = false).ready(caps().copy(nat = Probe.MISSING)))
         // NCM picked on a kernel that cannot run it still starts RNDIS
         assertEquals("rndis", tetherFunction(TetherPlan(function = "ncm"), emptyMap(), caps()))
         assertEquals("ncm", tetherFunction(TetherPlan(), emptyMap(), caps().copy(ncm = Probe.OK)))
         assertEquals("rndis", tetherFunction(TetherPlan(), mapOf("tether_function" to "rndis"), caps().copy(ncm = Probe.OK)))
         // A kernel with NCM alone (no RNDIS past GKI 5.10) starts NCM whatever was picked
         assertEquals("ncm", tetherFunction(TetherPlan(function = "rndis"), emptyMap(), caps().copy(ncm = Probe.OK, rndis = Probe.MISSING)))
-    }
-
-    // Applying Storage touches only the LUNs that changed since its last start, so the host keeps the others
-    @Test
-    fun storageAppliesPerLun() {
-        val a = "/storage/emulated/0/USB-Arsenal/a.iso"
-        val b = "/storage/emulated/0/USB-Arsenal/b.img"
-        val c = "/storage/emulated/0/USB-Arsenal/c.img"
-        val before = listOf(Pick(0, "auto", a), Pick(1, "rw", b))
-        // As status shows it: the files under another path, and auto's choice
-        val live = listOf(Lun(0, "/mnt/x/a.iso", "cdrom", "ro"), Lun(1, "/mnt/x/b.img", "rw", "rw"))
-        // LUN1 no longer picked: ejected in place, LUN0 left alone
-        assertEquals(listOf(listOf("storage", "eject", "--lun", "1")), storageApply(before, listOf(Pick(0, "auto", a)), live))
-        // A new image on LUN1: a start of its own, which the backend swaps in place
-        assertEquals(listOf(listOf("storage", "start", "--lun", "1", "--mode", "rw", c)), storageApply(before, listOf(Pick(0, "auto", a), Pick(1, "rw", c)), live))
-        // Two swaps are two starts, so neither replugs the other
-        assertEquals(
-            listOf(listOf("storage", "start", "--lun", "0", "--mode", "auto", c), listOf("storage", "start", "--lun", "1", "--mode", "rw", a)),
-            storageApply(before, listOf(Pick(0, "auto", c), Pick(1, "rw", a)), live),
-        )
-        // rw to auto on the same file is a change: auto never serves writable
-        assertEquals(listOf(listOf("storage", "start", "--lun", "1", "--mode", "auto", b)), storageApply(before, listOf(Pick(0, "auto", a), Pick(1, "auto", b)), live))
-        // New LUNs share one start: one replug for all of them
-        assertEquals(
-            listOf(listOf("storage", "start", "--lun", "2", "--mode", "rw", c, "--lun", "3", "--mode", "disk", b)),
-            storageApply(before, before + Pick(2, "rw", c) + Pick(3, "disk", b), live),
-        )
-        // A drive the host ejected itself is loaded again, though its pick did not change
-        assertEquals(listOf(listOf("storage", "start", "--lun", "0", "--mode", "auto", a)), storageApply(before, before, listOf(Lun(0, "", "", ""), live[1])))
-        assertEquals(emptyList<List<String>>(), storageApply(before, before, live))
-        assertEquals(listOf(listOf("storage", "stop")), storageApply(before, emptyList(), live))
     }
 
     @Test
@@ -148,12 +113,12 @@ class GadgetTest {
     }
 
     @Test
-    fun picksStartInOneCommand() {
-        val picks = listOf(Pick(1, "rw", "/sdcard/USB-Arsenal/pen drive.img"), Pick(0, "auto", "/sdcard/USB-Arsenal/a.iso"))
-        assertEquals(
-            listOf("storage", "start", "--lun", "0", "--mode", "auto", "/sdcard/USB-Arsenal/a.iso", "--lun", "1", "--mode", "rw", "/sdcard/USB-Arsenal/pen drive.img"),
-            startArgs(picks),
-        )
-        assertEquals(picks, decodePicks(encodePicks(picks)))
+    fun picksAreTheSetupsLuns() {
+        val setup = mapOf("storage_lun1" to "rw:/sdcard/USB-Arsenal/pen drive.img", "storage_lun0" to "auto:/sdcard/USB-Arsenal/a.iso", "storage_lun2" to "", "udc" to "")
+        val picks = picksOf(setup)
+        assertEquals(listOf(Pick(0, "auto", "/sdcard/USB-Arsenal/a.iso"), Pick(1, "rw", "/sdcard/USB-Arsenal/pen drive.img")), picks)
+        assertEquals("rw:/sdcard/USB-Arsenal/pen drive.img", picks[1].spec)
+        // A path with a colon keeps it: the mode ends at the first one
+        assertEquals(Pick(0, "dvd", "/a:b/c.iso"), picksOf(mapOf("storage_lun0" to "dvd:/a:b/c.iso")).single())
     }
 }

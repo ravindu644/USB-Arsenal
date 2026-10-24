@@ -51,6 +51,16 @@
 #define UA_GADGET "usb_arsenal"
 #define UA_CONFIG "c.1"
 
+/* The functions we create, by their configfs names. The "ua" instance marks
+ * them as ours (gadget.c is_ours). */
+#define UA_F_STORAGE "mass_storage.ua"
+#define UA_F_NCM "ncm.ua"
+#define UA_F_RNDIS "rndis.ua"
+#define UA_F_KBD "hid.ua_kbd"
+#define UA_F_MOUSE "hid.ua_mouse"
+
+enum ua_fn { UA_FN_STORAGE, UA_FN_TETHER, UA_FN_HID, UA_FN_ALL = -1 };
+
 /* Hardware knobs. Real controllers and hosts are slower than the spec says;
  * raise these if a device needs it. */
 #define UA_HANDOFF_TIMEOUT_MS 5000  /* Android dropping/raising its gadget */
@@ -142,10 +152,46 @@ void ua_gadget_unlink(struct ua_gadget *g, const char *func);
 int ua_gadget_remove(struct ua_gadget *g, const char *func);
 int ua_gadget_commit(struct ua_gadget *g);
 void ua_gadget_teardown(struct ua_gadget *g);
+/* Ends a critical section a command opened with begin and did not close with
+ * commit (apply swaps a function inside another command's begin) */
+void ua_gadget_hold(void);
+void ua_gadget_leave(void);
+void ua_boot_marker(char *out, size_t size);
+int ua_fn_linked(const struct ua_gadget *g, enum ua_fn fn);
 int ua_gadget_func_dir(const struct ua_gadget *g, const char *func, char *dir,
                        size_t size);
 
-/* config.c */
+/* config.c: one key table drives loading, validation, generate and show; the
+ * same machinery serves the profile (here) and the setup (setup.c) */
+
+enum ua_kind {
+  K_HEX16,
+  K_UINT,
+  K_STR,
+  K_MAC,
+  K_CHOICE,
+  K_CIDR,
+  K_DNS,
+  K_OCTAL,
+  K_LUN /* MODE:PATH, or empty */
+};
+
+struct ua_key {
+  const char *name;
+  enum ua_kind kind;
+  size_t off, size; /* field in the struct; size for strings */
+  unsigned max;     /* K_UINT, K_OCTAL upper bound; K_STR max length */
+  const char *choices, *comment;
+};
+
+int ua_key_set(void *base, const struct ua_key *k, const char *val);
+void ua_key_get(const void *base, const struct ua_key *k, char *out,
+                size_t size);
+int ua_table_load(const char *path, const struct ua_key *keys, size_t nkeys,
+                  void *base);
+int ua_write_atomic(const char *path, mode_t mode,
+                    void (*body)(FILE *, const void *), const void *arg);
+int ua_in_choices(const char *v, const char *choices);
 
 struct ua_config {
   char source[PATH_MAX]; /* the profile in force, "" = built-in */
@@ -164,6 +210,39 @@ void ua_config_active(struct ua_config *c);
 int ua_valid_dns(const char *v);
 int ua_cmd_identity(int argc, char **argv);
 void ua_help_identity(void);
+
+/* setup.c: what each function starts with (Gadget/setup.conf, the draft) and
+ * what the last successful start used (Gadget/running.conf). Same keys. */
+
+#define UA_LUNS 8
+#define UA_LUN_SPEC 512 /* "mode:path" */
+
+struct ua_setup {
+  char udc[64];
+  char lun[UA_LUNS][UA_LUN_SPEC];
+  char tether_function[8], tether_gateway[256], tether_gateway_iface[IFNAMSIZ];
+  unsigned tether_net;
+  char tether_address[32], tether_dns[128], tether_upstream[IFNAMSIZ];
+  unsigned hid_interval;
+};
+
+void ua_setup_defaults(struct ua_setup *s);
+void ua_setup_load(struct ua_setup *s);
+void ua_running_load(struct ua_setup *s);
+int ua_setup_save(const struct ua_setup *s);
+int ua_setup_set(struct ua_setup *s, const char *assignment, int report);
+/* Splits a LUN spec into its mode and path; -1 for an empty one */
+int ua_lun_spec(const char *spec, char *mode, size_t msize, char *path,
+                size_t psize);
+/* Running takes fn's keys from the setup; for storage only the LUNs in mask */
+int ua_running_take(enum ua_fn fn, unsigned mask);
+int ua_running_clear(enum ua_fn fn);
+int ua_running_clear_lun(int lun);
+int ua_setup_pending(enum ua_fn fn, const struct ua_setup *setup,
+                     const struct ua_setup *running);
+void ua_setup_json(const struct ua_gadget *g, int live, int *first);
+int ua_cmd_setup(int argc, char **argv);
+void ua_help_setup(void);
 
 /* check.c */
 

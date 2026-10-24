@@ -59,6 +59,7 @@ class ReportsTest {
         assertEquals("1 ms", periodText(4))
         assertEquals("512 ms", periodText(13))
         assertEquals("4.096 s", periodText(16))
-        assertEquals(listOf("hid", "start"), setupArgs(Fn.HID))
+        // The setup's 0 is the kernel's default, which the steppers show as 4
+        assertEquals(DEFAULT_INTERVAL, HidSetup.interval)
     }
 }

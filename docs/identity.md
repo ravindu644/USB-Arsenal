@@ -34,6 +34,9 @@ ignores `tether_address`.
 | `tether_address` | `192.168.42.129/24` | this side; the host gets the next address |
 | `tether_dns` | empty | empty: `1.1.1.1,8.8.8.8` |
 | `tether_upstream` | empty | empty: detect automatically |
+
+These defaults apply where the [setup](usage.md#setup) leaves a value empty: the setup is what
+this phone runs, the profile is what it falls back to.
 | `hid_perm`, `hid_group` | `0660`, `0` | octal; numeric gid |
 
 ## Where the active profile lives

@@ -174,6 +174,27 @@ Droidspaces' `config.c`:
 The active profile is `Gadget/identity.conf` (a symlink, or a copy). `build_skeleton()`
 reads it on every take and rebind; the commands read their defaults from it.
 
+## The setup (`src/setup.c`)
+
+What each function starts with, in the same format and through the same table machinery
+(`ua_table_load`, `ua_key_set`, `ua_write_atomic`, a second key table). Two files in `Gadget/`:
+- **`setup.conf`**, the draft: `setup set` edits it, and a `start` with arguments merges them
+  in first (Droidspaces' rule: the flags given to a start are saved, a later bare start needs
+  none). `udc` stands in for `--udc`, read in `main()`.
+- **`running.conf`**, what the last successful start of each function used: written by each
+  `do_start` after `commit` (storage per LUN), a function's keys cleared by its `stop` and by
+  `storage eject`, the file removed by `ua_gadget_teardown`. It carries the boot id, so after
+  a reboot it reads as empty.
+
+`<function> apply` brings what runs to the setup, deciding against the kernel: storage LUN by
+LUN (eject, in-place swap under the lock, one commit for the rest, nothing for a LUN already
+serving its file), tether and HID by swapping the function inside the caller's `begin` so the
+gadget stays bound (`ua_gadget_leave` closes that section when `do_start` committed).
+`status --json` prints `boot_id`, `setup`, `running` and `pending` (linked and the two differ,
+empty values compared as the profile's). The Android app is one client of this: it edits the
+setup, starts bare, applies, and shows `pending`; it keeps no setup of its own
+([research/06-app-state.md](research/06-app-state.md)).
+
 ## The tether process (`src/gadgets/tether.c`)
 
 `tether start` forks the network side and waits on a pipe for it to report up or down.

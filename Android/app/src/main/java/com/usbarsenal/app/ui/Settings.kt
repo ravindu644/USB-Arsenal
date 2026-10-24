@@ -26,6 +26,7 @@ import com.usbarsenal.app.BuildConfig
 import com.usbarsenal.app.backend.Backend
 import com.usbarsenal.app.backend.BackendState
 import com.usbarsenal.app.backend.RootResult
+import com.usbarsenal.app.backend.Cache
 import com.usbarsenal.app.backend.backendState
 import com.usbarsenal.app.backend.daemonMode
 import com.usbarsenal.app.backend.pathLinked
@@ -59,9 +60,9 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
     val context = LocalContext.current
     val switches = LocalSwitches.current
     val scope = rememberCoroutineScope()
-    var backend by remember { mutableStateOf<Backend?>(null) }
-    var daemon by remember { mutableStateOf<Boolean?>(null) }
-    var linked by remember { mutableStateOf<Boolean?>(null) }
+    val backend = Gadget.backend
+    var daemon by remember { mutableStateOf(Cache.daemonMode) }
+    var linked by remember { mutableStateOf(Cache.pathLinked) }
     // Either switch changed on this visit: it takes effect at the next boot, which is worth saying
     var changed by remember { mutableStateOf(false) }
     // A switch whose write failed shakes, and stderr's last line sits under it
@@ -71,11 +72,11 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
     val udcs = Controller.udcs.orEmpty()
     var choosingUdc by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        // Reads only, none behind the change lane; the profile is re-read, an identity may have changed
-        backend = backendState(context)
-        daemon = daemonMode()
-        linked = pathLinked()
-        readProfile().takeIf { it.isNotEmpty() }?.let { Gadget.profile = it }
+        // Reads only, none behind the change lane; each replaces its cached value when it answers
+        backendState(context).let { Gadget.backend = it; Cache.backend = it }
+        daemonMode()?.let { daemon = it; Cache.daemonMode = it }
+        pathLinked()?.let { linked = it; Cache.pathLinked = it }
+        readProfile().takeIf { it.isNotEmpty() }?.let { Gadget.profile = it; Cache.profile = it }
     }
     fun write(r: RootResult, done: () -> Unit) {
         fault = null
@@ -138,11 +139,18 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
         }
         ChoiceSheet(
             choosingUdc, "Controller", udcs.map { it.name }, Controller.picked.orEmpty(), "No controllers",
-            onPick = {
-                Controller.set(context, it)
-                // What the kernel can do is asked again, of this controller, when Home next loads
-                Gadget.caps = null
+            onPick = { name ->
                 choosingUdc = false
+                scope.launch {
+                    val r = Controller.set(name)
+                    if (!r.ok) {
+                        fault = r.why
+                        shake.fire()
+                        return@launch
+                    }
+                    // What the kernel can do is asked again, of this controller
+                    Gadget.readCheckOnce()
+                }
             },
             onDismiss = { choosingUdc = false },
             detail = { name -> udcs.firstOrNull { it.name == name }?.state.orEmpty() },

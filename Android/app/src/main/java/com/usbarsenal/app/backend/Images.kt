@@ -22,12 +22,9 @@ data class ImageFile(val path: String, val bytes: Long) {
 suspend fun imagesDir(): String = Root.read("mkdir -p $IMAGES && readlink -f $IMAGES").out.firstOrNull() ?: IMAGES
 
 // The folder's files; stat prints "<bytes> <path>"
-suspend fun listImages(dir: String): List<ImageFile> = Root.read(
-    "for f in ${shellQuote(dir)}/*; do [ -f \"\$f\" ] && stat -c '%s %n' \"\$f\"; done; true",
-).out.mapNotNull { line ->
-    val bytes = line.substringBefore(' ').toLongOrNull() ?: return@mapNotNull null
-    ImageFile(line.substringAfter(' '), bytes)
-}.sortedBy { it.name.lowercase() }
+suspend fun listImages(dir: String): List<ImageFile> = parseImages(
+    Root.read("for f in ${shellQuote(dir)}/*; do [ -f \"\$f\" ] && stat -c '%s %n' \"\$f\"; done; true").out,
+)
 
 // What the folder's filesystem has left for a new image
 suspend fun freeBytes(): Long? = Root.read("stat -f -c '%a %S' $IMAGES").out.firstOrNull()?.split(' ')?.let { (a, s) ->

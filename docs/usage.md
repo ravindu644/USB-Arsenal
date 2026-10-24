@@ -20,6 +20,11 @@ and the host sees it re-appear with the rest intact. Removing the last part hand
 USB port back to Android. Defaults for every option come from the active
 [identity profile](identity.md); an option given on the command line wins.
 
+**What each function starts with is saved.** A `start` with arguments writes them into the
+setup (`<workspace>/Gadget/setup.conf`), a bare `start` runs what is saved there, and `apply`
+brings what runs to it. The Android app edits the same file, so a setup made on either side
+is there for the other, and clearing the app's data loses nothing. See [setup](#setup).
+
 ## check, status, stop
 
 ```sh
@@ -44,18 +49,54 @@ The exit code is the same as the text report's.
 | `storage` | one object per LUN: `lun`, `file`, `mode` (`cdrom`, `dvd`, `disk`, `rw`), `access` (`ro`, `rw`); an ejected LUN has empty strings |
 | `hid` | one object per node: `function` (`keyboard`, `mouse`), `node` (`/dev/hidgN`, empty until it appears), `interval` (the poll interval exponent it runs with: `0` for the kernel's default, 1 ms; `-1` where the kernel has no control for it) |
 | `tether` | `null`, or `function` (`ncm`, `rndis`), `iface`, `running` (the network side is up), `address`, `ipv6`, `upstream`, `gateway` (`1` in gateway mode), `gateway_container`, `gateway_iface`, `gateway_waiting` (the container is not running yet), `tx_bytes` and `rx_bytes` (what the phone's end of the link has sent and received, `-1` when unread) |
+| `boot_id` | this boot's id, so a reader never takes a status from before a reboot as live |
+| `setup`, `running` | every key of the [setup](#setup), as set up and as the last successful start of each function used; `running` is empty for a function that is off |
+| `pending` | `storage`, `tether`, `hid`: `1` when the function is linked and its setup differs from what started it (an empty value is compared as the profile's), so `<function> apply` would change something |
 
 `stop` is safe at any time, any number of times. It is also the recovery path: if a
 command was killed half-way, or the phone lost power, `stop` finishes the job.
+
+## setup
+
+```sh
+usb-arsenal setup show [--json]            # every key: as set up, and as the last start used
+usb-arsenal setup set KEY=VALUE ...        # change the setup; a bad value changes nothing
+usb-arsenal setup reset [storage|tether|hid]   # back to the defaults
+usb-arsenal setup revert [storage|tether|hid]  # back to what runs
+```
+
+| Key | Value |
+|---|---|
+| `udc` | the controller every command uses when `/sys/class/udc` lists more than one; stands in for `--udc` |
+| `storage_lun0` to `storage_lun7` | `MODE:PATH` for each drive, mode `auto`, `cdrom`, `dvd`, `disk` or `rw`; empty: no drive |
+| `tether_function` | `ncm` or `rndis`; empty: the profile's |
+| `tether_gateway` | a Droidspaces container's name; empty: no gateway |
+| `tether_gateway_iface` | the cable's name inside the container; empty: `usb0` |
+| `tether_net` | `0` for `--no-net`, else `1`; ignored with a gateway |
+| `tether_address`, `tether_dns`, `tether_upstream` | as the options; empty: the profile's |
+| `hid_interval` | 1 to 255; `0`: the kernel's default |
+
+`setup.conf` is `key=value` lines with `#` comments, the identity profile's format. Next to it
+the backend keeps `running.conf`, the same keys as the last successful start of each function
+used (cleared when the function stops, and after a reboot). A start with arguments merges them
+into the setup first; `storage eject` clears that LUN in both. `status --json` reports both
+files and `pending`.
 
 ## storage
 
 ```sh
 usb-arsenal storage start [--mode MODE] [--lun N] IMAGE
 usb-arsenal storage start [--lun N] [--mode MODE] IMAGE [--lun N] [--mode MODE] IMAGE ...
+usb-arsenal storage start                  # every drive the setup holds, in one replug
+usb-arsenal storage apply                  # the drives to the setup, LUN by LUN
 usb-arsenal storage eject [--lun N]
 usb-arsenal storage stop
 ```
+
+`apply` decides against the kernel: a LUN the setup dropped is ejected in place, a LUN whose
+setup changed since it started (or whose medium the host ejected) is loaded, a LUN already
+serving the setup's file in its mode is left alone, and with nothing set up storage stops.
+Several images on live LUNs of the same type are swapped in place in one go.
 
 | Mode | The host sees |
 |---|---|
@@ -112,9 +153,14 @@ Make a blank 4 GB pen drive: `truncate -s 4G pendrive.img`, then
 ## hid
 
 ```sh
-usb-arsenal hid start [--perm MODE] [--group GROUP]
+usb-arsenal hid start [--perm MODE] [--group GROUP] [--interval N]
+usb-arsenal hid apply                      # restart with the setup's interval if it changed
 usb-arsenal hid stop
 ```
+
+`--interval` is saved as the setup's `hid_interval`; a bare `start` uses it. On a running HID
+a `start` that asks for another interval fails, since the interval only changes with a restart:
+`hid apply` does that in one replug and leaves the other functions bound.
 
 `start` adds a boot-protocol keyboard and a 5-button mouse with a wheel, then prints
 which `/dev/hidgN` is which. The numbers depend on what else the kernel has; Android's
@@ -141,8 +187,13 @@ Anyone who can write a node can type on the host.
 usb-arsenal tether start [--rndis | --ncm] [--address CIDR] [--dns IP[,IP]] [--upstream IFACE]
 usb-arsenal tether start --gateway CONTAINER [--gateway-iface IFACE]
 usb-arsenal tether start --no-net
+usb-arsenal tether start                   # with the setup's options
+usb-arsenal tether apply                   # restart with the setup if it changed, in one replug
 usb-arsenal tether stop
 ```
+
+Every option but `--gateway-pid`, `--gateway-netns` and `--foreground` is saved into the
+setup; a bare `start` runs it.
 
 The host gets a network adapter, an address by DHCP and a route out through the phone's
 connection. The default is `192.168.42.129/24` for the phone, with the host on `.130`,
@@ -170,7 +221,8 @@ usb-arsenal daemon stop
 
 See [containers.md](containers.md). When a daemon is running, every command except
 `daemon`, `help`, `version` and `identity generate` runs through it. `UA_NO_PROXY=1`
-makes a command act directly.
+makes a command act directly. A path a container client saves into the setup (a bare `start`
+later opens it on the daemon's side) must be one the daemon can see.
 
 ## Exit codes
 
