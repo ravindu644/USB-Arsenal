@@ -57,7 +57,7 @@ removed because it let its group make root open any file.
 | `src/config.c` | identity profiles |
 | `src/check.c` | capability probing |
 | `src/net/` | lifted from Droidspaces; keep its `ds_` names so it can be re-synced |
-| `kernel-patches/<kernel-version>/` | `git format-patch` exports of kernel fixes; list each in `docs/kernel-requirements.md` |
+| `kernel-patches/<kernel-version>/` | `git format-patch` exports of kernel fixes, and the `README.md` that lists them (the rule below) |
 | `DESIGN.md` | the Android app's design language: tokens, components, copy rules |
 | `docs/developer/design/` | the reference screens and `lcd.css`, the shared stylesheet |
 
@@ -189,13 +189,16 @@ name.
 ## Documentation
 
 - **User pages** live in `docs/` (installation, usage, tethering, containers, identity,
-  kernel requirements, troubleshooting).
+  troubleshooting); the kernel page is `kernel-patches/README.md`, beside the patches.
 - **Developer material** lives in `docs/developer/`: architecture, testing, research
   notes, references and the roadmap.
 - **Record findings and decisions there as you make them,** not in your head. Tick
   `docs/developer/ROADMAP.md` and add a dated line to its status log.
 - **The README stays under 150 lines and claims nothing that was not verified on
   hardware.**
+- **`kernel-patches/README.md` stays brief:** the options a feature needs, and the patches a
+  feature needs on which kernel versions. No device names, no links to kernel trees, no test
+  history. A new patch folder adds its row there in the same commit.
 
 ## Designing the app
 

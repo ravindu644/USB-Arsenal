@@ -29,7 +29,7 @@ usb-arsenal tether start --address 10.42.0.1/24 --dns 9.9.9.9 --upstream wlan0
   RNDIS (`--rndis`) is for Windows 7 and 8, and `--ncm` overrides a profile that picks
   RNDIS. Both carry fixed MAC addresses, so Windows does not add a new adapter every time.
 - **On Samsung 4.x kernels without the f_ncm fix,** USB Arsenal uses RNDIS automatically;
-  see [kernel-requirements.md](kernel-requirements.md).
+  see [kernel-patches/README.md](../kernel-patches/README.md).
 
 The network side runs as a small background process. `tether stop` or `stop` ends it and
 removes its firewall rules. Adding storage or HID while tethering keeps the link: on

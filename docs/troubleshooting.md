@@ -26,7 +26,7 @@ Windows does not look, so Windows never mounts the volume. Use `--mode dvd`.
 **A `dvd` drive does not appear in the PC's boot menu.**
 Older firmware does not boot a USB disk with 2048-byte sectors and no MBR (a 2012 laptop
 ignored it in both UEFI and legacy mode). Use `--mode cdrom` on a kernel with the DVD
-patch (see [kernel-requirements.md](kernel-requirements.md)), or a newer PC.
+patch (see [kernel-patches/README.md](../kernel-patches/README.md)), or a newer PC.
 
 **After USB Arsenal, Android shows no USB notification and USB tethering is greyed out.**
 Versions before 2026-10-19 (evening) removed their gadget on `stop`, and Android's configfs then
@@ -65,12 +65,12 @@ Give the link a "never default route" profile; see
 **`check` marks NCM as unsafe on a Samsung phone.**
 The kernel has Samsung's f_ncm bug: a second NCM instance panics it. USB Arsenal tethers
 over RNDIS there. Patch `0003` in `kernel-patches/4.14/` fixes the kernel, and NCM comes
-back by itself. See [kernel-requirements.md](kernel-requirements.md).
+back by itself. See [kernel-patches/README.md](../kernel-patches/README.md).
 
 **"This is stock Samsung configfs, which cannot create a second gadget".**
 A stock Samsung 4.x kernel: its configfs cannot build a gadget next to Android's (the
 `mkdir` fails as ENOMEM, and nothing is changed). USB Arsenal does not run on it;
-patches `0001` and `0002` in `kernel-patches/4.14/` fix the kernel. See [kernel-requirements.md](kernel-requirements.md).
+patches `0001` and `0002` in `kernel-patches/4.14/` fix the kernel. See [kernel-patches/README.md](../kernel-patches/README.md).
 
 **"More than one USB device controller".**
 Pick one with `--udc NAME`; `check` lists them. `dummy_udc.*`, which every GKI kernel builds in,

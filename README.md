@@ -35,7 +35,7 @@ The same binary runs on a Linux board with a USB device port, and inside a privi
 
 - A rooted phone running Android 8 or newer.
 - A kernel with USB configfs. The app checks this for you before it installs anything
-  ([kernel requirements](docs/kernel-requirements.md)).
+  ([kernel requirements](kernel-patches/README.md)).
 
 ## Get started
 
@@ -83,7 +83,7 @@ Linux boards and the KernelSU module are in the [installation guide](docs/instal
 | [Tethering](docs/tethering.md) | NAT mode, OpenWrt gateway mode, the host side. |
 | [Containers](docs/containers.md) | Running USB Arsenal inside a container. |
 | [Identity profiles](docs/identity.md) | Vendor and product IDs, names, serial, defaults. |
-| [Kernel requirements](docs/kernel-requirements.md) | Kernel options, Samsung quirks, the patches in `kernel-patches/`. |
+| [Kernel requirements](kernel-patches/README.md) | Kernel options and the patches, by feature. |
 | [Troubleshooting](docs/troubleshooting.md) | Symptoms, causes and fixes. |
 
 Developer notes (architecture, kernel research, the design language, roadmap) live in

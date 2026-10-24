@@ -7,7 +7,7 @@ app itself. Everything it does, a root shell can do too ([usage.md](usage.md)).
 ## Requirements
 
 - Android 8.0 or later, rooted. KernelSU is recommended.
-- A kernel `usb-arsenal check` accepts ([kernel-requirements.md](kernel-requirements.md)).
+- A kernel `usb-arsenal check` accepts ([kernel requirements](../kernel-patches/README.md)).
   The app runs the check for you before it installs anything.
 
 ## Install
