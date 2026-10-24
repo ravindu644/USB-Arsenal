@@ -196,12 +196,15 @@ fun App() {
             Controller.refresh()
         }
     }
-    // The one status loop: every screen reads Gadget.status; the read lane never waits on a command
+    // The one status loop: every screen reads Gadget.status; the read lane never waits on a command.
+    // Not while setup runs (no backend to ask yet): read through state, since the loop outlives
+    // the composition that started it
     val owner = LocalLifecycleOwner.current
+    val inSetup by rememberUpdatedState(setup)
     LaunchedEffect(owner) {
         owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
-                if (!setup && Gadget.backend?.state != BackendState.NO_ROOT) Gadget.refresh()
+                if (!inSetup && Gadget.backend?.state != BackendState.NO_ROOT) Gadget.refresh()
                 delay(POLL_MS)
             }
         }

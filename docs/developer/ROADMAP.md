@@ -564,5 +564,9 @@ Tick a box only when the item is merged and verified as described in its phase.
   in one replug, storage LUN by LUN with an "already serving" check under the lock);
   `status --json` adds `boot_id`, `setup`, `running`, `pending`. The app is cache-first
   (`backend/Cache.kt`), with one ordered status loop, no setup of its own and no `--udc` flag
-  (the pick is `setup set udc=`). `tests/dummy_hcd.sh` covers the setup; the device run is
-  pending.
+  (the pick is `setup set udc=`). `tests/dummy_hcd.sh` covers the setup (11 checks on a
+  Fedora host). Verified on the a16xm (5.15): the CLI story (start saves, `setup set`,
+  `storage apply` ejects LUN 1 in place, `hid apply` changes the interval in one replug), the
+  same story through the app (Home's switch, Eject, Back, the Not applied sheet, Apply: Home
+  then says `1 UP`, `LUN0 cd.img · disk`, `BOUND`), and a `pm clear` followed by setup and
+  relaunch showing the picks, the DNS and the interval set before the wipe.

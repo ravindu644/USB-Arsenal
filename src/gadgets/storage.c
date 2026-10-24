@@ -699,7 +699,7 @@ static int do_apply(void) {
   struct ua_gadget g;
   struct load ls[UA_MAX_FDS];
   char fdir[PATH_MAX];
-  int any = 0, n = 0;
+  int any = 0, n = 0, ejected = 0;
   ua_setup_load(&s);
   ua_running_load(&r);
   for (int lun = 0; lun < UA_LUNS; lun++)
@@ -723,6 +723,7 @@ static int do_apply(void) {
     if (!s.lun[lun][0]) {
       if (loaded && do_eject(lun) != UA_EXIT_OK)
         return UA_EXIT_FAIL;
+      ejected |= loaded;
       if (r.lun[lun][0])
         ua_running_clear_lun(lun);
       continue;
@@ -738,7 +739,8 @@ static int do_apply(void) {
     n++;
   }
   if (!n) {
-    ua_log("Storage already runs its setup");
+    ua_log(ejected ? "Storage now runs its setup"
+                   : "Storage already runs its setup");
     return UA_EXIT_OK;
   }
   return start_loads(ls, n);
