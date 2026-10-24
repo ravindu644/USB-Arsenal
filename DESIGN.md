@@ -500,7 +500,8 @@ what the port is really doing:
 
 ### Drive (`.drive`)
 150px box with an inverted 40px face: activity LED, `LUN0`, eject glyph. Its body shows the
-disc, the filename and `size · type` with an access `.tag` (`ro` or `rw`). Ejected or empty,
+image's sprite, the filename and `size · type` with an access `.tag` (`ro` or `rw`): the disc
+for a cd or dvd, the pen drive for a disk, padlocked when the host cannot write it. Ejected or empty,
 the body shows a `.ghost` disc. The face never repeats what the body shows. The body is the
 setup, the face what runs: the LED blinks while the host is served, an ejected pick too, is lit
 for a pick not served yet, and hollow with neither. The type is the kernel's (`status --json`)
@@ -906,6 +907,8 @@ USB-A shell are its eyes; its cable is its tail. Its 16×18 bitmap:
 The blink frame replaces rows 2 and 3 (counting from 0) with `...#........#...` and `...#.##..##.#...`.
 
 Function icons are 16px sprites: `storage` (disc), `tether` (RJ45 jack), `hid` (keyboard).
+A disk in the drive is `stick` (a pen drive, Pin's plug on a wider body) or `stick locked`,
+the same with a padlock hung off its corner; both are 16×18 so they share one height.
 Others: `usb` (trident), `eject`, `spark`, `pointer`, `duck` (Quacky's), and the four arrow
 keys. All of them are in the Pixel kit screen.
 

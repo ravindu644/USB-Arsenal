@@ -59,8 +59,8 @@ import com.usbarsenal.app.lcd.stepSpec
 data class DriveImage(val name: String, val size: String, val kind: String, val access: String)
 
 /*
- * .drive: a 150dp box with an inverted 40dp face (the LED, the LUN, eject) over the disc, the
- * file and `size · kind` with its access tag. Empty, the tray is out over the body:
+ * .drive: a 150dp box with an inverted 40dp face (the LED, the LUN, eject) over the disc (a pen
+ * drive for a disk, padlocked when read-only), the file and `size · kind` with its access tag. Empty, the tray is out over the body:
  * a ghosted disc on the drive's ground, sliding in 3 steps of 2 frames. The body is the setup;
  * the LED is what runs: it blinks while the host is served, even with the pick ejected, is lit
  * for a pick not served yet, and hollow with neither.
@@ -79,7 +79,9 @@ fun Drive(lun: Int, image: DriveImage?, serving: Boolean, onEject: () -> Unit, m
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SpriteIcon(Sprites.Storage, 4.dp)
+                // The disc is a cd or dvd; a disk is a pen drive, locked when the host cannot write it
+                val sprite = if (image.kind != "disk") Sprites.Storage else if (image.access == "rw") Sprites.Stick else Sprites.StickLocked
+                SpriteIcon(sprite, 4.dp)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Lcd.lines)) {
                     Marquee(image.name, LcdType.data, Modifier.fillMaxWidth())
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
