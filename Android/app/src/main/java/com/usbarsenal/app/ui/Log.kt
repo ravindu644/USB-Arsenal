@@ -14,6 +14,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import com.usbarsenal.app.backend.Root
@@ -33,6 +34,8 @@ private const val DAEMON_LOG = "$WORKSPACE/Logs/usb-arsenald.log"
 private object DaemonLog {
     val lines = mutableStateListOf<String>()
     var offset: Long? = null
+    // Clears done so far; the tail that starts after one empties the tab
+    var cleared = 0
 }
 
 /*
@@ -51,10 +54,25 @@ fun LogScreen(back: () -> Unit) {
     val scope = rememberCoroutineScope()
     LaunchedEffect(tab, clears) {
         if (tab != 1) return@LaunchedEffect
+        // A Clear empties the tab here, once the tail before it is gone, so none of its lines
+        // land after the clear
+        val mine = clears
+        if (mine != DaemonLog.cleared) {
+            daemon.clear()
+            DaemonLog.offset = 0
+            DaemonLog.cleared = mine
+        }
         // The last 200 lines the first time; after that, the bytes since the tab last showed.
-        // A file now shorter than that was rotated at a daemon start: its last 200 lines again
+        // A file now shorter than that was rotated at a daemon start: its last 200 lines again,
+        // under a line that says so
         val size = Root.read("stat -c %s $DAEMON_LOG").out.firstOrNull()?.toLongOrNull()
-        val from = DaemonLog.offset?.takeIf { size != null && it <= size }?.let { "-c +${it + 1}" } ?: "-n 200"
+        if (size == null) {
+            daemon += "# no daemon log yet: daemon mode writes it"
+            return@LaunchedEffect
+        }
+        val at = DaemonLog.offset
+        if (at != null && at > size) daemon += "# a daemon start began a new log"
+        val from = at?.takeIf { it <= size }?.let { "-c +${it + 1}" } ?: "-n 200"
         // -f, not -F: Android 8 to 10 ship a toybox without -F, and the log rotates only when
         // the daemon starts
         val tail = Root.stream("tail $from -f $DAEMON_LOG")
@@ -71,7 +89,8 @@ fun LogScreen(back: () -> Unit) {
             // Leaving the tab cancels this: the tail's shell goes with it, and where it got to is kept
             withContext(NonCancellable) {
                 tail.close()
-                DaemonLog.offset = Root.read("stat -c %s $DAEMON_LOG").out.firstOrNull()?.toLongOrNull()
+                // Not after a Clear: the tail that follows it starts from the emptied file
+                if (clears == mine) DaemonLog.offset = Root.read("stat -c %s $DAEMON_LOG").out.firstOrNull()?.toLongOrNull()
             }
         }
     }
@@ -89,15 +108,11 @@ fun LogScreen(back: () -> Unit) {
                         // appends (O_APPEND), so it writes on at the new end; the .old a daemon
                         // start rotated aside goes too. Its own shell: this is not a gadget change
                         scope.launch {
-                            if (Root.read(": > $DAEMON_LOG; rm -f $DAEMON_LOG.old").ok) {
-                                daemon.clear()
-                                DaemonLog.offset = 0
-                                clears++
-                            }
+                            if (Root.read(": > $DAEMON_LOG; rm -f $DAEMON_LOG.old").ok) clears++
                         }
                     }
                 }
-                Key("Copy logs", Modifier.weight(1f), primary = true) {
+                Key("Copy logs", Modifier.weight(1f).focusRequester(focusOn()), primary = true) {
                     context.getSystemService(ClipboardManager::class.java)
                         .setPrimaryClip(ClipData.newPlainText("usb-arsenal log", lines.joinToString("\n")))
                 }

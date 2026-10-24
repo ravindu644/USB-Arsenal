@@ -14,12 +14,11 @@ import org.junit.Test
  * Each failed on the code as audited.
  */
 class AuditTest {
-    // A generated profile leaves `serial=` empty with a comment after it; the app must read it
-    // as empty (the phone's own serial), as config.c does, not as the comment's text
+    // A generated profile leaves `serial=` empty with a comment after it. The app no longer reads
+    // files itself: config.c does (`identity show --json FILE`), and its empty serial stays empty
     @Test
     fun generatedProfileSerialIsEmpty() {
-        val lines = listOf("== /p/x.conf", "serial=                          # empty: ro.serialno, or /etc/machine-id", "product=AB#12 # not a comment")
-        val p = parseProfiles(lines).single()
+        val p = parseProfiles("""[{"path":"/p/x.conf","errors":0,"keys":{"serial":"","product":"AB#12"}}]""").single()
         assertEquals("", p.serial)
         assertEquals("AB#12", p.product)
     }
@@ -48,5 +47,38 @@ class AuditTest {
         val old = parseStatus("""{"version":"1.2.0","udc":"u","udc_state":"x","bound":0,"storage":[],"hid":[],"tether":null}""")
         assertEquals(emptyMap<String, String>(), old.setup)
         assertEquals("", old.bootId)
+    }
+
+    // Interface names as the kernel's dev_valid_name takes them; an empty gateway iface is usb0
+    @Test
+    fun ifaceNamesAsTheKernel() {
+        assertFalse(validIface("."))
+        assertFalse(validIface(".."))
+        assertFalse(validIface("eth0:1"))
+        assertTrue(validIface("rmnet_data0"))
+        assertTrue(TetherPlan(container = "OpenWrt").ready(null))
+        assertEquals("", TetherPlan(container = "OpenWrt").keys().toMap()["tether_gateway_iface"])
+    }
+
+    // A DNS list longer than the backend's 127-character field is refused before it is sent
+    @Test
+    fun dnsFitsTheBackendsField() {
+        assertFalse(validDns(List(9) { "100.100.100.100" }.joinToString(",")))
+        assertTrue(validDns("1.1.1.1,8.8.8.8"))
+    }
+
+    // A drive says its kind once: rw is a disk, its tag says the access
+    @Test
+    fun driveKind() {
+        assertEquals("cd", kindOf("cdrom"))
+        assertEquals("disk", kindOf("rw"))
+        assertEquals("dvd", kindOf("dvd"))
+    }
+
+    // A USB 1.1 host polls in whole 1 ms frames
+    @Test
+    fun fullSpeedPeriod() {
+        assertEquals("3 ms", periodText(3, fullSpeed = true))
+        assertEquals("500 us", periodText(3))
     }
 }

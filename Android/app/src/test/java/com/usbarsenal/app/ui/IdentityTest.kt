@@ -2,6 +2,7 @@ package com.usbarsenal.app.ui
 
 import com.usbarsenal.app.backend.BUILT_IN
 import com.usbarsenal.app.backend.Profile
+import com.usbarsenal.app.backend.parseProfile
 import com.usbarsenal.app.backend.parseProfiles
 import com.usbarsenal.app.backend.withKeys
 import org.junit.Assert.assertEquals
@@ -10,19 +11,15 @@ import org.junit.Test
 
 // Profiles read as config.c reads them, write only their five keys, and a pick waits only while bound
 class IdentityTest {
+    // As `identity show --json FILE...` prints them: config.c read each file, so a key the file
+    // lacks comes back at its default and ids are 0x%04x
     @Test
     fun parse() {
-        val lines = listOf(
-            "== /storage/emulated/0/USB-Arsenal/Profiles/pixel 8.conf",
-            "product=Pixel 8",
-            "manufacturer=Google",
-            "id_vendor=0x18D1",
-            "id_product=0x4ee7",
-            "max_power=500                    # mA, 0-500",
-            "serial=PX8-0001",
-            "== /storage/emulated/0/USB-Arsenal/Profiles/bare.conf",
-        )
-        val (bare, pixel) = parseProfiles(lines)
+        val json = """[{"path":"/storage/emulated/0/USB-Arsenal/Profiles/pixel 8.conf","errors":0,"keys":{"product":"Pixel 8",
+            "manufacturer":"Google","id_vendor":"0x18d1","id_product":"0x4ee7","max_power":"500","serial":"PX8-0001"}},
+            {"path":"/storage/emulated/0/USB-Arsenal/Profiles/bare.conf","errors":0,"keys":{"product":"USB Arsenal","manufacturer":"USB Arsenal",
+            "id_vendor":"0x1d6b","id_product":"0x0104","max_power":"250","serial":""}}]"""
+        val (bare, pixel) = parseProfiles(json)
         assertEquals(Profile("/storage/emulated/0/USB-Arsenal/Profiles/pixel 8.conf", "Pixel 8", "Google", "18d1", "4ee7", 500, "PX8-0001"), pixel)
         assertEquals("pixel 8", pixel.name)
         // A profile missing a key reads as the built-in value for it
@@ -53,6 +50,18 @@ class IdentityTest {
         // An empty serial is written empty, which config.c reads as the phone's own
         assertEquals("serial=", out[5])
         assertEquals(template[7], out[7])
+        // A hand-made file without a key gets it added, so none of the six is lost
+        val added = withKeys(listOf("product=Old"), Profile("/p.conf", "Pixel 8", "Google", "18d1", "4ee7", 500)).lines()
+        assertTrue("id_vendor=0x18d1" in added && "max_power=500" in added && "serial=" in added)
+    }
+
+    @Test
+    fun inForce() {
+        val p = parseProfile("""{"profile":"","copy":false,"missing":"/p/gone.conf","keys":{"product":"USB Arsenal","serial":""}}""")
+        assertEquals("Built-in", profileName(p))
+        assertEquals("/p/gone.conf", p["missing"])
+        // A derived value is empty in the JSON and left out
+        assertTrue("serial" !in p)
     }
 
     @Test
@@ -68,7 +77,7 @@ class IdentityTest {
 
     @Test
     fun names() {
-        assertEquals("Built-in", profileName(mapOf("profile" to "built-in defaults")))
+        assertEquals("Built-in", profileName(mapOf("profile" to "")))
         assertEquals("pixel 8", profileName(mapOf("profile" to "/storage/emulated/0/USB-Arsenal/Profiles/pixel 8.conf")))
     }
 

@@ -185,6 +185,12 @@ body{margin:0}
 .cells i{display:block}
 .cells i.f{background:var(--ink)}
 
+/* Held: the knob stays, the track's border dashed as a disabled key's; it keeps focus, takes no flip */
+.dip.held .trk{border-style:dashed}
+
+/* An option the kernel cannot honour: a .d50 shade behind a full-ink label */
+.seg[disabled]{background-image:repeating-conic-gradient(currentColor 0 25%,transparent 0 50%);background-size:4px 4px;cursor:not-allowed}
+
 /* A function this kernel lacks: the row stays, its switch cannot move */
 .dip[disabled]{cursor:not-allowed}
 .dip[disabled] .trk{background-image:repeating-conic-gradient(currentColor 0 25%,transparent 0 50%);background-size:4px 4px}

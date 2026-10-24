@@ -68,6 +68,17 @@ class RootExec(private val launch: (String) -> Process) {
             p.inputStream.pumpInto(out, buf)
             p.errorStream.pumpInto(err, buf)
         }
+        // The shell's pid, the first line. Under Magisk the shell is not our child, so a kill
+        // before that line came would free the lane while the command runs on: wait for it
+        suspend fun pid(): Int {
+            repeat(100) {
+                pump()
+                out.lines().firstOrNull()?.toIntOrNull()?.let { return it }
+                if (!p.isAlive) return 0
+                delay(10)
+            }
+            return 0
+        }
         val code = try {
             withTimeoutOrNull(timeoutMs) {
                 while (p.isAlive) {
@@ -75,9 +86,9 @@ class RootExec(private val launch: (String) -> Process) {
                     delay(10)
                 }
                 p.exitValue()
-            } ?: TIMED_OUT.also { kill(p, out.lines().firstOrNull()?.toIntOrNull() ?: 0) }
+            } ?: TIMED_OUT.also { kill(p, pid()) }
         } catch (e: CancellationException) {
-            withContext(NonCancellable) { kill(p, out.lines().firstOrNull()?.toIntOrNull() ?: 0) }
+            withContext(NonCancellable) { kill(p, pid()) }
             throw e
         }
         // Once the shell has exited, what is still in the pipes is the rest of its output

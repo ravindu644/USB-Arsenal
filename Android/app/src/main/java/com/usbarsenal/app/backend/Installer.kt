@@ -36,6 +36,7 @@ data class Backend(val state: BackendState, val installed: String?)
 suspend fun backendState(context: Context): Backend {
     val r = Root.read(
         """
+        echo root
         test -x $UA && echo bin
         test -f $MODULE/module.prop && echo module
         v=$($UA version 2>/dev/null) && echo "${'$'}v" | head -n 1 | sed 's/^/runs /'
@@ -45,12 +46,15 @@ suspend fun backendState(context: Context): Backend {
     // "runs usb-arsenal 1.2.0"
     val installed = r.out.firstOrNull { it.startsWith("runs ") }?.substringAfterLast(' ')?.takeIf { it.isNotEmpty() }
     val md5 = r.out.firstNotNullOfOrNull { Regex("^([0-9a-f]{32}) ").find(it)?.groupValues?.get(1) }
+    // A shell that never said `root` never ran: su denied it (Magisk exits 13 with nothing said)
+    // or is missing, so nothing was checked. No binary bundled for this ABI is nothing to update to
+    val asset = assetMd5(context)
     val state = when {
-        r.code == NO_ROOT || (r.timedOut && "bin" !in r.out) -> BackendState.NO_ROOT
+        "root" !in r.out -> BackendState.NO_ROOT
         "bin" !in r.out -> BackendState.NOT_INSTALLED
         "module" !in r.out -> BackendState.MODULE_MISSING
         installed == null -> BackendState.CORRUPTED
-        md5 != assetMd5(context) -> BackendState.UPDATE_AVAILABLE
+        asset != null && md5 != asset -> BackendState.UPDATE_AVAILABLE
         else -> BackendState.READY
     }
     return Backend(state, installed)
@@ -84,10 +88,12 @@ private suspend fun install(context: Context, log: (String) -> Unit): Boolean {
     }
     log("[+] Device architecture: $arch")
 
-    // The manager loads sepolicy.rule at boot. A rule already in the module is in the policy now;
-    // a new one waits for a reboot. It is never patched into the live policy, which root
-    // detectors watch for. Asked before anything is copied, as Droidspaces does
-    val ruleIsNew = !Root.read("test -f $MODULE/sepolicy.rule").ok
+    // The manager loads sepolicy.rule at boot. The rule already in the module is in the policy
+    // now; a new or changed one waits for a reboot. It is never patched into the live policy,
+    // which root detectors watch for. Asked before anything is copied, as Droidspaces does
+    val oldRule = Root.read("cat $MODULE/sepolicy.rule").takeIf { it.ok }?.out
+    val newRule = withContext(Dispatchers.IO) { context.assets.open("boot-module/sepolicy.rule").bufferedReader().readLines() }
+    val ruleIsNew = oldRule != newRule.dropLastWhile(String::isEmpty)
 
     val staging = File(context.cacheDir, "backend")
     try {
@@ -171,7 +177,10 @@ private const val DAEMON_MODE = "$WORKSPACE/.daemon_mode"
 // Null when root cannot be asked; no file, or an empty one, is off
 suspend fun daemonMode(): Boolean? = Root.read("cat $DAEMON_MODE 2>/dev/null; true").takeIf { it.ok }?.let { it.out.firstOrNull()?.trim() == "1" }
 
-suspend fun setDaemonMode(on: Boolean) = Root.change("echo ${if (on) 1 else 0} > $DAEMON_MODE")
+// Never a marker for a binary that is not there: the boot module would start nothing
+suspend fun setDaemonMode(on: Boolean) = Root.change(
+    (if (on) "test -x $UA || { echo '[-] Install the backend first' >&2; exit 1; }; " else "") + "echo ${if (on) 1 else 0} > $DAEMON_MODE",
+)
 
 // Droidspaces' SymlinkInstaller: usb-arsenal on PATH is the module's system/bin link to the workspace binary
 suspend fun pathLinked(): Boolean? = Root.read("test -L $MODULE_LINK && echo 1 || echo 0").takeIf { it.ok }?.out?.firstOrNull()?.let { it == "1" }

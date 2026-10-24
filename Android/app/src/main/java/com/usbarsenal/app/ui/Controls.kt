@@ -37,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -87,6 +88,7 @@ import com.usbarsenal.app.lcd.Pin
 import com.usbarsenal.app.lcd.Sprite
 import com.usbarsenal.app.lcd.SpriteIcon
 import com.usbarsenal.app.lcd.Sprites
+import com.usbarsenal.app.lcd.dashedRect
 import com.usbarsenal.app.lcd.dither
 import com.usbarsenal.app.lcd.ghost
 import com.usbarsenal.app.lcd.lcdClickable
@@ -95,6 +97,7 @@ import com.usbarsenal.app.lcd.shoulderStep
 import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.focus.onFocusChanged
@@ -200,11 +203,14 @@ private fun Seg(label: String, spoken: String?, on: Boolean, enabled: Boolean, m
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val body = @Composable {
-        val ground = LocalLcd.current.ground
+        val c = LocalLcd.current
+        // Disabled is the .d50 shade behind the label; a ghost's dither would eat Silkscreen's strokes
         Box(
-            Modifier.fillMaxWidth().heightIn(min = Lcd.touch).background(ground).padding(horizontal = 4.dp),
+            Modifier.fillMaxWidth().heightIn(min = Lcd.touch).background(c.ground)
+                .then(if (enabled) Modifier else Modifier.dither(Dither.D50, c.ink))
+                .padding(horizontal = 4.dp),
             contentAlignment = Alignment.Center,
-        ) { Text(label, LcdType.labelStrong, if (enabled) Modifier else Modifier.ghost(ground), maxLines = 1) }
+        ) { Text(label, LcdType.labelStrong, maxLines = 1) }
     }
     // Drawn above its neighbours while focused, so the next cell's ground does not cover the dashed cursor
     Box(
@@ -235,17 +241,28 @@ fun LunStrip(count: Int, selected: Int, onSelect: (Int) -> Unit, onAdd: () -> Un
  * .dip: one function on or off. On prints 1 with the knob right; off prints O with the knob
  * left. The knob snaps across in one frame. It draws in the ink around it, so it inverts with
  * its row. A function this kernel lacks gets a dithered track with no knob, which focus skips.
+ * [held] is the other dead look: the knob stays where it is, the track's border is dashed as a
+ * disabled key's, and it keeps focus but takes no flip (a command running, a value not read yet).
+ * The haptic plays on the frame the knob moves, which for a function is when its command ends.
  */
 @Composable
-fun Dip(on: Boolean, onToggle: (Boolean) -> Unit, label: String, modifier: Modifier = Modifier, enabled: Boolean = true) {
+fun Dip(on: Boolean, onToggle: (Boolean) -> Unit, label: String, modifier: Modifier = Modifier, enabled: Boolean = true, held: Boolean = false) {
     val interaction = remember { MutableInteractionSource() }
     val haptics = LocalHaptics.current
     val ink = LocalLcd.current.ink
+    // A flip asked for and not yet drawn; a knob moved by anyone else plays nothing
+    var asked by remember { mutableStateOf(false) }
+    LaunchedEffect(on) {
+        if (asked) haptics.toggle(on)
+        asked = false
+    }
+    LaunchedEffect(held) { if (!held) asked = false }
     Box(
         modifier
             .heightIn(min = Lcd.touch)
             .lcdClickable(interaction, outline = true, role = Role.Switch, enabled = enabled) {
-                haptics.toggle(!on)
+                if (held) return@lcdClickable
+                asked = true
                 onToggle(!on)
             }
             .semantics {
@@ -258,8 +275,13 @@ fun Dip(on: Boolean, onToggle: (Boolean) -> Unit, label: String, modifier: Modif
         Row(
             Modifier
                 .size(68.dp, 32.dp)
-                .then(if (enabled) Modifier else Modifier.dither(Dither.D50, ink))
-                .border(Lcd.pixel, ink)
+                .then(
+                    when {
+                        !enabled -> Modifier.dither(Dither.D50, ink).border(Lcd.pixel, ink)
+                        held -> Modifier.dashedRect(ink, -Lcd.pixel)
+                        else -> Modifier.border(Lcd.pixel, ink)
+                    },
+                )
                 .padding(Lcd.pixel),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -441,7 +463,7 @@ fun FunctionRow(
                 Marquee(line1, LcdType.data, Modifier.fillMaxWidth())
                 Marquee(line2, LcdType.data, Modifier.fillMaxWidth())
             }
-            Dip(on, onToggle, label, enabled = available && enabled)
+            Dip(on, onToggle, label, enabled = available, held = !enabled)
         }
     }
     Box(modifier) { Inverted(focused || pressed, body) }
@@ -496,14 +518,23 @@ fun Card(label: String, line: String, icon: Sprite, onOpen: () -> Unit, modifier
     val focused by interaction.collectIsFocusedAsState()
     val pressed by interaction.collectIsPressedAsState()
     val haptics = LocalHaptics.current
-    val lit = focused || pressed
+    // A tap is seen: the card stays inverted two frames after it lifts, then opens
+    var holding by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val lit = focused || pressed || holding
     val edge = LocalLcd.current.ink
     Box(
         modifier
             .fillMaxWidth()
             .lcdClickable(interaction, outline = false, role = Role.Button) {
+                if (holding) return@lcdClickable
                 haptics.keyPress()
-                onOpen()
+                holding = true
+                scope.launch {
+                    delay(2L * FRAME_MS)
+                    holding = false
+                    onOpen()
+                }
             },
     ) {
         Inverted(lit) {
@@ -734,6 +765,8 @@ fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier, binds: Int,
         bonking = false
     }
     val busy = port is Port.Replugging || port is Port.Stopping
+    // The next command ends the failure, so a short one never brings Failed back after it
+    LaunchedEffect(busy) { if (busy) bonking = false }
     val failing = bonking && !busy
     val row: Any = if (failing) Failed else port
     val rule = LocalLcd.current.ink
@@ -841,7 +874,9 @@ private fun PinStage(port: Port, bonking: Boolean, binds: Int) {
                 }
             }
             when {
-                // Dizzy until the bar's timer ends the failure, which restarts this as the real state
+                // Dizzy until the bar's timer ends the failure, which restarts this as the real state.
+                // Still bound, he stays plugged in: popping out would replug him with a tick after
+                bonking && plugged && port is Port.Bound -> dizzy = true
                 bonking -> {
                     popOut()
                     walk(mid - 52.dp)
@@ -904,7 +939,8 @@ private fun PinStage(port: Port, bonking: Boolean, binds: Int) {
         }
         if (dozing) {
             val rise = loop(1800) { it / 600 }
-            Text("z", LcdType.labelStrong, Modifier.offset(home + 34.dp + 4.dp * rise, 22.dp - 8.dp * rise))
+            // VT323 keeps its case; Silkscreen would draw a Z
+            Text("z", LcdType.data, Modifier.offset(home + 34.dp + 4.dp * rise, 22.dp - 8.dp * rise))
         }
     }
 }

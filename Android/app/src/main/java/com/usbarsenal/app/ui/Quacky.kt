@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import com.usbarsenal.app.lcd.LcdType
 import com.usbarsenal.app.lcd.Pin
@@ -20,7 +21,7 @@ import com.usbarsenal.app.lcd.Sprites
 fun QuackyScreen(back: () -> Unit) {
     BackHandler(onBack = back)
     Screen {
-        Top { BackKey() }
+        Top { BackKey(Modifier.focusRequester(focusOn())) }
         Title("Quacky")
         // Centred in what the window leaves; a short window scrolls to it
         Box(Modifier.fill(min = 200.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {

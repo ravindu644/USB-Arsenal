@@ -3,7 +3,6 @@ package com.usbarsenal.app.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -65,15 +64,18 @@ fun HomeScreen(open: (Fn) -> Unit, openLog: () -> Unit, openSettings: () -> Unit
     val silent = Gadget.misses >= 3
     val port = when {
         busy?.stopping == true -> Port.Stopping(busy.says)
+        // An identity set with nothing bound replugs nothing: the port stays Android's
+        busy != null && busy.fn == null && busy.typed.startsWith("identity ") && status?.bound != true -> Port.Android(busy.says)
         busy != null -> Port.Replugging(busy.says)
         status?.bound == true -> Port.Bound(if (silent) NO_ANSWER else status.udc)
         else -> Port.Android(if (silent) NO_ANSWER else "")
     }
 
-    // Stop all fails on the whole gadget: the bar shakes and the fault sits above it
+    // A fault sits at the end, above the bar, so nothing above it moves; the row that failed
+    // shakes, or the bar for the whole gadget
     val barShake = rememberShake()
-    val wholeFault = Gadget.fault?.takeIf { it.where == null }
-    LaunchedEffect(wholeFault) { if (wholeFault != null) barShake.fire() }
+    val fault = Gadget.fault?.takeUnless { it.identity }
+    LaunchedEffect(fault) { if (fault != null && fault.where == null) barShake.fire() }
     val stopAll = { Gadget.run(null, "stop") }
     Screen(bottomBar = { BottomBar(port, { stopAll() }, Modifier.shake(barShake), Gadget.binds, Gadget.fails) }) {
         Top {
@@ -88,8 +90,8 @@ fun HomeScreen(open: (Fn) -> Unit, openLog: () -> Unit, openSettings: () -> Unit
         Column(Modifier.bleed(10.dp)) {
             Fn.entries.forEachIndexed { i, fn ->
                 val shake = rememberShake()
-                val fault = Gadget.fault?.takeIf { it.where == fn }
-                LaunchedEffect(fault) { if (fault != null) shake.fire() }
+                val mine = fault?.takeIf { it.where == fn }
+                LaunchedEffect(mine) { if (mine != null) shake.fire() }
                 val (l1, l2) = rowLines(fn, status, caps, busy)
                 val on = status.isOn(fn)
                 FunctionRow(
@@ -115,8 +117,6 @@ fun HomeScreen(open: (Fn) -> Unit, openLog: () -> Unit, openSettings: () -> Unit
                     // Storage starts from its picks; with none there is nothing to serve
                     enabled = !held && (on || startable(fn)),
                 )
-                // On the gutter, under the row that bleeds past it
-                if (fault != null) Fault(fault.message, onLog = openLog, modifier = Modifier.padding(horizontal = 10.dp).opener("home/fault/${fn.name}"))
             }
         }
         // Under the rows, as the board has them; a short window scrolls to them
@@ -125,7 +125,7 @@ fun HomeScreen(open: (Fn) -> Unit, openLog: () -> Unit, openSettings: () -> Unit
             Key("Log", Modifier.weight(1f).opener("home/log"), onClick = openLog)
             Key("Settings", Modifier.weight(1f).opener("home/settings"), onClick = openSettings)
         }
-        if (wholeFault != null) Fault(wholeFault.message, onLog = openLog, modifier = Modifier.opener("home/fault"))
+        if (fault != null) Fault(fault.message, onLog = openLog, modifier = Modifier.opener("home/fault"))
     }
 }
 

@@ -35,6 +35,9 @@ import androidx.compose.ui.unit.dp
 import com.usbarsenal.app.backend.Cache
 import com.usbarsenal.app.backend.IMAGES
 import com.usbarsenal.app.backend.ImageFile
+import com.usbarsenal.app.backend.NO_PATH
+import com.usbarsenal.app.backend.Root
+import com.usbarsenal.app.backend.shellQuote
 import com.usbarsenal.app.backend.createFull
 import com.usbarsenal.app.backend.createSparse
 import com.usbarsenal.app.backend.fileBytes
@@ -74,13 +77,21 @@ fun sizeText(bytes: Long): String = when {
     else -> "${bytes}B"
 }
 
+// The kind a drive shows: the kernel's mode (`status --json`) or the setup's, as the segments name
+// it; rw is a disk, its tag says the access
+fun kindOf(mode: String) = when (mode) {
+    "cdrom" -> "cd"
+    "rw" -> "disk"
+    else -> mode
+}
+
 // A warning only for a consequence (DESIGN.md): a CD-ROM past its limit
 fun storageWarning(mode: String, bytes: Long?): String? =
     "over 2.36G: the host reads a truncated disc".takeIf { mode == "cdrom" && bytes != null && bytes > CDROM_MAX }
 
 // What the host gets in each mode, so the wrong one is not picked: a dead or truncated drive
 fun modeHint(mode: String): String = when (mode) {
-    "auto" -> "disk if it has a partition table, else cd"
+    "auto" -> "disk if partitioned; cd, or dvd past 2.36G"
     "cdrom" -> "read-only cd-rom, up to 2.36G"
     "dvd" -> "read-only, 2048-byte sectors, any size"
     "disk" -> "read-only disk"
@@ -122,9 +133,16 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
     val path = pick?.path
     val name = path?.substringAfterLast('/')
     val file = files?.firstOrNull { it.path == path }
+    // A file picked from elsewhere is not in the listing: its size is read once, for the drive
+    // and the CD-ROM warning
+    var picked by remember { mutableStateOf<Pair<String, Long?>?>(null) }
+    LaunchedEffect(path, file) { if (path != null && file == null && picked?.first != path) picked = path to fileBytes(path) }
+    val bytes = file?.bytes ?: picked?.takeIf { it.first == path }?.second
     // Before anything is picked, the mode is the one the next pick will take
     var nextMode by rememberSaveable { mutableStateOf("auto") }
     val mode = pick?.mode ?: nextMode
+    // What the host is served on this LUN, when it is the file picked: the kernel's own words
+    val runs = served?.takeIf { it.file == path }
     var creating by rememberSaveable { mutableStateOf(false) }
     val shake = rememberShake()
     val fault = Gadget.fault?.takeIf { it.where == Fn.STORAGE }
@@ -134,8 +152,9 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             scope.launch {
-                val p = realPath(context, uri)
-                if (p != null) serve(p, mode) else Gadget.fault = Fault(Fn.STORAGE, "[-] That picker gives no file path; copy the image into $IMAGES")
+                realPath(context, uri)
+                    .onSuccess { serve(it, mode) }
+                    .onFailure { Gadget.fault = Fault(Fn.STORAGE, it.message ?: NO_PATH) }
             }
         }
     }
@@ -143,32 +162,26 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
     Box(Modifier.fillMaxSize()) {
         Screen(
             footer = {
+                // Over the keys, which is where a pick fails; the body above never moves for it
+                fault?.let { Fault(it.message, onLog = openLog, modifier = Modifier.shake(shake).opener("storage/fault")) }
                 KeyRow {
                     Key("Pick image", Modifier.weight(1f)) { picker.launch(arrayOf("*/*")) }
-                    Key("Create", Modifier.weight(1f).opener("storage/create"), primary = true) { creating = true }
+                    Key("Create", Modifier.weight(1f).focusRequester(focusOn()).opener("storage/create"), primary = true) { creating = true }
                 }
             },
         ) {
             Top { BackKey() }
             Title("Storage")
-            fault?.let { Fault(it.message, onLog = openLog, modifier = Modifier.shake(shake).opener("storage/fault")) }
             LunStrip(count, lun, { lun = it }, { if (count < LUNS) lun = count })
             Drive(
                 lun,
-                image = name?.let { DriveImage(it, file?.bytes?.let(::sizeText).orEmpty(), mode, if (mode == "rw") "rw" else "ro") },
+                image = name?.let {
+                    DriveImage(it, bytes?.let(::sizeText).orEmpty(), kindOf(runs?.mode ?: mode), runs?.access ?: if (mode == "rw") "rw" else "ro")
+                },
                 serving = served != null,
                 onEject = { dropPick(lun) },
             )
-            if (path == null && files?.isEmpty() == true) {
-                // Nothing loaded and nothing to load: Pin asks for an image
-                Box(Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SpriteIcon(Sprites.Question, 4.dp)
-                        Pin(8.dp)
-                    }
-                }
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text("No image loaded", LcdType.labelStrong) }
-            } else {
+            run {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Mode", LcdType.labelStrong)
                     Segs(MODE_LABELS, MODES.indexOf(mode).coerceAtLeast(0), { i ->
@@ -176,12 +189,11 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                         if (path != null) serve(path, m) else nextMode = m
                     })
                     // One line whatever the mode, so FILES never moves: the hint, or the warning in its place
-                    val warning = storageWarning(mode, file?.bytes)
+                    val warning = storageWarning(mode, bytes)
                     Inverted(warning != null) {
-                        Text(
+                        Marquee(
                             warning ?: modeHint(mode), LcdType.data,
                             Modifier.bleed(10.dp).fillMaxWidth().background(LocalLcd.current.ground).padding(horizontal = 10.dp, vertical = 8.dp),
-                            maxLines = 1,
                         )
                     }
                 }
@@ -189,6 +201,17 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                 Rule()
                 Column(Modifier.bleed(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     FilesHeader(IMAGES)
+                    // Nothing to load: Pin asks for an image, where the rows would be, so nothing
+                    // above moves when the listing comes back
+                    if (path == null && files?.isEmpty() == true) {
+                        Box(Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                SpriteIcon(Sprites.Question, 4.dp)
+                                Pin(8.dp)
+                            }
+                        }
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text("No image loaded", LcdType.labelStrong) }
+                    }
                     files.orEmpty().forEach { f ->
                         // A file another LUN holds is tagged with it and cannot be picked
                         val other = picks.firstOrNull { it.lun != lun && it.path == f.path }?.lun
@@ -198,8 +221,10 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
             }
         }
         UnappliedSheet(Fn.STORAGE, back)
-        CreateSheet(creating, dir, files, free, onDismiss = { creating = false }) { p ->
+        CreateSheet(creating, dir, files, free, onDismiss = { creating = false }) { p, size ->
             creating = false
+            // Listed at once, so the drive shows its size from the first frame; the reload confirms it
+            files = files.orEmpty().filter { it.path != p } + ImageFile(p, size)
             reload++
             serve(p, "rw")
         }
@@ -212,8 +237,9 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
  * Cancel removes what was written.
  */
 @Composable
-private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, free: Long?, onDismiss: () -> Unit, onCreated: (String) -> Unit) {
+private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, free: Long?, onDismiss: () -> Unit, onCreated: (String, Long) -> Unit) {
     val haptics = LocalHaptics.current
+    val shake = rememberShake()
     val scope = rememberCoroutineScope()
     var name by rememberSaveable { mutableStateOf("") }
     var size by rememberSaveable { mutableStateOf("4") }
@@ -224,8 +250,16 @@ private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, fre
     var job by remember { mutableStateOf<Job?>(null) }
     val target = name.trim().ifEmpty { "disk.img" }
     val bytes = createBytes(size, gb)
+    // Each opening starts with no name, so the last image's name is never shown as taken
+    LaunchedEffect(open) {
+        if (open) {
+            name = ""
+            failed = null
+        }
+    }
     val taken = files?.any { it.name == target } == true
-    val tooBig = bytes != null && free != null && bytes > free
+    // A sparse image takes no blocks until the host writes them
+    val tooBig = !sparse && bytes != null && free != null && bytes > free
     val badName = '/' in target || target.startsWith('.')
     val writing = written != null
 
@@ -233,24 +267,25 @@ private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, fre
         val total = bytes ?: return
         val path = "$dir/$target"
         failed = null
+        fun fail(why: String) {
+            failed = why
+            shake.fire()
+        }
         job = scope.launch {
+            // Anything there by that name, a folder too, which the listing leaves out
+            if (Root.read("test -e ${shellQuote(path)}").ok) return@launch fail("[-] $target is already there")
             if (sparse) {
                 val r = createSparse(path, total)
                 if (r.ok) {
                     haptics.confirm()
-                    onCreated(path)
+                    onCreated(path, total)
                 } else {
-                    failed = r.why
-                    haptics.reject()
+                    fail(r.why)
                 }
                 return@launch
             }
             val megabytes = total / MIB
-            val dd = createFull(path, megabytes)
-            if (dd == null) {
-                failed = "[-] No root"
-                return@launch
-            }
+            val dd = createFull(path, megabytes) ?: return@launch fail("[-] No root")
             written = 0L to total
             val poll = launch {
                 while (true) {
@@ -263,11 +298,10 @@ private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, fre
                 poll.cancel()
                 if (fileBytes(path) == megabytes * MIB) {
                     haptics.confirm()
-                    onCreated(path)
+                    onCreated(path, megabytes * MIB)
                 } else {
-                    failed = "[-] The image came out short; it was removed"
                     removeFile(path)
-                    haptics.reject()
+                    fail("[-] The image came out short; it was removed")
                 }
             } finally {
                 // Cancel, or the screen going: dd stops, and half an image is no image
@@ -314,7 +348,7 @@ private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, fre
             }
             if (tooBig) Warn("more than the free ${sizeText(free)}")
             Kv("Sparse") { Dip(sparse, { sparse = it }, "Sparse") }
-            failed?.let { Fault(it, onLog = null) }
+            failed?.let { Fault(it, onLog = null, modifier = Modifier.shake(shake)) }
         } else {
             val (done, total) = progress
             Kv(target, fact = true) { Text(sizeText(total), LcdType.data) }

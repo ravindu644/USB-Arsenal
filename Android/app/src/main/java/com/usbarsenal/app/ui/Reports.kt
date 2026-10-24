@@ -56,8 +56,10 @@ fun keyFor(c: Char): Pair<Int, Int>? = when (c) {
     }
 }
 
-// The bInterval period for exponent [n] at high speed, 2^(n-1) x 125us, as hid.c gives it
-fun periodText(n: Int): String {
+// The bInterval period for [n]: at high and super speed an exponent, 2^(n-1) x 125us, as hid.c
+// gives it; at full speed (a USB 1.1 host) n whole 1 ms frames
+fun periodText(n: Int, fullSpeed: Boolean = false): String {
+    if (fullSpeed) return "$n ms"
     val us = (1L shl (n - 1)) * 125
     // From 1 ms up every period is whole milliseconds; past a second, 1.024 s to 4.096 s
     return when {

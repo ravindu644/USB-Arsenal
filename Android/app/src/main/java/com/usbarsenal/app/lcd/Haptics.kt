@@ -46,7 +46,7 @@ class Haptics(private val view: View, private val feedback: HapticFeedback, priv
             .addControlPoint(1f, 0.2f, 20)
             .addControlPoint(0f, 0.2f, 60)
             .build()
-        Build.VERSION.SDK_INT >= 30 && vibrator.areAllPrimitivesSupported(PRIMITIVE_TICK, thud) ->
+        Build.VERSION.SDK_INT >= 30 && vibrator.areAllPrimitivesSupported(thud) ->
             VibrationEffect.startComposition().addPrimitive(thud, 1f).compose()
         Build.VERSION.SDK_INT >= 29 -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
         else -> null

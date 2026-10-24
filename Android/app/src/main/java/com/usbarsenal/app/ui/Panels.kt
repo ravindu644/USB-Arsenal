@@ -58,8 +58,9 @@ data class DriveImage(val name: String, val size: String, val kind: String, val 
 /*
  * .drive: a 150dp box with an inverted 40dp face (the LED, the LUN, eject) over the disc, the
  * file and `size · kind` with its access tag. Empty, the tray is out over the body:
- * a ghosted disc on the drive's ground, sliding in 3 steps of 2 frames. The LED blinks while the host is
- * served and is hollow with no image.
+ * a ghosted disc on the drive's ground, sliding in 3 steps of 2 frames. The body is the setup;
+ * the LED is what runs: it blinks while the host is served, even with the pick ejected, is lit
+ * for a pick not served yet, and hollow with neither.
  */
 @Composable
 fun Drive(lun: Int, image: DriveImage?, serving: Boolean, onEject: () -> Unit, modifier: Modifier = Modifier) {
@@ -103,7 +104,7 @@ fun Drive(lun: Int, image: DriveImage?, serving: Boolean, onEject: () -> Unit, m
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                LedDot(if (out) Led.OFF else if (serving) Led.BUSY else Led.ON)
+                LedDot(if (serving) Led.BUSY else if (out) Led.OFF else Led.ON)
                 Text("lun$lun", LcdType.labelStrong)
                 Spacer(Modifier.weight(1f))
                 if (image != null) {
@@ -168,8 +169,8 @@ fun FileRow(name: String, size: String, lun: String?, selected: Boolean, onPick:
 // .panel: a 2dp box over an inverted 40dp .face, as Identity's profile draws it. A lit card keeps
 // the screen's [edge]: drawn in the card's own colours, it would vanish into the screen
 @Composable
-fun Panel(face: @Composable RowScope.() -> Unit, edge: Color = LocalLcd.current.ink, body: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth().background(LocalLcd.current.ground).border(Lcd.pixel, edge).padding(Lcd.pixel)) {
+fun Panel(face: @Composable RowScope.() -> Unit, edge: Color = LocalLcd.current.ink, modifier: Modifier = Modifier, body: @Composable () -> Unit) {
+    Column(modifier.fillMaxWidth().background(LocalLcd.current.ground).border(Lcd.pixel, edge).padding(Lcd.pixel)) {
         Inverted {
             Row(
                 Modifier.fillMaxWidth().height(40.dp).background(LocalLcd.current.ground).padding(horizontal = 12.dp),
@@ -182,10 +183,22 @@ fun Panel(face: @Composable RowScope.() -> Unit, edge: Color = LocalLcd.current.
     }
 }
 
-// .node: one end of the tether chain, its name left and its value right; the phone is inverted
+// .node: one end of the tether chain, its name left and its value right; the phone is inverted.
+// A node can be its own setting: [onClick] opens a choice (it inverts while focused, as rows
+// do), [trailing] holds an input in place of the value, so the chain never names it twice
 @Composable
-fun Node(label: String, value: String? = null, inverted: Boolean = false) {
+fun Node(
+    label: String,
+    value: String? = null,
+    inverted: Boolean = false,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    trailing: (@Composable RowScope.() -> Unit)? = null,
+) {
     val rule = LocalLcd.current.ink
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    val haptics = LocalHaptics.current
     val body = @Composable {
         Row(
             Modifier.fillMaxWidth().heightIn(min = Lcd.touch).background(LocalLcd.current.ground).border(Lcd.pixel, rule).padding(horizontal = 10.dp),
@@ -193,10 +206,16 @@ fun Node(label: String, value: String? = null, inverted: Boolean = false) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(label, LcdType.labelStrong)
-            if (value != null) Text(value, LcdType.data)
+            trailing?.invoke(this) ?: run { if (value != null) Text(value, LcdType.data) }
+            if (onClick != null) Text(" >", LcdType.data)
         }
     }
-    Inverted(inverted, body)
+    Box(
+        if (onClick == null) modifier else modifier.lcdClickable(interaction, outline = false, role = Role.Button) {
+            haptics.keyPress()
+            onClick()
+        },
+    ) { Inverted(inverted || focused, body) }
 }
 
 /*
