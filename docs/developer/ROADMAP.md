@@ -553,3 +553,16 @@ Tick a box only when the item is merged and verified as described in its phase.
   override, the app's preview kit with ui-tooling), and duplicates became one helper each
   (`write_attr` for four attribute writers, `ua_wait`, `bound()`, `Modifier.dashes`).
   `.clang-format` is `BasedOnStyle: LLVM`, which formats `src/` byte for byte as the dump did.
+- 2026-10-24: the app-state audit ([research/06-app-state.md](research/06-app-state.md)):
+  a map of the app's state, seven parallel reviews, 38 confirmed findings tracked in
+  [app-state-fixes.md](../app-state-fixes.md). The storage report ("storage off" under a
+  "bound" bar) came from unordered status writes landing a mid-apply snapshot, or Apply
+  deciding from a null status. The fix is the setup architecture: `Gadget/setup.conf` (what
+  each function starts with) and `Gadget/running.conf` (what the last start used), written by
+  the C side (`src/setup.c`); `setup show|set|reset|revert`; a start with arguments saves them
+  and a bare start runs them; `<function> apply` reconciles against the kernel (tether and HID
+  in one replug, storage LUN by LUN with an "already serving" check under the lock);
+  `status --json` adds `boot_id`, `setup`, `running`, `pending`. The app is cache-first
+  (`backend/Cache.kt`), with one ordered status loop, no setup of its own and no `--udc` flag
+  (the pick is `setup set udc=`). `tests/dummy_hcd.sh` covers the setup; the device run is
+  pending.
