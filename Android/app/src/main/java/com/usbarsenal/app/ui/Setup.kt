@@ -12,7 +12,12 @@ import androidx.compose.ui.semantics.semantics
 import com.usbarsenal.app.lcd.lcdClickable
 import com.usbarsenal.app.lcd.Inverted
 import com.usbarsenal.app.lcd.LocalLcd
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.usbarsenal.app.backend.Controller
+import com.usbarsenal.app.backend.UA
+import kotlinx.coroutines.delay
 import com.usbarsenal.app.backend.Udc
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
@@ -75,6 +80,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+// Status is re-read this often while the app is started (and after every command)
+const val POLL_MS = 2_000L
+
 // Every screen; App keeps them as a back stack
 private enum class Step { WELCOME, ROOT, CONTROLLER, CHECK, INSTALL, HOME, LOG, SETTINGS, FONTS, STORAGE, TETHER, HID, KEYS, QUACKY, IDENTITY }
 
@@ -119,6 +127,8 @@ private object Setup {
         phase = Phase.RUNNING
         scope.launch {
             val ok = installBackend(context.applicationContext) { log += it }
+            // Home draws the installed state at once, not the one from before
+            if (ok) Gadget.launchReads(context.applicationContext)
             phase = if (ok) Phase.DONE else Phase.FAILED
         }
     }
@@ -175,12 +185,26 @@ fun App() {
         Setup.fresh()
         push(Step.INSTALL)
     }
-    // The controllers once a launch. A set-up app on a phone with several and no pick (set up
-    // before the step existed, or its pick gone) is asked for one before anything else
+    // Once a launch: the backend, the kernel, the profile, the controllers. A set-up app on a
+    // phone with several and no pick (set up before the step existed) is asked for one first
     LaunchedEffect(Unit) {
-        if (stack.first() == Step.HOME && Controller.refresh(context)) push(Step.CONTROLLER)
-        // Setup brought back past Root (the process was killed) counts its steps from them again
-        else if (stack.first() != Step.HOME && stack.size > 2) Controller.refresh(context)
+        if (stack.first() == Step.HOME) {
+            Gadget.launchReads(context)
+            if (Controller.refresh() && stack.last() != Step.CONTROLLER) push(Step.CONTROLLER)
+        } else if (stack.size > 2) {
+            // Setup brought back past Root (the process was killed) counts its steps again
+            Controller.refresh()
+        }
+    }
+    // The one status loop: every screen reads Gadget.status; the read lane never waits on a command
+    val owner = LocalLifecycleOwner.current
+    LaunchedEffect(owner) {
+        owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                if (!setup && Gadget.backend?.state != BackendState.NO_ROOT) Gadget.refresh()
+                delay(POLL_MS)
+            }
+        }
     }
     // A real bind (the port left Android) thuds wherever it was started; Home's Pin plugs in on it
     val haptics = LocalHaptics.current
@@ -311,7 +335,7 @@ private fun RootScreen(back: () -> Unit, next: () -> Unit) {
         snapshotFlow { stepNow }.first { it >= enter }
         val r = rootInfo()
         // Controller's step joins the dots here, so it is there before Next lights
-        if (r.isSuccess) Controller.refresh(context)
+        if (r.isSuccess) Controller.refresh()
         Setup.root = r
     }
     val done = result != null && step >= total
@@ -539,17 +563,28 @@ private fun ControllerScreen(setup: Boolean, back: () -> Unit, next: () -> Unit)
     BackHandler(onBack = back)
     val context = LocalContext.current
     // Read again when the process was killed on this step, so its rows come back
-    LaunchedEffect(Unit) { if (Controller.udcs == null) Controller.refresh(context) }
+    LaunchedEffect(Unit) { if (Controller.udcs == null) Controller.refresh() }
     val udcs = Controller.udcs.orEmpty()
     var picked by rememberSaveable { mutableStateOf(Controller.picked) }
+    var writing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     Screen(
         footer = {
             KeyRow {
-                Key("Next", Modifier.weight(1f), primary = true, enabled = udcs.any { it.name == picked }) {
-                    Controller.set(context, picked)
-                    // Check's answer is for the controller it ran with
-                    Setup.check = null
-                    next()
+                Key("Next", Modifier.weight(1f), primary = true, enabled = !writing && udcs.any { it.name == picked }) {
+                    // Into the setup, through the binary at hand: the staged one before the
+                    // backend is installed, since Check runs that
+                    writing = true
+                    scope.launch {
+                        val bin = if (setup) Setup.staged?.takeIf { it.exists() } ?: stageBinary(context)?.also { Setup.staged = it } else null
+                        val r = Controller.set(picked!!, bin?.absolutePath ?: UA)
+                        writing = false
+                        if (!r.ok) return@launch
+                        // Check's answer is for the controller it ran with
+                        Setup.check = null
+                        if (!setup) Gadget.readCheckOnce()
+                        next()
+                    }
                 }
             }
         },

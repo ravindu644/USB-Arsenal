@@ -230,9 +230,19 @@ name.
   the start (a disabled key where a key will be, an idle prompt where output will go), and a
   line already drawn never moves.
 - **Never ask root for what the app knows itself** (its own version, the phone's codename),
-  and never ask twice: a probe's result lasts until the app leaves recents, and Back never
-  re-runs it. The activity handles configuration changes itself, so a rotation or a gamepad
+  and never ask twice: every read is cached across launches with the boot id it was read in
+  (`backend/Cache.kt`), the first frame draws from the cache, one live read per launch corrects
+  it, and Back never re-runs a probe; only Recheck, Reinstall, a controller change or an identity
+  command does. The activity handles configuration changes itself, so a rotation or a gamepad
   connecting never cancels a su request.
+- **The setup is the backend's.** What each function starts with lives in
+  `Gadget/setup.conf`, what runs in `Gadget/running.conf`, both written by the C side
+  (`src/setup.c`); the app edits the setup through `setup set`, starts with a bare `start`, applies
+  with `<function> apply`, and reads everything back in one `status --json`. Never keep a setup
+  or a "what runs" record in the app: `docs/developer/research/06-app-state.md` is why.
+- **One status loop,** in `App()`, with ordered reads: a read begun while a command runs is
+  skipped, and a result is dropped when a newer one was applied or a command finished since it
+  began. A failed read keeps the last status; after three the bar says `no answer from usb-arsenal`.
 - **Every screen works without touch.** Before a screen is done, walk it with
   `adb shell input keyevent` (`KEYCODE_DPAD_*`, `KEYCODE_ENTER`, `KEYCODE_BUTTON_A`,
   `KEYCODE_BUTTON_B`, `KEYCODE_TAB`) and confirm every control is reachable and the focus

@@ -70,6 +70,14 @@ Daemon, the daemon's log file. Clear empties the tab in front (on Daemon, the fi
 live in `/sdcard/USB-Arsenal/Profiles`), the controller on phones with several, daemon mode,
 `usb-arsenal` on PATH for root shells, and Reinstall.
 
+**What each screen sets up is the backend's.** The picks, the tether options, the HID interval
+and the controller live in `/data/local/USB-Arsenal/Gadget/setup.conf`, the same file
+`usb-arsenal setup` edits ([usage.md](usage.md#setup)), so a setup made in the app starts from
+a root shell with a bare `usb-arsenal storage start`, one made there shows in the app, and
+clearing the app's data or reinstalling it loses nothing. Each screen draws what it last knew
+at once and corrects it when the backend answers; after three unanswered reads Home's bar says
+`no answer from usb-arsenal` and keeps showing the last answer.
+
 ## Without touch
 
 Every screen works with a keyboard, a D-pad or a gamepad: Tab or the D-pad moves, Enter or A

@@ -1,10 +1,8 @@
 package com.usbarsenal.app.backend
 
-import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.core.content.edit
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -23,7 +21,7 @@ const val UA = "$WORKSPACE/bin/usb-arsenal"
  */
 private const val NO_PROXY = "UA_NO_PROXY=1"
 
-private fun read() = "$NO_PROXY $UA${udcFlag(Controller.picked)}"
+private fun read() = "$NO_PROXY $UA"
 
 // A USB device controller as /sys/class/udc lists it, and its state ("configured": a host is
 // talking to it, "not attached": nothing is)
@@ -36,44 +34,43 @@ fun parseUdcs(lines: List<String>): List<Udc> = lines.mapNotNull { line ->
     if (gap < 0) Udc(l, "") else Udc(l.substring(0, gap), l.substring(gap + 1).trim())
 }.filterNot { it.name.startsWith("dummy_udc.") } // GKI's built-in dummy_hcd reaches no host; the backend skips it too
 
-// " --udc NAME" while a controller is picked; it goes right after the binary on every command
-fun udcFlag(name: String?) = name?.let { " --udc " + shellQuote(it) }.orEmpty()
-
 /*
- * The controller every command names. With more than one, the backend wants --udc on each and
- * remembers none, so the app keeps the pick setup made (or Settings changed); with one there is
- * no pick and no flag.
+ * The controller every command uses. With more than one, the backend reads the setup's `udc`
+ * key, so the pick is set once (`setup set udc=NAME`) and no command carries a flag; with one
+ * there is no pick. The app only mirrors the key, from the last status read.
  */
 object Controller {
-    var picked by mutableStateOf<String?>(null)
+    var picked by mutableStateOf<String?>(Cache.status?.setup?.get("udc")?.ifEmpty { null })
         private set
 
-    // What /sys/class/udc listed at launch (setup and Settings read it from here); null until then
-    var udcs by mutableStateOf<List<Udc>?>(null)
+    // What /sys/class/udc listed last, from the cache first
+    var udcs by mutableStateOf<List<Udc>?>(Cache.udcs)
 
-    fun load(context: Context) {
-        picked = prefs(context).getString("udc", null)
-    }
-
-    fun set(context: Context, name: String?) {
-        picked = name
-        prefs(context).edit { if (name == null) remove("udc") else putString("udc", name) }
+    // The setup says, after a status read
+    fun mirror(setup: Map<String, String>) {
+        picked = setup["udc"]?.ifEmpty { null }
     }
 
     /*
-     * Reads the controllers and squares the pick with them: with one or none no pick is needed,
-     * and a pick no longer listed (a driver gone) would fail every command, so it goes. Whether
-     * the user has to pick now comes back; a failed read changes nothing and asks nothing.
+     * Writes the pick into the setup through [binary] (the staged one before the backend is
+     * installed, since Check runs it), and shows it at once. A pick is never cleared by the app:
+     * a controller gone to host mode comes back, and the user picks another in Settings.
      */
-    suspend fun refresh(context: Context): Boolean {
+    suspend fun set(name: String, binary: String = UA): RootResult {
+        val r = Root.change("$NO_PROXY ${shellQuote(binary)} setup set ${shellQuote("udc=$name")}")
+        if (r.ok) picked = name
+        return r
+    }
+
+    // Reads the controllers; whether the user has to pick one now comes back. A failed read
+    // keeps the last list and asks nothing
+    suspend fun refresh(): Boolean {
         val found = Root.read("""for u in /sys/class/udc/*; do [ -e "${'$'}u" ] && echo "${'$'}{u##*/} ${'$'}(cat "${'$'}u/state" 2>/dev/null)"; done; true""")
             .takeIf { it.ok }?.let { parseUdcs(it.out) } ?: return false
         udcs = found
-        if (found.size <= 1 || found.none { it.name == picked }) set(context, null)
+        Cache.udcs = found
         return found.size > 1 && picked == null
     }
-
-    private fun prefs(context: Context) = context.getSharedPreferences("usb", Context.MODE_PRIVATE)
 }
 
 // check probes by creating functions in configfs, so once the gadget may be live it goes through
@@ -108,7 +105,7 @@ fun splitCheck(out: List<String>): Pair<List<String>, List<String>> {
  * ponytail: check probes twice, once per format; one run that prints both if a kernel ever minds
  */
 suspend fun readCheckReport(binary: String): Pair<List<String>, Result<Capabilities>> {
-    val check = "$NO_PROXY ${shellQuote(binary)}${udcFlag(Controller.picked)} check"
+    val check = "$NO_PROXY ${shellQuote(binary)} check"
     val r = Root.read("$check 2>&1; echo $REPORT_END; $check --json", timeoutMs = 30_000)
     val (report, json) = splitCheck(r.out)
     return report to r.copy(out = json).json(::parseCheck)
@@ -120,7 +117,7 @@ suspend fun readCheckReport(binary: String): Pair<List<String>, Result<Capabilit
  * as the "profile" key.
  */
 suspend fun readProfile(): Map<String, String> {
-    val out = Root.read("${read()} identity show").out
+    val out = Root.read("${read()} identity show").out.ifEmpty { return emptyMap() }
     val keys = out.filter { it.startsWith("  ") }
         .mapNotNull { line -> line.trim().split(Regex("\\s+"), limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
         .filter { it.second != "(derived)" }
@@ -138,6 +135,12 @@ suspend fun readDroidspaces(): Droidspaces {
     if (r.code == 3) return Droidspaces(false, null)
     return Droidspaces(true, if (r.ok) runCatching { parseContainers(r.out.joinToString("\n")) }.getOrNull() else null)
 }
+
+// The folder's files as `stat -c '%s %n'` prints them
+fun parseImages(lines: List<String>): List<ImageFile> = lines.mapNotNull { line ->
+    val bytes = line.substringBefore(' ').toLongOrNull() ?: return@mapNotNull null
+    ImageFile(line.substringAfter(' '), bytes)
+}.sortedBy { it.name.lowercase() }
 
 const val DROIDSPACES = "/data/local/Droidspaces/bin/droidspaces"
 
@@ -188,6 +191,8 @@ data class Capabilities(
     val requirementsMet: Boolean,
     // Whether f_hid takes an interval; null from a backend older than the probe
     val hidInterval: Probe? = null,
+    // The JSON it was parsed from, for the cache
+    val raw: String = "",
 )
 
 // An ejected LUN has an empty file, mode and access
@@ -222,6 +227,13 @@ data class GadgetStatus(
     val storage: List<Lun>,
     val hid: List<HidNode>,
     val tether: Tether?,
+    // The boot this was read in, the setup (what each function starts with), what the last
+    // successful start used, and whether they differ per function; empty from an older backend
+    val bootId: String = "",
+    val setup: Map<String, String> = emptyMap(),
+    val running: Map<String, String> = emptyMap(),
+    val pending: Map<String, Boolean> = emptyMap(),
+    val raw: String = "",
 )
 
 // The C side prints every key, so a missing one is a mismatched backend and throws
@@ -236,8 +248,11 @@ fun parseCheck(json: String): Capabilities = with(JSONObject(json)) {
         p("ncm"), p("rndis"), p("nat"), p("nat6"),
         getString("version"), getString("udc_name"), getInt("requirements_met") == 1,
         if (has("hid_interval")) p("hid_interval") else null,
+        raw = json,
     )
 }
+
+private fun JSONObject.strings() = keys().asSequence().associateWith { getString(it) }
 
 fun parseStatus(json: String): GadgetStatus = with(JSONObject(json)) {
     GadgetStatus(
@@ -265,6 +280,11 @@ fun parseStatus(json: String): GadgetStatus = with(JSONObject(json)) {
                 rxBytes = optLong("rx_bytes", -1),
             )
         },
+        bootId = optString("boot_id"),
+        setup = optJSONObject("setup")?.strings().orEmpty(),
+        running = optJSONObject("running")?.strings().orEmpty(),
+        pending = optJSONObject("pending")?.let { o -> o.keys().asSequence().associateWith { o.getInt(it) == 1 } }.orEmpty(),
+        raw = json,
     )
 }
 

@@ -257,13 +257,14 @@ Structure:
   (suspended), `plugged in, not set up by a computer` (attached, powered, default, addressed:
   a charger stops here), `nothing plugged in` (not attached); any other state has no line. The
   picked row is inverted, and `Next` waits for a pick. Check then runs with that `--udc`, and
-  every later command carries it; with one controller nothing is asked or passed. The
-  controllers are read once a launch: a pick no longer listed is dropped, and a set-up app
-  with several and no pick shows this step over Home, where Next goes back.
-- **What setup finds lasts until the app leaves recents.** Back never asks su or the kernel
-  again; only Recheck does. A root manager takes a grant at the app's next start, so a denial
-  has no retry, only the shade below. A result that was already there shows at once; only one
-  that arrives on screen types or resolves.
+  the pick goes into the backend's setup (`setup set udc=NAME`), so every command uses it and
+  none carries a flag; with one controller nothing is asked. The controllers are read once a
+  launch; a pick is never dropped by the app (a controller in host mode comes back), and a
+  set-up app with several and no pick shows this step over Home, where Next goes back.
+- **What setup finds is cached across launches.** Back never asks su or the kernel again; only
+  Recheck does. A root manager takes a grant at the app's next start, so a denial has no retry,
+  only the shade below. A result that was already there shows at once; only one that arrives on
+  screen types or resolves.
 - **New functions are new rows.** The structure does not change.
 - **Tablets and landscape** keep the function list as a 420px pane beside the selected
   function's screen.
@@ -384,22 +385,26 @@ Class names are those in `docs/developer/design/lcd.css`.
 
 ### Functions: set up, then switch on at Home
 Storage, Tether and HID work one way.
-- **A function's screen only configures.** It edits a setup that the app keeps: picks per LUN
-  with their modes, every `tether start` option, the HID interval. It never touches the port and
-  has no switch.
-- **Home's row** opens that screen (`STORAGE >`), and its DIP is the only switch. It starts the
-  whole setup in one command, so every LUN comes up in one replug.
+- **A function's screen only configures.** It edits the setup the backend keeps (`setup.conf`:
+  picks per LUN with their modes, every `tether start` option, the HID interval), which the
+  command line shares. It never touches the port and has no switch.
+- **Home's row** opens that screen (`STORAGE >`), and its DIP is the only switch. It runs a bare
+  `<function> start`, which starts the whole setup in one command, so every LUN comes up in one
+  replug.
 - **A change while the function runs** waits until Back. Back then asks, in a sheet, `Not
   applied`, with one line saying what applying does to the host. `Discard` puts the setup back
   as the function started; `Apply` applies it, and Home's bar shows it replugging. Either way
   the screen is left, so it never shows a setup that is not what runs. Nothing else on the
   screen says a change waits.
-- **Storage applies LUN by LUN,** so the host keeps every drive it can: a LUN no longer picked
-  is ejected in place, and each new image on a live LUN gets a start of its own, which swaps in
-  place when the type stays the same. A new LUN, a new type, or a drive the host holds locked
-  replugs, and with it every drive and function. Tether and HID stop and start. The chain, the
-  counters and a drive's LED keep showing what runs; the LUN strip shows the setup (and, for
-  storage the app did not start, what runs).
+- **Apply is the backend's `<function> apply`,** decided against the kernel. Storage applies LUN
+  by LUN, so the host keeps every drive it can: a LUN no longer picked is ejected in place, a
+  changed image on a live LUN swaps in place when the type stays the same, a LUN already serving
+  its pick is left alone. A new LUN, a new type, or a drive the host holds locked replugs, and
+  with it every drive and function. Tether and HID swap their function in one replug, the other
+  functions still bound. Whether a change waits (`pending`) is the backend's too, from its two
+  files, whoever started the function; a function started from the command line asks the same.
+  The chain, the counters and a drive's LED keep showing what runs; the LUN strip shows the
+  setup and what runs.
 
 ### Function row (`.row`)
 32px sprite, Silkscreen name with ` >` (the row opens its screen), two VT323 status lines, DIP
@@ -875,7 +880,8 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | Tether chain, Tx, Rx | `status --json`: `tether`'s `iface`, `upstream`, `gateway_*`, `tx_bytes`, `rx_bytes` |
 | Gateway, container, its iface | `--gateway CONTAINER`, `--gateway-iface IFACE`; the containers are `droidspaces show --json`'s `running`, and the gateway shows only with `/data/local/Droidspaces/bin/droidspaces` installed |
 | Tether address, DNS, upstream, DHCP and NAT | `--address CIDR`, `--dns IP[,IP]`, `--upstream IFACE`, `--no-net` |
-| Not applied sheet, Apply | Storage: `storage eject --lun N` for a LUN no longer picked, then one `storage start` with the changed picks (`storage stop` with none); Tether and HID: `stop`, then `start` with the setup |
+| Not applied sheet, Apply, Discard | `status --json`'s `pending`; `storage apply`, `tether apply`, `hid apply`; `setup revert <function>` |
+| Each function's setup | `setup set KEY=VALUE` on every edit (one write a beat later), read back as `status --json`'s `setup`; the picks are `storage_lunN=MODE:PATH`, Tether's rows the `tether_*` keys, the interval `hid_interval` |
 | HID interval | `hid start --interval N`, period 2^(N-1)×125µs, set at start; without the f_hid patch (`check`'s `hid_interval` is 0) it is `1 ms, fixed by this kernel` and the steppers are dead |
 | Keys + mouse, the gamepad | app-side: 8-byte keyboard and 4-byte mouse reports, each one write to `/dev/hidgN` through a root `dd` per node; Speed and Natural scroll are app-side too, applied to the reports before they are written |
 | Quacky | nothing yet: a WIP page |
@@ -884,7 +890,7 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | Function names in the bind screen | `mass_storage.ua`, `ncm.ua`, `hid.ua_kbd`, `hid.ua_mouse` |
 | Root screen | `id -u; su -v` (prints `3.3.0:KernelSU` or `<version>:MAGISK`), shown as a shell session; its `#` comments are the app's narration |
 | Check screen | `check --json`, run with the bundled binary before anything is installed |
-| Controller step, Settings' Controller | `/sys/class/udc/*` and each one's `state`; the pick is app-side and goes as `--udc NAME` on every command |
+| Controller step, Settings' Controller | `/sys/class/udc/*` and each one's `state`; the pick is `setup set udc=NAME`, which every command then uses |
 | Backend screen | the ported installer: the binary to `/data/local/USB-Arsenal/bin`, `module/` to `/data/adb/modules/usb-arsenal`, each step printing what it really printed, then `[+] Installed`, and `[!] Reboot to load the SELinux rule` only when the module had no rule before. The daemon is Settings' daemon mode, never the install's. `./install-backend.sh` is how the session shows it; there is no such script. The version is the app's own, never asked of root |
 | Home attention key | the installer's backend check: not installed, module missing, corrupted, update available (no root is the shade) |
 | Home status, live rows | `status --json` |
@@ -892,8 +898,12 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 Every command runs through root in its own short-lived shell with a timeout (see AGENTS.md),
 so one stuck command can never freeze the screen.
 
-App-side features, done by the app itself: each function's setup (Storage's picks, every
-Tether option), the Not applied sheet, the `/sdcard/USB-Arsenal` file list, Create (a sparse
+Every read is cached in the app's prefs with the boot id it was read in, so the first frame of
+every screen draws the last known world and a live read replaces only what changed; a failed
+read keeps the last value, and after three in a row Home's bar says `no answer from usb-arsenal`.
+
+App-side features, done by the app itself: the Not applied sheet's asking (what it asks about is
+the backend's `pending`), the `/sdcard/USB-Arsenal` file list, Create (a sparse
 image, as `truncate -s` does, or a full one with progress), HID input written to `/dev/hidgN`,
 the Motion and Haptics switches in Settings, and the profiles folder,
 `/sdcard/USB-Arsenal/Profiles`, which Identity lists and writes. Settings' Daemon mode writes `1` or `0` to
