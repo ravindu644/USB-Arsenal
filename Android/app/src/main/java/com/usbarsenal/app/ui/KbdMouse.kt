@@ -412,7 +412,7 @@ private fun Trackpad(
                 .focusTick()
                 .focusable()
                 .then(if (padFocused) Modifier.focusOutline(ink) else Modifier)
-                .dither(Dither.D25, ink)
+                .dither(Dither.D25, LocalLcd.current)
                 .pointerInput(Unit) { detectTapGestures(onTap = { at = it; tap() }) }
                 .pointerInput(Unit) {
                     // Half a pixel of host travel per pixel of drag at 1.0x (4 quarters), the

@@ -86,14 +86,17 @@ enum class Theme(val label: String, val ground: Color, val ink: Color) {
     Plasma("Plasma", Color(0xFF1A0300), Color(0xFFFF6A2A)),
     ;
 
-    val lit get() = ground.luminance() > ink.luminance()
     val colors get() = LcdColors(ground, ink)
+    val lit get() = colors.lit
 }
 
 // The two colours as the content below sees them. Inside an inverted element they swap
 @Immutable
 data class LcdColors(val ground: Color, val ink: Color) {
     fun inverted() = LcdColors(ground = ink, ink = ground)
+
+    // A lit theme has a light glass and dark pixels; a negative one the reverse, so its ink glows
+    val lit get() = ground.luminance() > ink.luminance()
 }
 
 val LocalLcd = staticCompositionLocalOf { Theme.Amber.colors }

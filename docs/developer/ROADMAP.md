@@ -605,3 +605,6 @@ Tick a box only when the item is merged and verified as described in its phase.
   default, picked from a Theme row in Settings' App section and kept across launches. A theme
   is only the pair: the scanline grid is ink at 6%, the window behind Compose is the ground,
   and the bars' icons go light on a negative theme. The icon and the splash stay Amber.
+  A shade on a negative theme is 25%, not 50%: the ink is the light colour there, and
+  half of it lit the whole screen (seen on Plasma's Keys + mouse page).
+  The box over a shade is plain there too, not inverted: the dark colour of the pair.
