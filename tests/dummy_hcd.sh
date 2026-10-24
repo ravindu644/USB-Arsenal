@@ -67,8 +67,12 @@ KBD=$("$B" $A status --json | sed -n 's/.*"function":"keyboard","node":"\([^"]*\
 [ "$(stat -c %a "$KBD")" = 600 ] || die "a bare hid start reset --perm"
 "$B" $A status --json | grep -q '"speed":"[a-z-]*speed"' || die "status --json has no speed while bound"
 # The non-blocking writer: an all-zero report is no key at all, so the host
-# (this PC) sees nothing; it must exit 0 at the end of stdin
-printf '\0\0\0\0\0\0\0\0' | "$B" $A hid write "$KBD" 8 || die "hid write"
+# (this PC) sees nothing; it must exit 0 at the end of stdin. f_hid answers
+# ESHUTDOWN until the host has configured the interface, so wait for that and
+# say what the host did if the write still fails
+for i in $(seq 50); do [ "$(cat /sys/class/udc/$UDC/state)" = configured ] && break; sleep 0.1; done
+printf '\0\0\0\0\0\0\0\0' | "$B" $A hid write "$KBD" 8 ||
+  die "hid write (udc state: $(cat /sys/class/udc/$UDC/state); kernel: $(dmesg | grep -iE 'hid|dummy|usb [0-9]' | tail -n 5 | tr '\n' '|'))"
 "$B" $A hid write "$TMP/disk.img" 8 2>/dev/null && die "hid write must refuse a regular file"
 ok "hid: --perm kept, speed in status, hid write"
 
