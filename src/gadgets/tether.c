@@ -308,6 +308,17 @@ static int usb_on_bridge(const struct tether *t) {
   return !strcmp(b ? b + 1 : target, GW_BRIDGE);
 }
 
+/* With no daemon alive, a host end of the cable is a leftover; dropping it
+ * takes its far end with it, so what the container still holds is not ours */
+static void drop_host_end(void) {
+  ds_nl_ctx_t *ctx = ds_nl_open();
+  if (!ctx)
+    return;
+  if (ds_nl_link_exists(ctx, GW_VETH))
+    ds_nl_del_link(ctx, GW_VETH);
+  ds_nl_close(ctx);
+}
+
 /* Keep the cable plugged into the container's current namespace. A host end
  * whose far end lives in another (dead) namespace is deleted: it would pin
  * that namespace and lead nowhere. */
@@ -947,6 +958,22 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
   }
   if (daemon_pid() > 0) {
     ua_error("Tethering is already running; '" UA_NAME " tether stop' first");
+    return UA_EXIT_FAIL;
+  }
+  /* The far end is born under its name; one already there (VirtualAP's
+   * managed hotspot makes vaplan0) fails every plug, so refuse before the
+   * gadget is touched. A stopped container is fine: the cable goes in when
+   * it starts */
+  char ns[64];
+  if (t->gateway)
+    drop_host_end();
+  if (t->gateway &&
+      ua_container_netns(t->gw_name, t->gw_pid, t->gw_path, ns, sizeof(ns)) ==
+          0 &&
+      ds_netns_has_link(ns, t->gw_iface)) {
+    ua_error("%s already exists inside the container; give the cable another "
+             "name (--gateway-iface)",
+             t->gw_iface);
     return UA_EXIT_FAIL;
   }
 
