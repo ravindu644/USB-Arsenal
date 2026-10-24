@@ -61,7 +61,8 @@ class MainActivity : ComponentActivity() {
 
     // While Keys + mouse holds the left stick, it moves the host pointer, not focus. Most pads
     // send their D-pad as a hat on these same events: a hat that moved, pressed or let go, still
-    // goes on, so Android turns it into the D-pad keys that move focus
+    // goes on, so Android turns it into the D-pad keys that move focus. It goes on with the stick
+    // centred, or a deflected stick would start a repeating D-pad key of its own
     override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
         val sink = Stick.sink
         if (sink != null && ev.isFromSource(InputDevice.SOURCE_JOYSTICK) && ev.action == MotionEvent.ACTION_MOVE) {
@@ -70,7 +71,22 @@ class MainActivity : ComponentActivity() {
             val hatMoved = now != hat
             hat = now
             if (!hatMoved) return true
+            val hatOnly = ev.withoutStick()
+            return super.dispatchGenericMotionEvent(hatOnly).also { hatOnly.recycle() }
         }
         return super.dispatchGenericMotionEvent(ev)
     }
+}
+
+// The same event with the left stick's axes at rest
+private fun MotionEvent.withoutStick(): MotionEvent {
+    val props = Array(pointerCount) { i -> MotionEvent.PointerProperties().also { getPointerProperties(i, it) } }
+    val coords = Array(pointerCount) { i ->
+        MotionEvent.PointerCoords().also {
+            getPointerCoords(i, it)
+            it.setAxisValue(MotionEvent.AXIS_X, 0f)
+            it.setAxisValue(MotionEvent.AXIS_Y, 0f)
+        }
+    }
+    return MotionEvent.obtain(downTime, eventTime, action, pointerCount, props, coords, metaState, buttonState, xPrecision, yPrecision, deviceId, edgeFlags, source, flags)
 }

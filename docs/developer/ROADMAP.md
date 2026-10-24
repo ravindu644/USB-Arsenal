@@ -570,3 +570,17 @@ Tick a box only when the item is merged and verified as described in its phase.
   same story through the app (Home's switch, Eject, Back, the Not applied sheet, Apply: Home
   then says `1 UP`, `LUN0 cd.img · disk`, `BOUND`), and a `pm clear` followed by setup and
   relaunch showing the picks, the DNS and the interval set before the wipe.
+- 2026-10-24: the audit's other 69 findings, fixed in bulk (every box in
+  [app-state-fixes.md](../app-state-fixes.md) ticked, one new one open: the f_hid interval
+  patch never restores the default descriptors). Backend: `hid write NODE SIZE`, a writer
+  that never blocks on the node and keeps only the newest report while the host reads
+  nothing, in place of the app's `dd`; `identity show --json [FILE...]` through config.c's own
+  loader, naming a profile link whose file is gone; `status --json`'s `speed`; one 5 s eject
+  budget per storage command; the old medium put back when the kernel refuses a new one; the
+  daemon re-executing itself when its binary is updated; `status` no longer creating the
+  gadget off Android; stdout line-buffered. App: a held DIP look, `focusOn` on every screen,
+  faults where nothing moves, Tether's upstream inside its chain node, the Drive's face showing
+  what runs, canonical picker paths, the installer's su denial read as no root. Verified on the
+  a16xm (5.15): the app's own backend update, storage and HID bound with `speed` high-speed,
+  `hid write` from the app's Keys + mouse (one writer per node, gone with HID), `identity show
+  --json` both forms, a clean `stop` with no kernel warnings.

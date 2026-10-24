@@ -29,7 +29,10 @@ import androidx.compose.ui.unit.dp
 import com.usbarsenal.app.backend.BUILT_IN
 import com.usbarsenal.app.backend.PROFILES
 import com.usbarsenal.app.backend.Profile
-import com.usbarsenal.app.backend.listProfiles
+import com.usbarsenal.app.backend.Cache
+import com.usbarsenal.app.backend.listProfilesJson
+import com.usbarsenal.app.backend.parseProfiles
+import com.usbarsenal.app.backend.profileOf
 import com.usbarsenal.app.backend.profilesDir
 import com.usbarsenal.app.backend.writeProfile
 import com.usbarsenal.app.backend.writeText
@@ -90,12 +93,18 @@ fun IdentityScreen(back: () -> Unit, openLog: () -> Unit) {
     val active = activeProfile(Gadget.profile)
     val scope = rememberCoroutineScope()
     var dir by remember { mutableStateOf(PROFILES) }
-    var profiles by remember { mutableStateOf<List<Profile>?>(null) }
+    // The folder as last listed, so the list and the panel are there from the first frame
+    var profiles by remember { mutableStateOf(Cache.profiles?.let(::parseProfiles)) }
     var reload by remember { mutableIntStateOf(0) }
     LaunchedEffect(reload) {
         dir = profilesDir()
-        profiles = listProfiles(dir)
+        listProfilesJson(dir)?.let {
+            profiles = parseProfiles(it)
+            Cache.profiles = it
+        }
     }
+    // A launch whose read of the profile in force failed asks again here, where it is needed
+    LaunchedEffect(Unit) { if (Gadget.profile.isEmpty()) Gadget.reloadProfile() }
     // The pick starts at what is in force, each time the screen opens and whenever that changes
     // under it (a set from the command line, a set that finished after Back)
     LaunchedEffect(active) {
@@ -105,9 +114,13 @@ fun IdentityScreen(back: () -> Unit, openLog: () -> Unit) {
         IdentitySetup.undo = null
     }
     val chosen = IdentitySetup.chosen
-    val shown = if (chosen == null) BUILT_IN else profiles?.firstOrNull { it.path == chosen }
+    // The one in force is known from `identity show` before the folder is listed
+    val shown = if (chosen == null) BUILT_IN else profiles?.firstOrNull { it.path == chosen } ?: chosen.takeIf { it == active }?.let { profileOf(it, Gadget.profile) }
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }
-    val fault = Gadget.fault?.takeIf { it.where == null }
+    val shake = rememberShake()
+    val fault = Gadget.fault?.takeIf { it.identity }
+    LaunchedEffect(fault) { if (fault != null) shake.fire() }
+    val missing = Gadget.profile["missing"].orEmpty()
 
     // Set what is chosen: identity set, or unset for Built-in. A live gadget replugs once. A set
     // refused or failed leaves the pick on what is really in force, so the screen never shows
@@ -121,10 +134,18 @@ fun IdentityScreen(back: () -> Unit, openLog: () -> Unit) {
             // The profile now in force, whatever happened: the effect above moves the pick to it
             Gadget.reloadProfile()
         }
-        if (!accepted) IdentitySetup.chosen = active
+        if (!accepted) {
+            IdentitySetup.chosen = active
+            IdentitySetup.edited = false
+            IdentitySetup.undo = null
+        }
     }
     fun pick(path: String?) {
-        if (!known) return
+        // Nothing is set before the gadget and the profile in force are known: say so
+        if (!known) {
+            Gadget.fault = Fault(null, "[-] The profile in force is not read yet", identity = true)
+            return
+        }
         IdentitySetup.chosen = path
         if (!bound && path != active) applyChosen()
     }
@@ -140,14 +161,16 @@ fun IdentityScreen(back: () -> Unit, openLog: () -> Unit) {
                 KeyRow {
                     // Built-in is no file: there is nothing to edit
                     Key("Edit", Modifier.weight(1f).opener("identity/edit"), enabled = shown != null && chosen != null) { sheet = chosen }
-                    Key("Create", Modifier.weight(1f).opener("identity/create"), primary = true) { sheet = "" }
+                    Key("Create", Modifier.weight(1f).focusRequester(focusOn()).opener("identity/create"), primary = true) { sheet = "" }
                 }
             },
         ) {
             Top { BackKey() }
             Title("Identity")
+            ProfilePanel(shown, live = bound, Modifier.shake(shake))
+            // Under the panel, which is what a set acts on
             fault?.let { Fault(it.message, onLog = openLog, modifier = Modifier.opener("identity/fault")) }
-            ProfilePanel(shown, live = bound)
+            if (missing.isNotEmpty() && fault == null) Warn("$missing is gone: the host gets Built-in")
             Column(Modifier.bleed(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 FilesHeader(PROFILES, label = "Profiles")
                 FileRow(BUILT_IN.name, "${BUILT_IN.vid}:${BUILT_IN.pid}", null, selected = chosen == null, onPick = { pick(null) })
@@ -199,13 +222,15 @@ fun IdentityScreen(back: () -> Unit, openLog: () -> Unit) {
 
 // The drive's look for a profile: an inverted face with its LED and name, the facts in the body
 @Composable
-private fun ProfilePanel(p: Profile?, live: Boolean) {
-    Panel({
+private fun ProfilePanel(p: Profile?, live: Boolean, modifier: Modifier) {
+    Panel(modifier = modifier, face = {
         LedDot(if (live) Led.BUSY else Led.ON)
         Text(p?.name ?: "", LcdType.labelStrong)
     }) {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 96.dp).padding(horizontal = 14.dp, vertical = 12.dp),
+            // Four lines tall whether or not they are there yet, so it never grows under the list;
+            // a larger font scale may make the lines themselves taller, so it is a floor
+            Modifier.fillMaxWidth().heightIn(min = 20.dp * 4 + Lcd.lines * 3 + 24.dp).padding(horizontal = 14.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.Top,
         ) {
@@ -310,7 +335,13 @@ private fun ProfileSheet(open: Boolean, profile: Profile?, dir: String, names: L
             }
         }
         problems["ids"]?.let { Warn(it) }
-        Field("Power") { Segs(POWERS.map { "$it mA" }, POWERS.indexOf(power), { power = POWERS[it] }) }
+        // The unit in VT323 beside the segments: Silkscreen would print it as MA
+        Field("Power") {
+            Row(horizontalArrangement = Arrangement.spacedBy(Lcd.tight), verticalAlignment = Alignment.CenterVertically) {
+                Segs(POWERS.map { "$it" }, POWERS.indexOf(power), { power = POWERS[it] }, Modifier.weight(1f), spoken = { "${POWERS[it]} milliamps" })
+                Text("mA", LcdType.data)
+            }
+        }
         failed?.let { Fault(it, onLog = null) }
     }
 }

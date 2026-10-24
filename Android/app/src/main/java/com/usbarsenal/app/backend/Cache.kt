@@ -85,5 +85,15 @@ object Cache {
         get() = text("free")?.toLongOrNull()
         set(v) = put("free", v?.toString())
 
+    // Identity's folder, as `identity show --json FILE...` printed it
+    var profiles: String?
+        get() = text("profiles")
+        set(v) = put("profiles", v)
+
+    // The last install that ended, its phase and what it printed, until the next one starts
+    var install: Pair<String, List<String>>?
+        get() = text("install")?.lines()?.let { it.first() to it.drop(1) }
+        set(v) = put("install", v?.let { (phase, log) -> (listOf(phase) + log).joinToString("\n") })
+
     private fun JSONObject.toMap() = keys().asSequence().associateWith { getString(it) }
 }

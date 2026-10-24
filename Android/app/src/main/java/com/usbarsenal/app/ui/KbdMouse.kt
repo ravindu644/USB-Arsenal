@@ -62,7 +62,11 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.input.key.Key as KeyCode
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
+import com.usbarsenal.app.lcd.focusOutline
+import com.usbarsenal.app.lcd.focusTick
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -72,8 +76,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.usbarsenal.app.backend.Root
-import com.usbarsenal.app.backend.shellQuote
+import com.usbarsenal.app.backend.hidWrite
 import com.usbarsenal.app.lcd.dashes
 import com.usbarsenal.app.lcd.Dither
 import com.usbarsenal.app.lcd.FRAME_MS
@@ -96,40 +99,54 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /*
- * One root `dd` per node, fed one report per write. f_hid sends at most one report per write,
- * so reports must never merge: each is a single pipe write (atomic below PIPE_BUF), and dd with
- * bs equal to the report size writes each read on as it came.
+ * One root `hid write` per node, fed one report per pipe write (atomic below PIPE_BUF). It never
+ * blocks on the node: while the host reads nothing it keeps only the newest report, so the host
+ * ends in the latest state and no backlog lands when it wakes. f_hid holds one report at a time,
+ * so a report written before the host took the last one replaces it: keys, where every press
+ * and release counts, are [paced] (ms) to two poll periods apart, and none is ever dropped here.
+ * Pointer moves may go: the newest carries the buttons as they are.
  */
-private class HidWriter(private val node: String, private val size: Int) {
-    // Bounded: while the host reads nothing (asleep, unplugged) the oldest go, so a backlog of
-    // pointer moves never lands all at once when it wakes
-    private val reports = Channel<ByteArray>(64, BufferOverflow.DROP_OLDEST)
+private class HidWriter(private val node: String, private val size: Int, private val paced: () -> Long = { 0L }) {
+    private val reports = if (paced() > 0) Channel<ByteArray>(Channel.UNLIMITED) else Channel(64, BufferOverflow.DROP_OLDEST)
 
     fun send(report: ByteArray) {
         reports.trySend(report)
     }
 
-    // Runs until cancelled, which kills the dd with its shell. A dd that dies (the host gone, so
-    // f_hid fails its write) breaks the pipe under the next report; another is started
+    // Runs until cancelled, which kills the writer with its shell. One that dies (HID stopped, the
+    // host gone) breaks the pipe under the next report; another is started, and every start
+    // first lets go of everything, so a release lost with the last one holds no key down
     suspend fun run() {
         while (true) {
-            val dd = Root.stream("dd of=${shellQuote(node)} bs=$size")
-            if (dd != null) {
+            val w = hidWrite(node, size)
+            if (w != null) {
                 try {
                     withContext(Dispatchers.IO) {
+                        w.input.write(ByteArray(size))
+                        w.input.flush()
                         for (r in reports) {
-                            dd.input.write(r)
-                            dd.input.flush()
+                            w.input.write(r)
+                            w.input.flush()
+                            paced().takeIf { it > 0 }?.let { delay(it) }
                         }
                     }
                 } catch (_: IOException) {
                 } finally {
-                    withContext(NonCancellable) { dd.close() }
+                    withContext(NonCancellable) { w.close() }
                 }
             }
             delay(1000)
         }
     }
+}
+
+// Two poll periods of the running keyboard, in whole ms: its interval (0 is the kernel's 1 ms) at
+// the bus speed the host gave it
+private fun keyPace(): Long {
+    val s = Gadget.status
+    val n = s?.hid?.firstOrNull { it.function == "keyboard" }?.interval?.takeIf { it > 0 } ?: DEFAULT_INTERVAL
+    val us = if (s?.speed == "full-speed") n * 1000L else (1L shl (n - 1)) * 125
+    return maxOf(1L, (2 * us + 999) / 1000)
 }
 
 // The left stick while Keys + mouse holds it: MainActivity hands joystick moves here instead of
@@ -138,7 +155,7 @@ object Stick {
     var sink: ((Float, Float) -> Unit)? = null
 }
 
-private val KEY_H = 40.dp
+private val KEY_H = Lcd.touch
 private val KEY_GAP = 10.dp
 private val FKEYS = (1..12).map { "F$it" }
 private val TABLE = listOf(
@@ -176,7 +193,7 @@ fun KbdMouseScreen(back: () -> Unit) {
     val kbdNode = hid.firstOrNull { it.function == "keyboard" }?.node?.ifEmpty { null }
     val mouseNode = hid.firstOrNull { it.function == "mouse" }?.node?.ifEmpty { null }
     val on = kbdNode != null && mouseNode != null
-    val kbd = remember(kbdNode) { kbdNode?.let { HidWriter(it, 8) } }
+    val kbd = remember(kbdNode) { kbdNode?.let { HidWriter(it, 8, ::keyPace) } }
     val mouse = remember(mouseNode) { mouseNode?.let { HidWriter(it, 4) } }
     LaunchedEffect(kbd) { kbd?.run() }
     LaunchedEffect(mouse) { mouse?.run() }
@@ -210,31 +227,30 @@ fun KbdMouseScreen(back: () -> Unit) {
         }
     }
 
-    // Speed or Natural scroll has focus: A works them, as it does a key
-    var setupFocused by remember { mutableStateOf(false) }
-
     // A phone held sideways: the Mouse tab cannot fit, so the whole screen scrolls instead, by the
     // title, the tabs or a label (the pad and L M R keep their own gestures)
     val windowHeight = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
     val short = windowHeight < 600.dp
-    // Full screen: the pad and L M R alone, landscape, the system bars hidden. Only while HID runs
-    var full by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(on) { if (!on) full = false }
+    // Full screen: the pad and L M R alone, landscape, the system bars hidden. Only while HID runs:
+    // a restore asks for it again, and it shows once HID is known to run, never before
+    var wantFull by rememberSaveable { mutableStateOf(false) }
+    val full = wantFull && on
+    var wasOn by remember { mutableStateOf(on) }
+    LaunchedEffect(on) {
+        if (wasOn && !on) wantFull = false
+        wasOn = on
+    }
     // Turning the phone sideways on the Mouse tab is asking for the wide pad. Only on the turn, so
     // leaving full screen while still sideways stays left (the page then scrolls)
-    LaunchedEffect(short) { if (short && on && tab == 0) full = true }
-    // The keys in and out of full screen have focus: A presses them, as it does any key
-    var fullKeyFocused by remember { mutableStateOf(false) }
-    // L M R are drawn anew on the way in or out, and a button held then would never let go; the
-    // key that had focus is gone too
+    LaunchedEffect(short) { if (short && on && tab == 0) wantFull = true }
+    // L M R are drawn anew on the way in or out, and a button held then would never let go
     LaunchedEffect(full) {
-        fullKeyFocused = false
         if (buttons != 0) {
             buttons = 0
             pointer()
         }
     }
-    BackHandler(enabled = full) { full = false }
+    BackHandler(enabled = full) { wantFull = false }
     val activity = LocalActivity.current
     val view = LocalView.current
     // The screen gives back the orientation it found when it leaves
@@ -279,24 +295,13 @@ fun KbdMouseScreen(back: () -> Unit) {
                 button(MOUSE_LEFT, false)
             },
             onWheel = { pointer(wheel = it) },
+            onButton = { bit, down -> if (on) button(bit, down) },
             onFull = onFull,
-            onFullFocus = { fullKeyFocused = it },
         )
     }
-    Box(
-        Modifier.fillMaxSize().onPreviewKeyEvent {
-            // A and X click on the host; B stays Back
-            val bit = when (it.key) {
-                KeyCode.ButtonA -> MOUSE_LEFT
-                KeyCode.ButtonX -> MOUSE_RIGHT
-                else -> return@onPreviewKeyEvent false
-            }
-            // On Keys, A presses the focused key instead
-            if (!on || tab != 0 || setupFocused || fullKeyFocused) return@onPreviewKeyEvent false
-            button(bit, it.type == KeyEventType.KeyDown)
-            true
-        },
-    ) {
+    // Keys typed into the box, kept here so a trip to the Mouse tab never empties it
+    var text by rememberSaveable { mutableStateOf("") }
+    Box(Modifier.fillMaxSize()) {
         if (full) {
             Column(
                 Modifier
@@ -311,10 +316,10 @@ fun KbdMouseScreen(back: () -> Unit) {
                 Row(horizontalArrangement = Arrangement.spacedBy(Lcd.tight), verticalAlignment = Alignment.CenterVertically) {
                     Key(
                         "Leave full screen",
-                        Modifier.width(56.dp).onFocusChanged { fullKeyFocused = it.isFocused },
+                        Modifier.width(56.dp),
                         icon = Sprites.Collapse,
                         padding = 0.dp,
-                    ) { full = false }
+                    ) { wantFull = false }
                     Box(Modifier.weight(1f)) { MouseButtons { bit, down -> button(bit, down) } }
                 }
             }
@@ -334,12 +339,9 @@ fun KbdMouseScreen(back: () -> Unit) {
                         KEYS_ABOVE_BOX.coerceAtMost(maxHeight - below).coerceAtLeast(120.dp)
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(Lcd.section)) {
-                        pad(Modifier.height(padHeight), if (on) ({ full = true }) else null)
+                        pad(Modifier.height(padHeight), if (on) ({ wantFull = true }) else null)
                         MouseButtons { bit, down -> button(bit, down) }
-                        Column(
-                            Modifier.onFocusChanged { setupFocused = it.hasFocus },
-                            verticalArrangement = Arrangement.spacedBy(Lcd.section),
-                        ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(Lcd.section)) {
                             Group("Configure")
                             val speed = HidSetup.speed
                             Slider("Speed", speed, 1..16, if (speed % 4 == 0) "${speed / 4}.0x" else "${speed / 4f}x", { HidSetup.speed(it) })
@@ -348,10 +350,10 @@ fun KbdMouseScreen(back: () -> Unit) {
                     }
                 }
             } else {
-                KeysTab(mods, onMod = { mods = mods xor it }, onKey = { press(it) }, onType = { m, c -> press(c, m) })
+                KeysTab(text, { text = it }, mods, onMod = { mods = mods xor it }, onKey = { press(it) }, onType = { m, c -> press(c, m) })
             }
         }
-        if (!on) HidOff()
+        if (!on) HidOff(Gadget.caps.has(Fn.HID))
     }
 }
 
@@ -368,9 +370,10 @@ private fun Trackpad(
     onMove: (Int, Int) -> Unit,
     onTap: () -> Unit,
     onWheel: (Int) -> Unit,
+    // A gamepad's A and X while the pad has focus: a left and a right button, held as long as they are
+    onButton: (Int, Boolean) -> Unit,
     // Set: the key into full screen, in the pad's top-left corner
     onFull: (() -> Unit)?,
-    onFullFocus: (Boolean) -> Unit = {},
 ) {
     // The gestures outlive a recomposition; they must reach the writer, and use the setup, as it is now
     val quarters by rememberUpdatedState(speed)
@@ -384,11 +387,31 @@ private fun Trackpad(
     val tickPx = with(density) { 8.dp.toPx() }
     val stepPx = with(density) { 16.dp.toPx() }
     var at by remember { mutableStateOf<Offset?>(null) }
+    val button by rememberUpdatedState(onButton)
+    var padFocused by remember { mutableStateOf(false) }
+    var wheelFocused by remember { mutableStateOf(false) }
     Row(modifier.fillMaxWidth().border(Lcd.pixel, ink)) {
         Box(
             Modifier
                 .weight(1f)
                 .fillMaxHeight()
+                // The first stop, so a gamepad has the pad from the start: A and X click only over it,
+                // and Enter or A on anything else presses that instead
+                .focusRequester(focusOn())
+                .onFocusChanged { padFocused = it.isFocused }
+                .onKeyEvent {
+                    val bit = when (it.key) {
+                        KeyCode.ButtonA, KeyCode.Enter, KeyCode.DirectionCenter -> MOUSE_LEFT
+                        KeyCode.ButtonX -> MOUSE_RIGHT
+                        else -> return@onKeyEvent false
+                    }
+                    if (it.type == KeyEventType.KeyDown && it.nativeKeyEvent.repeatCount == 0) haptics.keyPress()
+                    button(bit, it.type == KeyEventType.KeyDown)
+                    true
+                }
+                .focusTick()
+                .focusable()
+                .then(if (padFocused) Modifier.focusOutline(ink) else Modifier)
                 .dither(Dither.D25, ink)
                 .pointerInput(Unit) { detectTapGestures(onTap = { at = it; tap() }) }
                 .pointerInput(Unit) {
@@ -424,7 +447,7 @@ private fun Trackpad(
             if (onFull != null) {
                 Key(
                     "Full screen",
-                    Modifier.padding(6.dp).size(Lcd.touch).onFocusChanged { onFullFocus(it.isFocused) },
+                    Modifier.padding(6.dp).size(Lcd.touch),
                     icon = Sprites.Expand,
                     padding = 0.dp,
                     onClick = onFull,
@@ -435,6 +458,18 @@ private fun Trackpad(
             Modifier
                 .width(44.dp)
                 .fillMaxHeight()
+                // Up and Down turn the wheel a step while it has focus, as a drag of 16dp does
+                .onFocusChanged { wheelFocused = it.isFocused }
+                .onKeyEvent {
+                    val up = it.key == KeyCode.DirectionUp
+                    if (it.type != KeyEventType.KeyDown || !(up || it.key == KeyCode.DirectionDown)) return@onKeyEvent false
+                    wheel(if (up) 1 else -1)
+                    haptics.frequentTick()
+                    true
+                }
+                .focusTick()
+                .focusable()
+                .then(if (wheelFocused) Modifier.focusOutline(ink) else Modifier)
                 .background(LocalLcd.current.ground)
                 // The 2dp rule between the strip and the pad
                 .drawBehind { drawRect(ink, size = Size(Lcd.pixel.toPx(), size.height)) }
@@ -473,6 +508,7 @@ private fun Trackpad(
 @Composable
 private fun MouseButtons(onButton: (Int, Boolean) -> Unit) {
     val ink = LocalLcd.current.ink
+    val haptics = LocalHaptics.current
     val button by rememberUpdatedState(onButton)
     Row(Modifier.fillMaxWidth().border(Lcd.pixel, ink).padding(Lcd.pixel)) {
         listOf("L" to MOUSE_LEFT, "M" to MOUSE_MIDDLE, "R" to MOUSE_RIGHT).forEachIndexed { i, (label, bit) ->
@@ -485,6 +521,7 @@ private fun MouseButtons(onButton: (Int, Boolean) -> Unit) {
                     when (it) {
                         is PressInteraction.Press -> {
                             fromPress = true
+                            haptics.keyPress()
                             button(bit, true)
                         }
                         is PressInteraction.Release -> button(bit, false)
@@ -505,6 +542,7 @@ private fun MouseButtons(onButton: (Int, Boolean) -> Unit) {
                             if (fromPress) {
                                 fromPress = false
                             } else {
+                                haptics.keyPress()
                                 button(bit, true)
                                 button(bit, false)
                             }
@@ -517,8 +555,7 @@ private fun MouseButtons(onButton: (Int, Boolean) -> Unit) {
 }
 
 @Composable
-private fun KeysTab(mods: Int, onMod: (Int) -> Unit, onKey: (Int) -> Unit, onType: (Int, Int) -> Unit) {
-    var text by rememberSaveable { mutableStateOf("") }
+private fun KeysTab(text: String, onText: (String) -> Unit, mods: Int, onMod: (Int) -> Unit, onKey: (Int) -> Unit, onType: (Int, Int) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // The box takes what the keys leave, and keeps a few lines when the keyboard is up
         val box = (maxHeight - KEYS_ABOVE_BOX).coerceAtLeast(120.dp)
@@ -538,10 +575,9 @@ private fun KeysTab(mods: Int, onMod: (Int) -> Unit, onKey: (Int) -> Unit, onTyp
                         val same = text.commonPrefixWith(next).length
                         repeat(text.length - same) { onKey(NAMED_KEYS.getValue("BKSP")) }
                         next.drop(same).forEach { c -> keyFor(c)?.let { (m, code) -> onType(m, code) } }
-                        text = next.takeLast(2000)
+                        onText(next.takeLast(2000))
                     },
                     Modifier.fillMaxWidth().height(box),
-                    placeholder = "text goes to the host",
                     keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, keyboardType = KeyboardType.Ascii),
                     singleLine = false,
                 )
@@ -590,6 +626,6 @@ private fun KeyGrid(rows: List<List<String>>, mods: Int, onMod: (Int) -> Unit, o
     }
 }
 
-// HID off: the page shaded, Pin asking for HID first
+// HID off: the page shaded, Pin asking for HID first, or saying this kernel has none, as Home's row does
 @Composable
-private fun HidOff() = Shade("Enable HID on Home\nto use this page") { Pin(3.dp) }
+private fun HidOff(kernelHas: Boolean) = Shade(if (kernelHas) "Enable HID on Home\nto use this page" else "No HID in\nthis kernel") { Pin(3.dp) }

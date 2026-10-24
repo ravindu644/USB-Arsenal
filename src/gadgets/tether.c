@@ -953,16 +953,20 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
   const char *func = live_func(&g);
   int added = 0;
   if (!func || !ua_gadget_live(&g)) {
-    /* A function already there (linked, gadget not live) is kept as is */
-    if (!func && !rndis && ua_ncm_unsafe())
+    if (!rndis && ua_ncm_unsafe())
       ua_log("NCM would crash this Samsung kernel (see 'check'); using RNDIS");
-    if (!func)
-      func = (rndis || !ua_probe_function(&g, "ncm", NULL)) ? RNDIS : NCM;
-    char dir[PATH_MAX], dev[32], host[32];
+    func = (rndis || !ua_probe_function(&g, "ncm", NULL)) ? RNDIS : NCM;
+    char dir[PATH_MAX], dev[32], host[32], other[PATH_MAX];
     ua_gadget_func_dir(&g, func, dir, sizeof(dir));
-    int existed = access(dir, F_OK) == 0;
     if (ua_gadget_begin(&g) < 0)
       return UA_EXIT_FAIL;
+    /* With the gadget not live, a tether function already here is what a
+     * crash left. The other kind would be linked beside ours at commit, so it
+     * goes; ours is reused, and either way a failed start removes it. */
+    const char *alt = strcmp(func, NCM) ? NCM : RNDIS;
+    ua_gadget_func_dir(&g, alt, other, sizeof(other));
+    if (access(other, F_OK) == 0)
+      ua_gadget_remove(&g, alt);
     /* dev_addr and host_addr are EBUSY while the function is linked */
     ua_gadget_unlink(&g, func);
     if (ua_gadget_add(&g, func, dir, sizeof(dir)) < 0) {
@@ -992,7 +996,7 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
       rndis_os_desc(&g, dir);
     if (ua_gadget_commit(&g) < 0)
       return UA_EXIT_FAIL;
-    added = !existed;
+    added = 1;
   }
 
   /* The netdev is registered at bind; give a slow kernel a moment */
@@ -1090,7 +1094,7 @@ static int do_apply(struct tether *t, int rndis, int no_net) {
   /* do_start committed (and left the lock once) when it got that far; a
    * failure before that leaves the gadget unbound, so bind what is left */
   if (ua_gadget_live(&g))
-    ua_gadget_leave();
+    ua_crit_leave();
   else
     ua_gadget_commit(&g);
   return ret;
@@ -1199,8 +1203,7 @@ int ua_cmd_tether(int argc, char **argv) {
    * with options saves them (Droidspaces' rule), a bare one runs the setup */
   char kv[UA_LUN_SPEC];
 #define SET(fmt, ...)                                                          \
-  (snprintf(kv, sizeof(kv), fmt, __VA_ARGS__), edited = 1,                     \
-   ua_setup_set(&s, kv, 1))
+  (snprintf(kv, sizeof(kv), fmt, __VA_ARGS__), edited = 1, ua_setup_set(&s, kv))
   while ((c = getopt_long(argc, argv, ":u:a:d:fG:h", opts, NULL)) != -1) {
     switch (c) {
     case OPT_RNDIS:
@@ -1262,7 +1265,8 @@ int ua_cmd_tether(int argc, char **argv) {
       /* Handed to the DHCP server as is, so it is checked here like the
        * profile's tether_dns */
       if (!ua_valid_dns(optarg)) {
-        ua_usage_error("tether", "--dns takes IPv4 addresses, comma-separated");
+        ua_usage_error("tether", "--dns takes IPv4 addresses, comma-separated, "
+                                 "127 characters at most");
         return UA_EXIT_USAGE;
       }
       SET("tether_dns=%s", optarg);

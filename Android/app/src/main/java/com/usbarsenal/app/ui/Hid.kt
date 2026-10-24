@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -33,14 +34,17 @@ fun HidScreen(back: () -> Unit, openKeys: () -> Unit, openQuacky: () -> Unit) {
         Screen {
             Top { BackKey() }
             Title("HID")
-            Card("Keyboard and mouse", nodes.joinToString(" · ").ifEmpty { "trackpad, buttons,\nkeys and typing" }, Sprites.Hid, openKeys, Modifier.opener("hid/keys"))
+            Card("Keyboard and mouse", nodes.joinToString(" · ").ifEmpty { "a trackpad and keys" }, Sprites.Hid, openKeys, Modifier.focusRequester(focusOn()).opener("hid/keys"))
             Card("Quacky", "WIP", Sprites.Duck, openQuacky, Modifier.opener("hid/quacky"))
             Row(Modifier.fillMaxWidth().heightIn(min = Lcd.touch), horizontalArrangement = Arrangement.spacedBy(Lcd.tight), verticalAlignment = Alignment.CenterVertically) {
-                // On a kernel without the f_hid control the host gets 1 ms whatever is set
+                // On a kernel without the f_hid control the host gets the stock period whatever is
+                // set: 1 ms at high speed, 10 ms on a USB 1.1 host. One line either way, so the row
+                // never re-lays itself when that is learned
                 val fixed = HidSetup.fixed
+                val fullSpeed = Gadget.status?.speed == "full-speed"
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Lcd.lines)) {
                     Text("Interval", LcdType.labelStrong)
-                    Text(if (fixed) "1 ms, fixed by this kernel" else periodText(interval), LcdType.data)
+                    Marquee(if (fixed) "${if (fullSpeed) 10 else 1} ms, fixed by this kernel" else periodText(interval, fullSpeed), LcdType.data, Modifier.fillMaxWidth())
                 }
                 // Lower is faster; the exponent stops at 16, where a USB interrupt endpoint does
                 Key("-", Modifier.width(44.dp).semantics { contentDescription = "Shorter interval" }, padding = 0.dp, enabled = !fixed && interval > 1) { HidSetup.set(interval - 1) }
