@@ -23,6 +23,11 @@ The daemon needs `--gid 0` there, since gid 3460 is not mapped.
 ## On a phone
 
 - **Run `adb devices` first.** If no line ends in `device`, stop.
+- **`tests/device.sh` runs the whole app:** every backend command the app sends, then each
+  screen, the switches, the Not applied sheet (Back one second after an edit too), Log and
+  Stop all, found by the text on screen, with `dmesg` checked after every step. It serves blank
+  images of its own, puts the setup back, and ends in `stop`. Its header says how to run it;
+  name a running container to test the gateway too.
 - **ADB drops while the gadget holds the port,** so run each test as one background
   script and read its log afterwards:
   ```sh
