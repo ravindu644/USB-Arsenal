@@ -7,6 +7,7 @@ The Android app's design language, as built and reviewed screen by screen. The r
 | --- | --- |
 | `lcd.css` | Every shared rule (tokens, type, keys, segments, switches, rows, bar, terminal, motion). Start a new screen from it |
 | `rendered/*.html` | Standalone renders. Open in any browser; fonts load from Google Fonts |
+| `hero.html` | The README's banner, a `.lcd.orange` panel on `lcd.css`; the render command is in its head |
 | `screens/*.dc.html`, `screens/canvas.json` | The Design canvas sources with their interactive state (switches, mode picks, the trackpad). They need the canvas runtime to run; read them for structure and logic |
 
 | Screen | Shows |

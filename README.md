@@ -1,97 +1,71 @@
+<img src="docs/resources/readme/hero.png" alt="USB Arsenal: boot an ISO or share a disk, network over the USB cable, keyboard and mouse on the host" width="100%">
+
+[![Latest release](https://img.shields.io/github/v/release/ravindu644/USB-Arsenal?label=Release&style=for-the-badge)](https://github.com/ravindu644/USB-Arsenal/releases/latest)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](./LICENSE)
 
 # USB Arsenal
 
-USB Arsenal turns a rooted Android phone, or a Linux board with a USB device port, into
-several USB devices at once over one cable: a USB drive or CD-ROM holding any image, a
-network adapter that shares the phone's internet, and a keyboard and mouse that a program on the phone can
-drive.
+USB Arsenal turns a rooted Android phone into several USB devices at once, over the one
+cable: a USB drive or CD-ROM holding any image, a network adapter that shares the phone's
+internet, and a keyboard and mouse that the phone drives.
 
-**There is no kernel module to install.** One static binary drives the
-kernel's own USB gadget drivers through configfs, and always gives the USB port back to
-Android when it is done, so ADB and MTP return.
+**There is no kernel module to install.** One static binary drives the kernel's own USB
+gadget drivers through configfs, and gives the port back to Android when it is done, so ADB
+and MTP return. The app installs that binary and runs it for you.
 
 ## What you get
 
-- **ISOs the way a boot stick or DVD presents them.** An image with a partition table
-  (hybrid Linux ISOs, USB images) appears as a disk; a plain ISO9660 image appears as a
-  CD-ROM, or past the 2.36 GB CD-ROM limit (Windows ISOs) as a disk with 2048-byte
-  sectors. The mode is picked from the image, and a new image can be swapped in while
-  the drive is live.
-- **A pen drive.** Any image file or block device, read-only or writable, with up to
-  eight drives at once.
-- **USB tethering.** NCM, or RNDIS for older Windows, with DHCP and NAT built in, IPv6
-  included where the kernel can NAT it. Or hand the link to an OpenWrt container and let
-  it be the router.
-- **A keyboard and a mouse.** `/dev/hidg*` nodes that any program can write reports to.
-- **All of it at once.** Storage, network and HID share one cable and survive each other
-  being added or removed, and a cable replug.
-- **Runs in containers.** A privileged Droidspaces container runs the binary itself (HID
-  from one was tested); tethering from one needs host networking.
-- **Your own identity.** Vendor and product IDs, names, serial number and defaults come
-  from editable profile files.
+- **Boot a computer from an ISO on your phone.** A plain ISO appears as a CD-ROM, a hybrid
+  ISO or a USB image as a disk, and a Windows ISO past the CD-ROM limit as a DVD. The mode
+  is picked from the image, and you can swap in another image while the drive is live.
+- **A pen drive.** Any image file, read-only or writable, up to eight drives at once.
+- **USB tethering that just works.** NCM, or RNDIS for older Windows, with DHCP and NAT
+  built in, IPv6 included. Or hand the link to an OpenWrt container and let it be the router.
+- **A keyboard and a mouse.** A trackpad and keys in the app, typed straight into the
+  computer. Any program on the phone can drive them too.
+- **All of it at once.** Storage, network and HID share the cable, and each can be added
+  or removed without disturbing the others.
+- **Your own identity.** Vendor and product IDs, names, serial and power draw come from
+  profiles you edit in the app.
 - **Fails safe.** The port is handed back after every command, error, crash or kill, and
-  `usb-arsenal stop` recovers whatever state was left.
+  `Stop all` recovers whatever was left.
+- **Eleven LCD themes**, from the amber default to Game Boy green and a negative display.
+
+The same binary runs on a Linux board with a USB device port, and inside a privileged
+[Droidspaces](https://github.com/ravindu644/Droidspaces-OSS) container.
 
 ## Requirements
 
-**Android**
-
-- A rooted device. **KernelSU is recommended**.
-- A kernel built with `CONFIG_USB_CONFIGFS` and the functions you want. Run
-  `usb-arsenal check` to see what yours has.
-- Samsung 4.x kernels need care: stock ones run in a fallback mode, and NCM is avoided
-  unless the kernel carries our fix. See [kernel requirements](docs/kernel-requirements.md),
-  which also ships the patches.
-
-**Linux**
-
-- A board whose USB port can act as a device (a Raspberry Pi's USB-C or OTG port, for
-  example), configfs, and root.
+- A rooted phone on Android 8.0 or newer. **KernelSU is recommended**; Magisk and APatch
+  work with the same module.
+- A kernel built with `CONFIG_USB_CONFIGFS` and the functions you want. The app checks
+  this before it installs anything and says what your kernel has. Samsung's 4.x kernels
+  need the patches in [kernel requirements](docs/kernel-requirements.md).
 
 ## Get started
 
-**Android**
+1. Install the APK from the [latest release](https://github.com/ravindu644/USB-Arsenal/releases/latest),
+   grant it root, and let it install the backend.
+2. Put an ISO or a disk image in `/sdcard/USB-Arsenal`, open **Storage** and pick it.
+3. Flip the switch on Home and plug the phone into a computer.
 
-1. Build the module with `make module`, or take the zip from a release.
-2. Flash `usb-arsenal-v<version>.zip` in KernelSU and reboot.
-3. Run `usb-arsenal check` in a root shell.
+Everything the app does, a root shell can do with `usb-arsenal` ([usage](docs/usage.md)).
+Linux boards and the KernelSU module are in the [installation guide](docs/installation.md).
 
-Or install the app's APK from a release: it checks the kernel, installs the module and drives
-everything from the phone ([the app](docs/app.md)).
+## Screenshots
 
-**Linux**
-
-Build with `make native` (or cross-compile with `make aarch64` / `armhf`), copy
-`output/usb-arsenal` to the board, and run `sudo usb-arsenal check`.
-
-The [installation guide](docs/installation.md) covers both in detail.
-
-## Examples
-
-```sh
-usb-arsenal storage start ubuntu-24.04.iso       # a disk (or CD-ROM) on the PC
-usb-arsenal storage start --mode rw pendrive.img  # a writable pen drive
-usb-arsenal hid start                             # /dev/hidg0 and /dev/hidg1
-usb-arsenal tether start                          # the PC gets internet over USB
-usb-arsenal tether start --gateway OpenWrt        # let an OpenWrt container serve it
-usb-arsenal setup show                            # what each function starts with (shared with the app)
-usb-arsenal status
-usb-arsenal stop                                  # everything off, ADB and MTP back
-```
-
-## Tested on
-
-- Galaxy A16 5G (MediaTek, kernel 5.15), from Android and from a Droidspaces container.
-- Galaxy S10 on the [M62-backport](https://github.com/ravindu644/M62-backport) kernel (Exynos 9820, kernel 4.14).
-
-The host was a Fedora PC: it read the disks and CD-ROMs, typed nothing but saw the HID
-devices, and got online through the tether. An MSI laptop booted Alpine Linux from an
-ISO on the S10 (UEFI, as a disk and as a CD-ROM) and a 4.9 GB Windows PE ISO in `dvd`
-mode. A 2012 Samsung laptop booted the same ISO as a DVD-ROM (patched kernel) in legacy
-BIOS and UEFI mode, but not in `dvd` mode, which needs newer firmware. The KernelSU module
-was flashed on the S10. Other phones, kernels and hosts are
-untested; reports are welcome.
+<table>
+  <tr>
+    <td width="33%" align="center"><img src="docs/resources/readme/01-home.png" width="100%"><br>Home</td>
+    <td width="33%" align="center"><img src="docs/resources/readme/02-storage.png" width="100%"><br>Storage</td>
+    <td width="33%" align="center"><img src="docs/resources/readme/03-tether.png" width="100%"><br>Tether</td>
+  </tr>
+  <tr>
+    <td width="33%" align="center"><img src="docs/resources/readme/04-keys-mouse.png" width="100%"><br>Keys + mouse</td>
+    <td width="33%" align="center"><img src="docs/resources/readme/05-identity.png" width="100%"><br>Identity</td>
+    <td width="33%" align="center"><img src="docs/resources/readme/06-themes.png" width="100%"><br>Themes</td>
+  </tr>
+</table>
 
 ## Security
 
@@ -108,16 +82,16 @@ untested; reports are welcome.
 
 | Page | What it covers |
 |------|----------------|
+| [The app](docs/app.md) | Setup, every screen, keys and TalkBack. |
 | [Installation](docs/installation.md) | The KernelSU module, a manual install, Linux boards. |
-| [The app](docs/app.md) | The Android app: setup, every screen, keys and TalkBack. |
-| [Usage](docs/usage.md) | Every command and option, with examples. |
+| [Usage](docs/usage.md) | Every `usb-arsenal` command and option, with examples. |
 | [Tethering](docs/tethering.md) | NAT mode, OpenWrt gateway mode, the host side. |
 | [Containers](docs/containers.md) | Running USB Arsenal inside a container. |
 | [Identity profiles](docs/identity.md) | Vendor and product IDs, names, serial, defaults. |
 | [Kernel requirements](docs/kernel-requirements.md) | Kernel options, Samsung quirks, the patches in `kernel-patches/`. |
 | [Troubleshooting](docs/troubleshooting.md) | Symptoms, causes and fixes. |
 
-Developer notes (architecture, kernel research, roadmap) live in
+Developer notes (architecture, kernel research, the design language, roadmap) live in
 [docs/developer](docs/developer/).
 
 ## Credits
@@ -128,6 +102,9 @@ Developer notes (architecture, kernel research, roadmap) live in
   (netlink, DHCP, NAT) and the installer come from it, by the same author.
 - VirtualAP, whose managed mode inspired the OpenWrt gateway mode.
 - DriveDroid, which showed a phone can boot a PC.
+- [Jersey 10](https://fonts.google.com/specimen/Jersey+10), [Silkscreen](https://fonts.google.com/specimen/Silkscreen)
+  and [VT323](https://fonts.google.com/specimen/VT323), the app's faces, under the
+  [SIL Open Font License 1.1](https://scripts.sil.org/OFL).
 
 ## License
 
