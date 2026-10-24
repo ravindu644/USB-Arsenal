@@ -126,8 +126,9 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
     }
     val picks = picks()
     var lun by rememberSaveable { mutableIntStateOf(0) }
-    // Every LUN set up, every LUN that runs, and the one being added
-    val count = ((picks.map { it.lun } + runningPicks().map { it.lun } + live.map { it.lun } + lun).max() + 1).coerceAtMost(LUNS)
+    // Every LUN set up and the one on screen: an ejected LUN leaves when you move off it, even
+    // while it still runs, since Back's unapplied sheet is where that shows
+    val count = ((picks.map { it.lun } + lun).max() + 1).coerceAtMost(LUNS)
     val served = live.firstOrNull { it.lun == lun }
     val pick = picks.firstOrNull { it.lun == lun }
     val path = pick?.path

@@ -433,9 +433,6 @@ fun picksOf(setup: Map<String, String>): List<Pick> = (0 until LUNS).mapNotNull 
 
 fun picks() = picksOf(Gadget.setup)
 
-// The drives that run, as the backend recorded them at the last start
-fun runningPicks() = picksOf(Gadget.status?.running.orEmpty())
-
 fun setPick(pick: Pick) = Gadget.set("storage_lun${pick.lun}" to pick.spec)
 
 fun dropPick(lun: Int) = Gadget.set("storage_lun$lun" to "")
