@@ -601,3 +601,7 @@ Tick a box only when the item is merged and verified as described in its phase.
   on the a16xm, the OpenWrt gateway included.
 - 2026-10-25: Settings' Requirements runs Check again, with Back and Done, so a kernel
   update can be checked without reinstalling; App moved below Backend.
+- 2026-10-25: themes. Eleven `lcd`/`ink` pairs (DESIGN.md's Colors table), Amber the
+  default, picked from a Theme row in Settings' App section and kept across launches. A theme
+  is only the pair: the scanline grid is ink at 6%, the window behind Compose is the ground,
+  and the bars' icons go light on a negative theme. The icon and the splash stay Amber.

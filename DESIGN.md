@@ -275,10 +275,33 @@ Two colours and nothing between them. The screen is a backlit LCD: a pixel is li
 
 | Token | Value | Where it goes |
 | --- | --- | --- |
-| `lcd` | `#FFA62E` | The backlight. Every ground, every unlit pixel |
+| `lcd` | `#FFA62E` | The glass. Every ground, every unlit pixel |
 | `ink` | `#1C1005` | Every lit pixel: text, borders, sprites, fills |
 | `primary` | `ink` | An alias for tools that expect a primary colour. The accent of this system is ink |
-| `scanline` | `#1C10050F` | The LCD pixel grid over the whole screen, and nothing else |
+| `scanline` | `#1C10050F` | The LCD pixel grid over the whole screen, and nothing else: `ink` at 6% |
+
+Those are Amber, the default. A theme is one `lcd`/`ink` pair and nothing more: inversion, dither,
+keys and the scanline grid all derive from the pair, so no component knows which theme it is on.
+Settings' Theme row picks one, the pick cuts the whole screen over in one frame, and it is kept
+across launches. The launcher icon and the splash stay Amber, as they draw before the pick is read.
+Every pair reads at 4.5:1 or better.
+
+| Theme | `lcd` | `ink` | What it is |
+| --- | --- | --- | --- |
+| Amber | `#FFA62E` | `#1C1005` | The default: an amber backlight |
+| Orange | `#FF8200` | `#000000` | The Flipper Zero's LCD, colours only |
+| Pea | `#9BBC0F` | `#0F380F` | The Game Boy's two ends |
+| Pocket | `#C4CFA1` | `#2A2B26` | The Game Boy Pocket, unlit STN |
+| Nokia | `#C7F0D8` | `#43523D` | The 3310's green backlight |
+| Paper | `#E9E6DC` | `#1A1A1A` | E-ink |
+| Night | `#1C1005` | `#FFA62E` | Amber, negative: the dark mode |
+| Phosphor | `#0B1A0E` | `#3DF07A` | A green phosphor CRT |
+| Matrix | `#000000` | `#00FF41` | Black glass, the rain's green |
+| Vfd | `#0A1412` | `#5EFFD2` | A vacuum fluorescent display |
+| Plasma | `#1A0300` | `#FF6A2A` | A gas plasma panel |
+
+The first six are lit, a light glass with dark pixels; the rest are negative, dark glass with lit
+pixels, and the system bars' icons follow: dark on a lit theme, light on a negative one.
 
 How colour is used:
 - **Inversion means selected or live.** Ink fill with amber text marks the focused row, the
@@ -287,7 +310,8 @@ How colour is used:
 - **Shade is dither, never grey.** 25% (`.d25`) for large panels like the trackpad, 50%
   (`.d50`) for a disabled state, and `.ghost` (amber dither knocked out of an ink sprite) for an
   empty slot such as a missing disc.
-- **One theme.** The LCD has no dark mode, by decision (see Decided exceptions).
+- **Themes never add a colour.** Night is the dark mode: the same pair, swapped. Nothing in a
+  theme is a third value.
 
 ## Typography
 
@@ -611,7 +635,8 @@ Tether's counters from `CONFIGURE`, HID's cards from `Interval`, Keys + mouse's 
 ### Settings
 In sections, a rule between each: `IDENTITY` (one row, `Profile` and the profile in force by its
 name as the VT323 value, `Built-in` with none, opening Identity), `BACKEND` (System path, then
-`Requirements` and `Reinstall`, full-width keys), `APP` (Motion, Haptics), `CREDITS` (Fonts) and
+`Requirements` and `Reinstall`, full-width keys), `APP` (Motion, Haptics, then `Theme` with the
+pick's name, opening a choice sheet of the themes, each noted `lit` or `negative`), `CREDITS` (Fonts) and
 `ABOUT` (App, Source), last. Requirements opens Check, run afresh, so a kernel update can be
 checked again; there its one key is `Done`, back to Settings, as nothing follows it. System
 path is held until read, and while no backend is installed. Under it one line is kept, so the
@@ -942,7 +967,7 @@ read keeps the last value, and after three in a row Home's bar says `no answer f
 App-side features, done by the app itself: the Not applied sheet's asking (what it asks about is
 the backend's `pending`), the `/sdcard/USB-Arsenal` file list, Create (a sparse
 image, as `truncate -s` does, or a full one with progress), HID input written to `/dev/hidgN`,
-the Motion and Haptics switches in Settings, and the profiles folder,
+the Motion and Haptics switches and the Theme pick in Settings, and the profiles folder,
 `/sdcard/USB-Arsenal/Profiles`, which Identity lists and writes. Settings' System path makes or
 removes `/data/adb/modules/usb-arsenal/system/bin/usb-arsenal`, a link to the workspace binary
 (Droidspaces' `SymlinkInstaller`), which acts at the next boot.
@@ -991,6 +1016,7 @@ Looked at and kept. Do not "fix" these without a reason the original one misses.
   keeps its case.
 - **The terminal is a whole inverted panel.** Live output reads as live; the newest line flips
   back to show where output ends.
-- **One theme.** An LCD has one look. Both system themes get the same screen.
+- **The system theme is ignored.** An LCD has one look at a time, the one picked in Settings.
+  Both system themes get the same screen.
 - **The marquee moves text.** Only for text that does not fit, in steps, so long filenames stay
   readable without wrapping the row.

@@ -11,10 +11,21 @@
 
 body{margin:0}
 
-/* The screen. Two colours only; uppercase because Silkscreen is a menu face */
+/* The screen. Two colours only; uppercase because Silkscreen is a menu face. Amber unless a theme class below says otherwise */
 .lcd{--lcd:#FFA62E;--ink:#1C1005;position:relative;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;gap:16px;padding:22px 20px 20px;background:var(--lcd);color:var(--ink);font-family:'Silkscreen',ui-monospace,monospace;font-size:16px;line-height:20px;text-transform:uppercase;-webkit-font-smoothing:none;font-smooth:never}
 /* The LCD pixel grid. The one translucent colour in the system (scanline token) */
-.lcd::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px),repeating-linear-gradient(90deg,rgba(28,16,5,.06) 0 1px,transparent 1px 2px)}
+.lcd::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg,color-mix(in srgb,var(--ink) 6%,transparent) 0 1px,transparent 1px 2px),repeating-linear-gradient(90deg,color-mix(in srgb,var(--ink) 6%,transparent) 0 1px,transparent 1px 2px)}
+/* The themes, DESIGN.md's Colors table: one pair each, nothing else changes */
+.lcd.orange{--lcd:#FF8200;--ink:#000000}
+.lcd.pea{--lcd:#9BBC0F;--ink:#0F380F}
+.lcd.pocket{--lcd:#C4CFA1;--ink:#2A2B26}
+.lcd.nokia{--lcd:#C7F0D8;--ink:#43523D}
+.lcd.paper{--lcd:#E9E6DC;--ink:#1A1A1A}
+.lcd.night{--lcd:#1C1005;--ink:#FFA62E}
+.lcd.phosphor{--lcd:#0B1A0E;--ink:#3DF07A}
+.lcd.matrix{--lcd:#000000;--ink:#00FF41}
+.lcd.vfd{--lcd:#0A1412;--ink:#5EFFD2}
+.lcd.plasma{--lcd:#1A0300;--ink:#FF6A2A}
 /* 68px at the bottom = 20px gutter + 48px left clear for Android's navigation bar */
 .phone{width:390px;height:844px;padding-bottom:68px}
 .lcd :focus-visible{outline:2px dashed currentColor;outline-offset:3px}
