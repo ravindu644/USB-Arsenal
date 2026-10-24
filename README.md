@@ -9,38 +9,33 @@ USB Arsenal turns a rooted Android phone into several USB devices at once, over 
 cable: a USB drive or CD-ROM holding any image, a network adapter that shares the phone's
 internet, and a keyboard and mouse that the phone drives.
 
-**There is no kernel module to install.** One static binary drives the kernel's own USB
-gadget drivers through configfs, and gives the port back to Android when it is done, so ADB
-and MTP return. The app installs that binary and runs it for you.
+The app sets everything up for you, and gives the USB port back to Android when you stop,
+so ADB and file transfer work again.
 
 ## What you get
 
-- **Boot a computer from an ISO on your phone.** A plain ISO appears as a CD-ROM, a hybrid
-  ISO or a USB image as a disk, and a Windows ISO past the CD-ROM limit as a DVD. The mode
-  is picked from the image, and you can swap in another image while the drive is live.
-- **A pen drive.** Any image file, read-only or writable, up to eight drives at once.
-- **USB tethering that just works.** NCM, or RNDIS for older Windows, with DHCP and NAT
-  built in, IPv6 included. Or hand the link to an OpenWrt container and let it be the router.
-- **A keyboard and a mouse.** A trackpad and keys in the app, typed straight into the
-  computer. Any program on the phone can drive them too.
-- **All of it at once.** Storage, network and HID share the cable, and each can be added
-  or removed without disturbing the others.
-- **Your own identity.** Vendor and product IDs, names, serial and power draw come from
-  profiles you edit in the app.
-- **Fails safe.** The port is handed back after every command, error, crash or kill, and
-  `Stop all` recovers whatever was left.
-- **Eleven LCD themes**, from the amber default to Game Boy green and a negative display.
+- **Boot a computer from your phone.** Put an ISO or a disk image on the phone and the
+  computer sees it as a USB drive or a CD/DVD. The app picks the right one for the image.
+- **A USB drive.** Share any image file with the computer, read-only or writable, up to
+  eight at once.
+- **Share the phone's internet.** The computer gets online through the cable. Or let a
+  [Droidspaces](https://github.com/ravindu644/Droidspaces-OSS) OpenWrt container be the
+  router.
+- **A keyboard and mouse.** Type and move the pointer on the computer from the app.
+- **All at once.** Drives, internet and keyboard share one cable, and you can turn each on
+  or off without touching the others.
+- **Pick how it shows up.** Choose the device name and IDs the computer sees.
+- **Always recovers.** If anything goes wrong, `Stop all` gives the port back to Android.
+- **Eleven LCD themes**, from the amber default to Game Boy green.
 
 The same binary runs on a Linux board with a USB device port, and inside a privileged
 [Droidspaces](https://github.com/ravindu644/Droidspaces-OSS) container.
 
 ## Requirements
 
-- A rooted phone on Android 8.0 or newer. **KernelSU is recommended**; Magisk and APatch
-  work with the same module.
-- A kernel built with `CONFIG_USB_CONFIGFS` and the functions you want. The app checks
-  this before it installs anything and says what your kernel has. Samsung's 4.x kernels
-  need the patches in [kernel requirements](docs/kernel-requirements.md).
+- A rooted phone running Android 8 or newer.
+- A kernel with USB configfs. The app checks this for you before it installs anything
+  ([kernel requirements](docs/kernel-requirements.md)).
 
 ## Get started
 
@@ -98,9 +93,6 @@ Developer notes (architecture, kernel research, the design language, roadmap) li
 
 - The Linux USB gadget subsystem: `f_mass_storage`, `f_hid`, `f_ncm`, `f_rndis` and
   configfs do the real work.
-- [Droidspaces](https://github.com/ravindu644/Droidspaces-OSS): the networking code
-  (netlink, DHCP, NAT) and the installer come from it, by the same author.
-- VirtualAP, whose managed mode inspired the OpenWrt gateway mode.
 - DriveDroid, which showed a phone can boot a PC.
 - [Jersey 10](https://fonts.google.com/specimen/Jersey+10), [Silkscreen](https://fonts.google.com/specimen/Silkscreen)
   and [VT323](https://fonts.google.com/specimen/VT323), the app's faces, under the
