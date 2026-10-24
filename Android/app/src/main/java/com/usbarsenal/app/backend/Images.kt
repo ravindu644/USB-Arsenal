@@ -31,22 +31,31 @@ suspend fun freeBytes(): Long? = Root.read("stat -f -c '%a %S' $IMAGES").out.fir
     (a.toLongOrNull() ?: return@let null) * (s.toLongOrNull() ?: return@let null)
 }
 
+const val NO_PATH = "[-] That picker gives no file path; copy the image into $IMAGES"
+
 /*
  * The file a provider actually opened for [uri], as a path root can open: Droidspaces'
  * FilePickerUtils.realPath. Guessing paths from document IDs differs per provider; the kernel
- * already knows the answer. Null when the provider hands out a pipe (cloud providers) or root
- * sees a different file at that path.
+ * already knows the answer. It comes back canonical (/storage/emulated/0/..., never
+ * /mnt/user/0/...), the spelling the folder's files and the kernel's LUNs use, so they compare
+ * equal. A failure is the fault to show: no path when the provider hands out a pipe (cloud
+ * providers) or root sees a different file there, or root that could not be asked.
  */
-suspend fun realPath(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) {
-    runCatching {
-        context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
-            val path = Os.readlink("/proc/self/fd/${pfd.fd}")
-            val st = Os.fstat(pfd.fileDescriptor)
-            path.takeIf { it.startsWith("/") }?.takeIf {
-                Root.read("stat -c '%d %i' ${shellQuote(it)}").out.singleOrNull() == "${st.st_dev} ${st.st_ino}"
-            }
+suspend fun realPath(context: Context, uri: Uri): Result<String> = withContext(Dispatchers.IO) {
+    val pfd = runCatching { context.contentResolver.openFileDescriptor(uri, "r") }.getOrNull()
+        ?: return@withContext Result.failure(IllegalStateException("[-] Cannot open that file"))
+    pfd.use {
+        val path = runCatching { Os.readlink("/proc/self/fd/${it.fd}") }.getOrNull()?.takeIf { p -> p.startsWith("/") }
+            ?: return@withContext Result.failure(IllegalStateException(NO_PATH))
+        val st = Os.fstat(it.fileDescriptor)
+        val q = shellQuote(path)
+        val r = Root.read("stat -c '%d %i' $q && readlink -f $q")
+        when {
+            r.timedOut || r.code == NO_ROOT -> Result.failure(IllegalStateException("[-] Cannot ask root about that file: ${r.why}"))
+            r.out.firstOrNull() != "${st.st_dev} ${st.st_ino}" -> Result.failure(IllegalStateException(NO_PATH))
+            else -> Result.success(r.out.getOrNull(1) ?: path)
         }
-    }.getOrNull()
+    }
 }
 
 // A sparse image: the size is set, no block is written until the host writes one

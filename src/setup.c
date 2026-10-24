@@ -73,7 +73,7 @@ static enum ua_fn key_fn(size_t i) {
   return UA_FN_ALL;
 }
 
-void ua_setup_defaults(struct ua_setup *s) {
+static void ua_setup_defaults(struct ua_setup *s) {
   memset(s, 0, sizeof(*s));
   s->tether_net = 1;
 }
@@ -150,17 +150,12 @@ static int save(const char *leaf, const struct ua_setup *s, int running) {
 
 int ua_setup_save(const struct ua_setup *s) { return save(SETUP_LEAF, s, 0); }
 
-static int running_save(const struct ua_setup *s) {
-  return save(RUNNING_LEAF, s, 1);
-}
-
 /* "key=value" into the draft, validated as the file would be */
-int ua_setup_set(struct ua_setup *s, const char *assignment, int report) {
+int ua_setup_set(struct ua_setup *s, const char *assignment) {
   char key[64];
   const char *eq = strchr(assignment, '=');
   if (!eq || eq == assignment || (size_t)(eq - assignment) >= sizeof(key)) {
-    if (report)
-      ua_error("'%s' is not KEY=VALUE", assignment);
+    ua_error("'%s' is not KEY=VALUE", assignment);
     return -1;
   }
   memcpy(key, assignment, (size_t)(eq - assignment));
@@ -169,25 +164,13 @@ int ua_setup_set(struct ua_setup *s, const char *assignment, int report) {
     if (!strcmp(key, keys[i].name)) {
       if (ua_key_set(s, &keys[i], eq + 1) == 0)
         return 0;
-      if (report)
-        ua_error("Bad value '%s' for %s%s%s", eq + 1, key,
-                 keys[i].comment ? ": " : "",
-                 keys[i].comment ? keys[i].comment : "");
+      ua_error("Bad value '%s' for %s%s%s", eq + 1, key,
+               keys[i].comment ? ": " : "",
+               keys[i].comment ? keys[i].comment : "");
       return -1;
     }
-  if (report)
-    ua_error("No such setup key: %s", key);
+  ua_error("No such setup key: %s", key);
   return -1;
-}
-
-int ua_lun_spec(const char *spec, char *mode, size_t msize, char *path,
-                size_t psize) {
-  const char *colon = strchr(spec, ':');
-  if (!spec[0] || !colon)
-    return -1;
-  snprintf(mode, msize, "%.*s", (int)(colon - spec), spec);
-  safe_strncpy(path, colon + 1, psize);
-  return 0;
 }
 
 /* Copy fn's keys (UA_FN_ALL: every key) from one setup to another; for
@@ -210,12 +193,18 @@ int ua_running_take(enum ua_fn fn, unsigned mask) {
   ua_setup_load(&s);
   ua_running_load(&r);
   copy_fn(&r, &s, fn, mask);
-  return running_save(&r);
+  return save(RUNNING_LEAF, &r, 1);
 }
 
 int ua_running_clear(enum ua_fn fn) {
   struct ua_setup r, d;
   char p[PATH_MAX];
+  /* A --perm or --group given to `hid start` lasts as long as that HID
+   * (hid.c save_perm); the next one starts from the profile's */
+  if (fn == UA_FN_ALL || fn == UA_FN_HID) {
+    ua_ws_path("Gadget", "hid.perm", p, sizeof(p));
+    unlink(p);
+  }
   if (fn == UA_FN_ALL) {
     ua_ws_path("Gadget", RUNNING_LEAF, p, sizeof(p));
     return unlink(p) < 0 && errno != ENOENT ? -1 : 0;
@@ -223,14 +212,14 @@ int ua_running_clear(enum ua_fn fn) {
   ua_running_load(&r);
   ua_setup_defaults(&d);
   copy_fn(&r, &d, fn, ~0u);
-  return running_save(&r);
+  return save(RUNNING_LEAF, &r, 1);
 }
 
 int ua_running_clear_lun(int lun) {
   struct ua_setup r;
   ua_running_load(&r);
   r.lun[lun][0] = '\0';
-  return running_save(&r);
+  return save(RUNNING_LEAF, &r, 1);
 }
 
 /* An empty value means the profile's (or usb0 for the cable's name), so two
@@ -308,19 +297,12 @@ void ua_setup_json(const struct ua_gadget *g, int live, int *first) {
   json_table("setup", &s, first);
   json_table("running", &r, first);
   printf(",\"pending\":{");
+  static const char *const names[] = {"storage", "tether", "hid"};
   int f = 1;
-  ua_json_int("storage",
-              live && ua_fn_linked(g, UA_FN_STORAGE) &&
-                  ua_setup_pending(UA_FN_STORAGE, &s, &r),
-              &f);
-  ua_json_int("tether",
-              live && ua_fn_linked(g, UA_FN_TETHER) &&
-                  ua_setup_pending(UA_FN_TETHER, &s, &r),
-              &f);
-  ua_json_int("hid",
-              live && ua_fn_linked(g, UA_FN_HID) &&
-                  ua_setup_pending(UA_FN_HID, &s, &r),
-              &f);
+  for (enum ua_fn fn = UA_FN_STORAGE; fn <= UA_FN_HID; fn++)
+    ua_json_int(names[fn],
+                live && ua_fn_linked(g, fn) && ua_setup_pending(fn, &s, &r),
+                &f);
   printf("}");
 }
 
@@ -412,7 +394,7 @@ int ua_cmd_setup(int argc, char **argv) {
     }
     ua_setup_load(&s);
     for (int i = 2; i < argc; i++)
-      if (ua_setup_set(&s, argv[i], 1) < 0)
+      if (ua_setup_set(&s, argv[i]) < 0)
         return UA_EXIT_USAGE;
     return ua_setup_save(&s) < 0 ? UA_EXIT_FAIL : UA_EXIT_OK;
   }

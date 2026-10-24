@@ -341,7 +341,8 @@ the rows), so they scroll with it.
 
 ### Scrollbar (`.scrollbar`)
 Anything that scrolls shows a 4px ink thumb, 4px from the screen's right edge, in the gutter
-clear of a row's or a rule's 10px bleed; inside a terminal it is amber. Its length is the share of the content in
+clear of a row's or a rule's 10px bleed; inside a terminal it is amber, 4px from the panel's
+edge. A terminal with nothing to scroll is no focus stop. Its length is the share of the content in
 view (24px at least), it is drawn on the pixel grid, and it shows only while there is more to
 scroll. It never moves on its own, so reduced motion leaves it as is.
 
@@ -420,6 +421,12 @@ knob left with `O` is off, both in VT323 like a status line. The knob is 30×36:
 the track's edge on its side and stands a dot past it above and below, so where it sits reads
 at a glance. Flipping it runs `<function> start` with the screen's setup, or `stop`, at
 once. It lives on Home's rows, and as a setting inside a screen (`Gateway`, `DHCP and NAT`).
+It has two dead looks. `disabled` (a `.d50` track, no knob, skipped by focus) is only for what
+the phone lacks: a function the kernel did not build, Droidspaces not installed, no NAT. `held`
+(`.dip.held`) keeps the knob where it is and dashes the track's border, as a disabled key's: it
+keeps focus but takes no flip, for a command running, a value not read yet, a backend that needs
+fixing, or storage with nothing picked. Its haptic plays on the frame the knob moves, which for
+a function is when its command ends.
 
 ### Key (`.key`, `.key.pri`)
 The only button. Plain keys are amber; the primary action of a screen (`Create`, `Save`,
@@ -428,7 +435,9 @@ at most.
 
 ### Segmented control (`.segs`, `.seg`)
 One choice among several: storage mode, NCM or RNDIS, log file, profile, power. Options are
-divided by 2px ink. The chosen one is inverted. Labels must fit: `CD`, not `CDROM`.
+divided by 2px ink. The chosen one is inverted. Labels must fit: `CD`, not `CDROM`. An option
+the kernel cannot honour sits on a `.d50` shade with its label in full ink (a ghost's dither
+would eat Silkscreen's strokes), and is never picked or focused.
 
 ### Slider (`.slider`)
 One value from a few dozen steps, in one 44px row: the label, a 2px track with a 28px pixel dot
@@ -453,18 +462,27 @@ what the port is really doing:
   moment the gadget is bound, wherever he had got to, `^ ^` eyes, sparks now and then.
 - **Stopping:** inverted, `STOPPING` with the cursor and the command. Pin tugs at the plug; when
   the port is Android's again he pops out and walks home.
-- **Failed:** after a command fails, for 2.4s or until the next command: `FAILED` (the fault
-  itself is the fault line, under its row or above the bar), Pin runs into the port's edge,
-  `x x` eyes and a star beside him. `STOP ALL` stays live if the gadget is still bound.
+- **Failed:** after a command fails, for 2.4s or until the next command starts: `FAILED` (the
+  fault itself is the fault line, above the bar), Pin runs into the port's edge, `x x` eyes and a
+  star beside him. Still bound, he stays plugged in with `x x` eyes. `STOP ALL` stays live if the
+  gadget is still bound.
+- **Port with Android, an identity set:** set with nothing bound, it replugs nothing, so the bar
+  stays `Port with Android` with `switching identity` as its detail.
 
 ### Drive (`.drive`)
 150px box with an inverted 40px face: activity LED, `LUN0`, eject glyph. Its body shows the
 disc, the filename and `size · type` with an access `.tag` (`ro` or `rw`). Ejected or empty,
-the body shows a `.ghost` disc. The face never repeats what the body shows.
+the body shows a `.ghost` disc. The face never repeats what the body shows. The body is the
+setup, the face what runs: the LED blinks while the host is served, an ejected pick too, is lit
+for a pick not served yet, and hollow with neither. The type is the kernel's (`status --json`)
+while that file runs, else the setup's, as the segments name it (`rw` is a `disk`, its tag says
+the access), and the size is read for a file picked from outside the folder too.
 
 ### Files list
 Rows of `filename` and size, under `FILES` and the folder path. An image in use on another LUN
 shows its LUN as a `.tag` before the size and cannot be picked. The list scrolls; the keys stay.
+An empty folder with nothing picked shows Pin and `No image loaded` where the rows go, under
+`FILES`, so the mode above never moves when the listing comes back.
 
 ### Warning
 An inverted VT323 line, shown only for a consequence the screen does not already show: a CD-ROM
@@ -507,7 +525,8 @@ A session is real commands with the app's narration as shell comments:
 idle `#`. Backend opens with `# usb-arsenal 1.2.0 for aarch64` (or `# update 1.1.0 → 1.2.0` and
 `# the gadget stays up while it updates`) and types `./install-backend.sh` at once: opening it
 (setup's Next, Home's update, Settings' Reinstall) was the ask, so it has no Install key, only
-`Home`, dashed until the install ends. The installer's `[+]` lines are its output, typed straight
+`Home`, dashed until the install ends; one that failed has `Copy log` and `Retry` in its place.
+Opened from Home or Settings, `< BACK` is there from the start, dashed while the install runs. The installer's `[+]` lines are its output, typed straight
 through as they come, with no beat between them. A denial prints what the
 shell would have said (`su: inaccessible or not found`, su's own stderr, or the timeout).
 Check types `# checking this kernel for usb arsenal` and `usb-arsenal check`, which runs the
@@ -553,20 +572,24 @@ A big way into a screen, in the drive panel's look: an inverted 40px face with t
 `>`, over a body with a 4x sprite and one VT323 line. The whole card is one key. Focused or
 held it inverts (the face goes light, the body dark, the 2px edge stays ink), and a tap keeps
 it inverted for 2 frames before the screen changes, so a quick tap is still seen to land. HID's
-cards: `Keyboard and mouse` (the nodes while HID runs) and `Quacky` (`WIP`).
+cards: `Keyboard and mouse` (the nodes while HID runs, `a trackpad and keys` before) and `Quacky` (`WIP`).
 
 ### HID, Keys + mouse, Quacky
-- **HID:** the two cards, then `Interval`: the period on the left, `-`, the exponent and `+`
-  on the right, 1 to 16. It is HID's setup; changed while HID runs, it waits for the `Not
+- **HID:** the two cards, then `Interval`: the period on the left (one line, sliding if it does
+  not fit), `-`, the exponent and `+` on the right, 1 to 16. The period is for the bus the host
+  gave the gadget: 2^(N-1)×125µs at high speed, N ms on a USB 1.1 host. It is HID's setup; changed while HID runs, it waits for the `Not
   applied` sheet.
 - **Keys + mouse:** `Mouse` and `Keys` tabs.
-  - Mouse is the trackpad and `L M R`.
+  - Mouse is the trackpad and `L M R`. The pad is the first focus stop and takes the dashed
+    cursor; the wheel strip is a stop too, where Up and Down turn the wheel a step.
   - Keys is `F1` to `F12`, the `ESC TAB BKSP DEL / SHIFT CTRL ALT SUPER / INS HOME END PRTSC /
     ENTER PGUP PGDN` table, the arrows as an inverted T, and `TYPE`: a label over a tall box
-    whose text goes to the host as typed (deleted text as Backspace).
+    whose text goes to the host as typed (deleted text as Backspace), with no placeholder. Keys
+    are 44px tall. The box keeps its text across a trip to the Mouse tab.
   - Modifier keys latch, shown inverted, for the next key or character.
   - With HID off the page is drawn under a D50 dither that takes no touch or focus, and an
-    inverted box with Pin, `Enable HID on Home to use this page`, steps in over it.
+    inverted box with Pin, `Enable HID on Home to use this page`, steps in over it; a kernel with
+    no HID says `No HID in this kernel` instead.
 - **Quacky:** not built yet. The duck beside Pin and `Under construction`; never shaded.
 
 ### Device panel (`.panel`, `.face`, `.led`, `.body`)
@@ -586,10 +609,12 @@ Tether's counters from `CONFIGURE`, HID's cards from `Interval`, Keys + mouse's 
 `CONFIGURE`).
 
 ### Settings
-In sections, a rule between each: `APP` (Motion, Haptics), `IDENTITY` (one row, the profile in
-force by its name, `Built-in` with none, opening Identity), `BACKEND` (Daemon mode, System path,
-Reinstall), `CREDITS` (Fonts) and `ABOUT` (App, Source), last. Once Daemon mode or System path
-has been changed, a warning line under them says `both apply from the next boot`. With more than
+In sections, a rule between each: `APP` (Motion, Haptics), `IDENTITY` (one row, `Profile` and the
+profile in force by its name as the VT323 value, `Built-in` with none, opening Identity),
+`BACKEND` (Daemon mode, System path, Reinstall), `CREDITS` (Fonts) and `ABOUT` (App, Source),
+last. Daemon mode and System path are held until read, and while no backend is installed. Under
+them one line is kept, so the sections below never move: a failed write's fault, or, once either
+is away from what it was first read as, the warning `both apply from the next boot`. With more than
 one controller a `USB` section after Identity holds `Controller`, the pick, opening a choice
 sheet with each controller's state; while the gadget is bound it is held, noted `stop all to
 change it`, as the backend keeps the controller it holds.
@@ -597,11 +622,13 @@ change it`, as the backend keeps the controller it holds.
 ### Identity
 The profile picked here as a panel in the drive's look: an inverted face with an LED (blinking
 while the host sees the gadget) and the name, over the USB sprite, product, maker, `vid:pid · N
-mA` and its serial (`serial from this phone` when it has none). Under it, `PROFILES` and the folder, then the rows like
+mA` and its serial (`serial from this phone` when it has none), its body four lines tall whether
+or not they are read yet. An identity command's fault sits under the panel (Home never shows it),
+and a profile link whose file is gone says so there: `/…/x.conf is gone: the host gets Built-in`. Under it, `PROFILES` and the folder, then the rows like
 `FILES`: `Built-in` first, then each profile with its `vid:pid`, the picked one inverted. `Edit`
 (dead on Built-in) and `Create` open one sheet in the Create sheet's look: Name (locked when editing,
 its border dashed), Product, Maker, Serial (empty: the phone's own), USB IDs as two four-digit inputs,
-Power `100 / 250 / 500 mA`; each
+Power `100 / 250 / 500` segments with `mA` beside them in VT323 (Silkscreen would print `MA`); each
 field says what is wrong under it, and the key waits until nothing is. With no gadget on the bus
 a pick is set at once; while the host sees it, a pick waits for the `Not applied` sheet on Back,
 whose Apply reconnects the gadget once.
@@ -617,9 +644,12 @@ The row stays so the user learns what the phone lacks. Its icon is `.ghost`, its
 `no hid in this kernel` and `CONFIG_USB_CONFIGFS_F_HID`. The text stays full ink.
 
 ### Fault line (`.fault`)
-The one pattern for a failed command, on every screen. An inverted bar directly under the
-element that was acted on, holding stderr's last line (`[-] ...`, up to three lines) and a `LOG`
-tag. It is a key that opens Log, and it stays until the next action. The element shakes for 3
+The one pattern for a failed command, on every screen. An inverted bar under the element that
+was acted on, holding stderr's last line (`[-] ...`, up to three lines) and a `LOG` tag. Where
+that would move what is below it, it goes where nothing moves: on Home at the end of the
+content, above the bar, for a row as for the whole gadget (the row shakes); on Storage over its
+keys; in Settings in the line kept under the Backend switches. A command refused because another
+runs is a fault too (`[-] Another command is running`). It is a key that opens Log, and it stays until the next action. The element shakes for 3
 frames with `Reject`, and switches show the real state again once `status --json` is re-read.
 The app's own timeout reads `[-] Timed out (30s)`.
 
@@ -632,7 +662,8 @@ read Droidspaces' containers`). A ghost is for sprites: its dither knocks VT323'
 ### Sheet (`.sheet`, `.scrim`)
 A bottom sheet for a short task (Create, a choice). It rises over the screen with a 2px top rule and the
 normal gutters, its own `display-title`, and its keys at the bottom. The screen behind is
-shaded with a `.d50` scrim, so it reads as unavailable. Back or Cancel closes it. The sheet
+shaded with a `.d50` scrim, so it reads as unavailable. Back, Cancel or a tap on the scrim
+closes it (not while it works: Create writing an image). The sheet
 rides on the keyboard and stops under the status bar; when its body does not fit, the body
 scrolls and the keys stay pinned above the keyboard, so a field never sits under it.
 
@@ -787,7 +818,10 @@ Key map:
 
 Rules:
 - **Initial focus** goes to the first row on Home and the primary key or first row on every
-  other screen, requested from a `LaunchedEffect`, never from the composable body.
+  other screen (Keys + mouse: the pad; Tether: the function segments; a screen with neither:
+  `< BACK`), requested from a `LaunchedEffect`, never from the composable body, once per screen
+  (`focusOn`). A shade or sheet open then holds the ask until it closes, and a screen Back
+  returns to lets its opener win.
 - **Focus comes back** after Back to the row or key that opened the screen, and after a sheet
   closes to the key that opened it. A pushed screen leaves composition, so `focusRestorer` has
   nothing to restore: each opener carries an id (`Modifier.opener`) and the stack keeps the one
@@ -879,13 +913,14 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | NCM / RNDIS | `tether start --ncm` / `tether start --rndis` |
 | Tether chain, Tx, Rx | `status --json`: `tether`'s `iface`, `upstream`, `gateway_*`, `tx_bytes`, `rx_bytes` |
 | Gateway, container, its iface | `--gateway CONTAINER`, `--gateway-iface IFACE`; the containers are `droidspaces show --json`'s `running`, and the gateway shows only with `/data/local/Droidspaces/bin/droidspaces` installed |
-| Tether address, DNS, upstream, DHCP and NAT | `--address CIDR`, `--dns IP[,IP]`, `--upstream IFACE`, `--no-net` |
+| Tether address, DNS, upstream, DHCP and NAT | `--address CIDR`, `--dns IP[,IP]` (127 characters at most), `--upstream IFACE`, `--no-net` |
 | Not applied sheet, Apply, Discard | `status --json`'s `pending`; `storage apply`, `tether apply`, `hid apply`; `setup revert <function>` |
 | Each function's setup | `setup set KEY=VALUE` on every edit (one write a beat later), read back as `status --json`'s `setup`; the picks are `storage_lunN=MODE:PATH`, Tether's rows the `tether_*` keys, the interval `hid_interval` |
 | HID interval | `hid start --interval N`, period 2^(N-1)×125µs, set at start; without the f_hid patch (`check`'s `hid_interval` is 0) it is `1 ms, fixed by this kernel` and the steppers are dead |
-| Keys + mouse, the gamepad | app-side: 8-byte keyboard and 4-byte mouse reports, each one write to `/dev/hidgN` through a root `dd` per node; Speed and Natural scroll are app-side too, applied to the reports before they are written |
+| Keys + mouse, the gamepad | app-side reports (8-byte keyboard, 4-byte mouse), each one write into `hid write NODE SIZE`, one per node, which never blocks on the node and keeps only the newest report while the host reads nothing; key reports are paced two poll periods apart. Speed and Natural scroll are app-side too, applied to the reports before they are written |
+| HID period text | `status --json`'s `speed` (`full-speed` is a USB 1.1 host) and `hid[].interval` |
 | Quacky | nothing yet: a WIP page |
-| Identity | `identity show` (the profile in force), `identity generate FILE --force` then the six keys written in (`product`, `manufacturer`, `serial`, `id_vendor`, `id_product`, `max_power`), an edit from the file as it is, through a rename, `identity set FILE`, `identity unset` for Built-in |
+| Identity | `identity show --json` (the profile in force, and `missing` for a link whose file is gone), `identity show --json FILE...` (the folder's profiles, read by the backend's own loader), `identity generate FILE --force` then the six keys written in (`product`, `manufacturer`, `serial`, `id_vendor`, `id_product`, `max_power`), an edit from the file as it is, through a rename, `identity set FILE`, `identity unset` for Built-in |
 | Log tabs | command output (CLI) and `Logs/usb-arsenald.log` (Daemon). Clear on Daemon empties the file (`: >`, safe while the daemon appends) and removes its rotated `.old` |
 | Function names in the bind screen | `mass_storage.ua`, `ncm.ua`, `hid.ua_kbd`, `hid.ua_mouse` |
 | Root screen | `id -u; su -v` (prints `3.3.0:KernelSU` or `<version>:MAGISK`), shown as a shell session; its `#` comments are the app's narration |

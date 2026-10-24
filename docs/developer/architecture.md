@@ -31,7 +31,11 @@ functions, attributes written while unlinked) → `commit`. Failures go to `tear
   - picks the UDC (one is used automatically; more than one needs `--udc`);
   - decides whether Android owns the controller, from the kernel (`g1` plus
     `/sys/class/android_usb`), not from `/system`, so it also works inside a container;
-  - picks the backend.
+  - picks the backend;
+  - where `/sys/class/android_usb` exists, creates `usb_arsenal` once and keeps it (the
+    stock Samsung ENOMEM detector below). Elsewhere it creates nothing: `status` opens
+    the gadget on every read, and a mkdir and rmdir there would race a command's
+    `build_skeleton`; `begin` makes the directory.
 - **`begin`:**
   - enters the critical section: the stop signals are held, and a flock on
     `Gadget/lock` serialises concurrent commands;
@@ -45,7 +49,8 @@ functions, attributes written while unlinked) → `commit`. Failures go to `tear
   - binds;
   - raises the pullup (below);
   - waits for `configured`;
-  - re-applies the HID permissions.
+  - re-applies the HID permissions, still inside the critical section, so a client
+    hangup's SIGTERM never lands between a chown and its chmod.
 
   A link failure fails the commit; no functions left means `teardown`.
 - **`teardown`:**
@@ -143,12 +148,20 @@ Details:
   - request: `u32 "UARS" | u16 version | u16 nfds | u32 argc`, then length-prefixed
     argv, with up to 8 fds on the first `sendmsg`;
   - replies: frames `u8 type | u32 len | payload` (OUT, ERR, EXIT).
-- **Sessions:** fork per client; the command re-executes the pinned binary with
-  `UA_NO_PROXY=1`, the passed fds as 3, 4, ..., and stdout/stderr piped back. A client
-  hangup sends the command SIGTERM.
+- **Sessions:** fork per client; the command executes the file at the daemon's own
+  path with `UA_NO_PROXY=1`, the passed fds as 3, 4, ..., and stdout/stderr piped back. A
+  client hangup sends the command SIGTERM.
+- **Updates:** before each `accept`, the daemon compares its binary on disk (device,
+  inode, mtime) with what it started from. When an update replaced it, the daemon
+  re-executes the new file with `daemon --foreground --gid N` and the listening socket
+  in `UA_DAEMON_FD`, so the pid, the pid file and the socket stay, the waiting client is
+  served by the new code, and sessions already running finish in their own processes.
+  A failed exec logs and keeps the old one running.
 - **Relay rules** (`src/main.c` `relay()`):
-  - everything is relayed except `daemon`, `help`, `version`, `--help` and
-    `identity generate`;
+  - everything is relayed except `daemon`, `help`, `version`, `--help`,
+    `identity generate`, `identity show FILE` (it reads the caller's files with the
+    caller's permissions, never as root) and `hid write` (its stdin is the report
+    stream, and it only writes a node the caller can open);
   - `storage start` opens IMAGE on the client side and swaps it for `--fd=3`; the kernel
     is given `/proc/self/fd/N`, which follows the magic link to the real file;
   - `identity set` sends its file the same way plus `--path=<client realpath>`, and the

@@ -40,8 +40,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-// A failed command, where it was acted on (null: the whole gadget), with stderr's last line
-data class Fault(val where: Fn?, val message: String)
+// A failed command, where it was acted on (null: the whole gadget), with stderr's last line;
+// [identity] is an identity command's, which Identity shows and Home does not
+data class Fault(val where: Fn?, val message: String, val identity: Boolean = false)
 
 // The command running, as typed after `usb-arsenal`, for which function, whether it stops it,
 // and what it does in a few words (the bottom bar's line; the typed one goes to the log)
@@ -107,9 +108,9 @@ object Gadget {
     var fails by mutableIntStateOf(0)
         private set
 
-    // Bound or not as last seen with no command running; null until the first read, so a launch
-    // onto a gadget already bound plays nothing
-    private var wasBound: Boolean? = null
+    // Settled reads in a row that saw the port Android's since it was last seen bound; null
+    // until the first read, so a launch onto a gadget already bound plays nothing
+    private var down: Int? = null
 
     // Commands finished so far, and the status reads begun and applied: a read is applied only
     // when nothing newer has been and no command finished since it began
@@ -193,20 +194,24 @@ object Gadget {
             Cache.status = s
             Controller.mirror(s.setup)
             // A running keyboard shows whether its interval took, which outranks check's probe
-            HidSetup.keyboardFixed = s.hid.firstOrNull { it.function == "keyboard" }?.let { it.interval < 0 }
-            if (idle && busy == null) settle()
+            // Kept once seen, so it never flips back with HID's run state on a backend without the probe
+            s.hid.firstOrNull { it.function == "keyboard" }?.let { HidSetup.keyboardFixed = it.interval < 0 }
+            if (idle && busy == null) settle(sure = false)
         }.onFailure { misses++ }
     }
 
     // Only settled states count: a replug unbinds and binds inside its command, which is never
-    // seen as the port leaving Android. A stop never settles from its own command either, so
-    // Apply's stop then start is a replug; a poll after a stop that stays stopped settles it.
-    // ponytail: a replug run from the CLI while the app polls could show one unbound read and
-    // play the moment; two unbound polls in a row would rule it out
-    private fun settle() {
+    // seen as the port leaving Android. A command's own read is [sure]; a replug from the command
+    // line can show a poll one unbound read, so polls need two in a row before a bind thuds
+    private fun settle(sure: Boolean) {
         val now = status?.bound ?: return
-        if (wasBound == false && now) binds++
-        wasBound = now
+        val d = down
+        if (now) {
+            if (d != null && d >= 2) binds++
+            down = 0
+        } else {
+            down = if (d == null || sure) 2 else d + 1
+        }
     }
 
     // Once a launch: the backend's state, what the kernel can do, the profile, Droidspaces. Each
@@ -232,7 +237,12 @@ object Gadget {
      * nothing while they run.
      */
     fun run(fn: Fn?, vararg args: String, quiet: Boolean = false, onDone: (Boolean) -> Unit = {}): Boolean {
-        if (busy != null) return false
+        if (busy != null) {
+            // Refused, as a tap that lands in the beat before the keys are held: say so
+            fault = Fault(fn, "[-] Another command is running", identity = args.firstOrNull() == "identity")
+            fails++
+            return false
+        }
         val typed = args.joinToString(" ")
         // `stop` and `<function> stop`; never read from the typed line, whose path could end in it
         if (!quiet) busy = Busy(fn, typed, stopping = args.firstOrNull() == "stop" || args.getOrNull(1) == "stop", says = says(args.toList()))
@@ -251,14 +261,13 @@ object Gadget {
                     r.timedOut -> "[-] Timed out (${CHANGE_TIMEOUT_MS / 1000}s)"
                     else -> r.err.lastOrNull()?.let(::plain) ?: "[-] Failed (exit ${r.code})"
                 }
-                fault = Fault(fn, why)
+                fault = Fault(fn, why, identity = args.firstOrNull() == "identity")
                 fails++
             }
             refresh(command = true)
-            val stopping = busy?.stopping == true
             busy = null
             finished++
-            if (!stopping) settle()
+            settle(sure = true)
             onDone(r.ok)
         }
         return true
@@ -439,7 +448,8 @@ fun dropPick(lun: Int) = Gadget.set("storage_lun$lun" to "")
 data class TetherPlan(
     val function: String? = null,
     val container: String = "",
-    val iface: String = "usb0",
+    // Empty is the container's usb0, as tether.c takes it
+    val iface: String = "",
     val address: String = "",
     val dns: String = "",
     val upstream: String = "",
@@ -450,7 +460,7 @@ data class TetherPlan(
     // Whether the backend takes it as it stands, so a start cannot fail on the setup itself
     // (--no-net sends none of the network fields, so they cannot stop it; NAT needs the kernel's)
     fun ready(caps: Capabilities?) = when {
-        gateway -> validIface(iface)
+        gateway -> iface.isBlank() || validIface(iface)
         !net -> true
         else -> caps.natOk() && (address.isBlank() || validAddress(address)) && (dns.isBlank() || validDns(dns)) && (upstream.isBlank() || validIface(upstream))
     }
@@ -459,7 +469,7 @@ data class TetherPlan(
     fun keys() = listOf(
         "tether_function" to function.orEmpty(),
         "tether_gateway" to container,
-        "tether_gateway_iface" to iface.takeIf { it != "usb0" }.orEmpty(),
+        "tether_gateway_iface" to iface.trim(),
         "tether_address" to address.trim(),
         "tether_dns" to dns.trim(),
         "tether_upstream" to upstream.trim(),
@@ -470,7 +480,7 @@ data class TetherPlan(
 fun tetherPlanOf(setup: Map<String, String>) = TetherPlan(
     function = setup["tether_function"]?.ifEmpty { null },
     container = setup["tether_gateway"].orEmpty(),
-    iface = setup["tether_gateway_iface"]?.ifEmpty { null } ?: "usb0",
+    iface = setup["tether_gateway_iface"].orEmpty(),
     address = setup["tether_address"].orEmpty(),
     dns = setup["tether_dns"].orEmpty(),
     upstream = setup["tether_upstream"].orEmpty(),
@@ -511,11 +521,12 @@ fun validIp(s: String) = s.split('.').let { p -> p.size == 4 && p.all { OCTET.ma
 // As tether.c's parse_address: a host address with a /8 to /30 prefix (24 when left out)
 fun validAddress(cidr: String) = hostOf(cidr.trim()) != null
 
-// As config.c's ua_valid_dns: IPv4 addresses, comma-separated
-fun validDns(s: String) = s.split(',').filter { it.isNotEmpty() }.let { p -> p.isNotEmpty() && p.all { validIp(it.trim()) } }
+// As config.c's ua_valid_dns: IPv4 addresses, comma-separated, in the 127 characters its field holds
+fun validDns(s: String) = s.trim().length <= 127 && s.split(',').filter { it.isNotEmpty() }.let { p -> p.isNotEmpty() && p.all { validIp(it.trim()) } }
 
-// An interface name the kernel takes: 1 to 15 characters, no slash or space
-fun validIface(s: String) = s.trim().length in 1..15 && s.trim().none { it == '/' || it.isWhitespace() }
+// An interface name the kernel takes, as dev_valid_name: 1 to 15 characters, not . or .., no
+// slash, colon or space
+fun validIface(s: String) = s.trim().let { n -> n.length in 1..15 && n != "." && n != ".." && n.none { it == '/' || it == ':' || it.isWhitespace() } }
 
 /*
  * Identity's pick: the profile the screen has chosen, a canonical path, or null for the built-in
@@ -523,7 +534,8 @@ fun validIface(s: String) = s.trim().length in 1..15 && s.trim().none { it == '/
  * backend's link is what persists, and [chosen] starts at it.
  */
 object IdentitySetup {
-    var chosen by mutableStateOf<String?>(null)
+    // From the cached profile, so the first frame picks what was last seen in force
+    var chosen by mutableStateOf(activeProfile(Cache.profile))
     var edited by mutableStateOf(false)
 
     // The running profile's file as it was before an edit made while bound, for Discard
@@ -536,7 +548,7 @@ object IdentitySetup {
 }
 
 // The profile `identity show` says is in force; null for the built-in defaults
-fun activeProfile(profile: Map<String, String>): String? = profile["profile"]?.takeIf { it.isNotEmpty() && it != "built-in defaults" }
+fun activeProfile(profile: Map<String, String>): String? = profile["profile"]?.ifEmpty { null }
 
 // The name Settings shows for it: the file's, without .conf
 fun profileName(profile: Map<String, String>) = activeProfile(profile)?.substringAfterLast('/')?.removeSuffix(".conf") ?: "Built-in"

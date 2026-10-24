@@ -59,6 +59,19 @@ ok "storage same-mode swap"
 grep -q "$TMP/plain2.iso" $G/functions/mass_storage.ua/lun.0/file || die "storage lost its image across the rebind"
 ok "hid start alongside storage"
 
+# --perm given once lasts while HID runs: a bare start must not reset it
+KBD=$("$B" $A status --json | sed -n 's/.*"function":"keyboard","node":"\([^"]*\)".*/\1/p')
+[ -c "$KBD" ] || die "status --json names no keyboard node"
+"$B" $A hid start --perm 0600 >/dev/null || die "hid start --perm"
+"$B" $A hid start >/dev/null || die "bare hid start on a running HID"
+[ "$(stat -c %a "$KBD")" = 600 ] || die "a bare hid start reset --perm"
+"$B" $A status --json | grep -q '"speed":"[a-z-]*speed"' || die "status --json has no speed while bound"
+# The non-blocking writer: an all-zero report is no key at all, so the host
+# (this PC) sees nothing; it must exit 0 at the end of stdin
+printf '\0\0\0\0\0\0\0\0' | "$B" $A hid write "$KBD" 8 || die "hid write"
+"$B" $A hid write "$TMP/disk.img" 8 2>/dev/null && die "hid write must refuse a regular file"
+ok "hid: --perm kept, speed in status, hid write"
+
 "$B" $A tether start --no-net || die "tether start --no-net"
 [ -L $G/configs/c.1/ncm.ua ] || die "ncm not linked"
 ok "tether --no-net adds NCM"
@@ -92,6 +105,7 @@ ok "status"
 
 "$B" $A hid stop || die "hid stop"
 [ ! -e $G/functions/hid.ua_kbd ] || die "hid stop left the function behind"
+[ ! -e /var/lib/USB-Arsenal/Gadget/hid.perm ] || die "hid stop kept the --perm of the HID it removed"
 [ "$(cat /sys/class/udc/$UDC/state)" = configured ] || die "gadget did not come back after hid stop"
 ok "hid stop rebinds the rest"
 
@@ -99,7 +113,9 @@ ok "hid stop rebinds the rest"
 [ ! -e $G ] || die "stop left $G behind"
 [ -z "$(cat /sys/class/udc/$UDC/function 2>/dev/null)" ] || die "UDC still bound after stop"
 "$B" $A stop >/dev/null || die "a second stop must be a no-op"
-ok "stop tears down, and is idempotent"
+"$B" $A status --json | grep -q '"speed":""' || die "speed should be empty while not bound"
+[ ! -e $G ] || die "status created $G"
+ok "stop tears down, and is idempotent; status creates nothing"
 
 # A bare start runs the setup the earlier starts saved; stop forgets what ran
 "$B" $A setup show | grep -q "^storage_lun0 *auto:$TMP/plain2.iso *-" || die "stop should clear what runs, not the setup"
@@ -108,5 +124,17 @@ grep -q "$TMP/plain2.iso" $G/functions/mass_storage.ua/lun.0/file || die "bare s
 "$B" $A stop || die "stop after the bare start"
 "$B" $A setup reset || die "setup reset"
 ok "a bare start runs the setup"
+
+# Profiles read through the C loader, and a profile whose file went is named
+printf ' id_product = 0104 \nbogus=1\n' > "$TMP/p.conf"
+"$B" $A identity show --json "$TMP/p.conf" 2>/dev/null | grep -q '"errors":1,"keys":{"id_vendor":"0x1d6b","id_product":"0x0044"' || die "identity show FILE --json"
+"$B" $A identity set "$TMP/p.conf" >/dev/null 2>&1 && die "identity set must refuse a file with errors"
+printf 'product=Gone\n' > "$TMP/gone.conf"
+"$B" $A identity set "$TMP/gone.conf" >/dev/null || die "identity set"
+rm "$TMP/gone.conf"
+"$B" $A identity show 2>/dev/null | grep -q "^Profile: $TMP/gone.conf (missing)" || die "identity show does not name the missing profile"
+"$B" $A identity show --json 2>/dev/null | grep -q "\"missing\":\"$TMP/gone.conf\"" || die "identity show --json has no missing"
+"$B" $A identity unset >/dev/null || die "identity unset"
+ok "identity show: FILEs through the loader, a missing profile named"
 
 echo "all $pass checks passed"

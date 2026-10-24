@@ -60,6 +60,7 @@ import androidx.core.content.edit
 import com.usbarsenal.app.BuildConfig
 import com.usbarsenal.app.backend.Backend
 import com.usbarsenal.app.backend.BackendState
+import com.usbarsenal.app.backend.Cache
 import com.usbarsenal.app.backend.Capabilities
 import com.usbarsenal.app.backend.deviceArch
 import com.usbarsenal.app.backend.installBackend
@@ -101,8 +102,9 @@ private object Setup {
     var staged: File? = null
 
 
-    val log = mutableStateListOf<String>()
-    var phase by mutableStateOf(Phase.BEFORE)
+    // An install that ended is kept (Cache.install), so a restore onto Install shows it, never runs it again
+    val log = mutableStateListOf<String>().also { it.addAll(Cache.install?.second.orEmpty()) }
+    var phase by mutableStateOf(Cache.install?.first?.let { n -> Phase.entries.firstOrNull { it.name == n } } ?: Phase.BEFORE)
     // A Retry starts the shell session over; the first Install types on in the same one
     var retries by mutableIntStateOf(0)
 
@@ -114,6 +116,7 @@ private object Setup {
         if (phase == Phase.DONE || phase == Phase.FAILED) {
             log.clear()
             phase = Phase.BEFORE
+            Cache.install = null
         }
     }
 
@@ -121,6 +124,7 @@ private object Setup {
     fun enter() {
         log.clear()
         phase = Phase.TYPING
+        Cache.install = null
     }
 
     fun install(context: Context) {
@@ -130,6 +134,7 @@ private object Setup {
             // Home draws the installed state at once, not the one from before
             if (ok) Gadget.launchReads(context.applicationContext)
             phase = if (ok) Phase.DONE else Phase.FAILED
+            Cache.install = phase.name to log.toList()
         }
     }
 }
@@ -148,6 +153,8 @@ fun App() {
     // The installed version when Install was opened to update it
     var update by rememberSaveable { mutableStateOf<String?>(null) }
     val focusManager = LocalFocusManager.current
+    // A denial is kept for the process, but "reopen the app" means a new activity asks again
+    remember { if (Setup.root?.isFailure == true) Setup.root = null }
     val scope = rememberCoroutineScope()
     var showing by remember { mutableStateOf<Job?>(null) }
     // openers[i] held focus on stack[i] when stack[i + 1] was pushed (ReturnFocus)
@@ -226,7 +233,10 @@ fun App() {
             }
             // In setup it leads on to Check; asked for at a launch, it goes back to Home
             Step.CONTROLLER -> ControllerScreen(setup, back = ::pop) { if (setup) push(Step.CHECK) else pop() }
-            Step.CHECK -> CheckScreen(back = ::pop) { push(Step.INSTALL) }
+            Step.CHECK -> CheckScreen(back = ::pop) {
+                Setup.fresh()
+                push(Step.INSTALL)
+            }
             Step.INSTALL -> InstallScreen(setup, update = update, back = ::pop, home = home)
             Step.HOME -> HomeScreen(
                 open = { fn ->
@@ -266,14 +276,6 @@ fun App() {
 private fun several() = (Controller.udcs?.size ?: 0) > 1
 
 private fun setupSteps() = if (several()) 4 else 3
-
-// Initial focus goes to the screen's primary key once it is there, from an effect, never the body
-@Composable
-private fun focusOn(key: Any?): FocusRequester {
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(key) { runCatching { focus.requestFocus() } }
-    return focus
-}
 
 // Welcome's parts come on one per frame, top to bottom, as DESIGN.md's rows typing on
 @Composable
@@ -344,7 +346,8 @@ private fun RootScreen(back: () -> Unit, next: () -> Unit) {
     val done = result != null && step >= total
     // Reject once the denial is on screen, not when su answers ahead of the typing
     LaunchedEffect(done) { if (done && result.isFailure && !had) haptics.reject() }
-    BackHandler { if (done) back() }
+    // Back leaves until su is asked, as Check's does; then su's answer comes first
+    BackHandler { if (done || stepNow < enter) back() }
     val focus = focusOn(done)
     Box(Modifier.fillMaxSize()) {
         Screen(
@@ -546,9 +549,10 @@ private fun InstallScreen(setup: Boolean, update: String?, back: () -> Unit, hom
             }
         },
     ) {
+        // Back is there from the start, dashed while the install runs, so nothing pops in
         Top {
             if (setup) Steps(setupSteps(), setupSteps())
-            else if (phase == Phase.FAILED && finished) BackKey()
+            else BackKey(enabled = finished || phase == Phase.BEFORE)
         }
         Title("Backend")
         Shell("sh", led, session.shownAt(step), Modifier.fill(min = 200.dp))
@@ -571,6 +575,8 @@ private fun ControllerScreen(setup: Boolean, back: () -> Unit, next: () -> Unit)
     var picked by rememberSaveable { mutableStateOf(Controller.picked) }
     var writing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val shown = rememberTyped(udcs.size.coerceAtLeast(1), 1)
+    val first = focusOn()
     Screen(
         footer = {
             KeyRow {
@@ -596,14 +602,17 @@ private fun ControllerScreen(setup: Boolean, back: () -> Unit, next: () -> Unit)
         Title("Controller")
         Text("This phone has more than one USB controller. Pick the one your cable is in.", LcdType.data)
         Column(Modifier.bleed(10.dp).selectableGroup()) {
-            udcs.forEachIndexed { i, udc -> ControllerRow(udc, udc.name == picked, rule = i > 0) { picked = udc.name } }
+            udcs.forEachIndexed { i, udc ->
+                val focus = if (i == 0) Modifier.focusRequester(first) else Modifier
+                ControllerRow(udc, udc.name == picked, rule = i > 0, focus.drawnFrom(i, shown)) { picked = udc.name }
+            }
         }
     }
 }
 
 // A controller as a Home-style row: Pin, its name, its state and what that means. Inverted while picked
 @Composable
-private fun ControllerRow(udc: Udc, picked: Boolean, rule: Boolean, onPick: () -> Unit) {
+private fun ControllerRow(udc: Udc, picked: Boolean, rule: Boolean, modifier: Modifier, onPick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val pressed by interaction.collectIsPressedAsState()
@@ -618,7 +627,7 @@ private fun ControllerRow(udc: Udc, picked: Boolean, rule: Boolean, onPick: () -
         else -> null
     }
     Box(
-        Modifier
+        modifier
             // The 2dp rule between rows, as Home's
             .then(if (rule) Modifier.drawWithContent { drawContent(); drawRect(ink, size = Size(size.width, Lcd.pixel.toPx())) } else Modifier)
             .lcdClickable(interaction, outline = false, role = Role.RadioButton) {

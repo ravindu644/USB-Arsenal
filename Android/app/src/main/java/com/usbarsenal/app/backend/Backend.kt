@@ -21,7 +21,12 @@ const val UA = "$WORKSPACE/bin/usb-arsenal"
  */
 private const val NO_PROXY = "UA_NO_PROXY=1"
 
-private fun read() = "$NO_PROXY $UA"
+internal fun read() = "$NO_PROXY $UA"
+
+// Keys + mouse's writer for one node: reports of [size] bytes on stdin, each one write, never
+// blocking on the node (hid.c's `hid write`). The binary never relays it, so it needs no
+// UA_NO_PROXY, which a stream's `exec` would take for the command's name
+suspend fun hidWrite(node: String, size: Int) = Root.stream("$UA hid write ${shellQuote(node)} $size")
 
 // A USB device controller as /sys/class/udc lists it, and its state ("configured": a host is
 // talking to it, "not attached": nothing is)
@@ -112,18 +117,17 @@ suspend fun readCheckReport(binary: String): Pair<List<String>, Result<Capabilit
 }
 
 /*
- * identity show: "Profile: <path or built-in defaults>[ (copy)]", then a key column,
- * "  tether_function  ncm", where a derived value reads "(derived)". The profile comes back
- * as the "profile" key.
+ * identity show --json: the keys in force (a derived one empty, so left out), with "profile"
+ * (the file, empty for the built-in defaults) and "missing" (a link to a file that is gone, whose
+ * host gets the defaults). Empty when it could not be read.
  */
-suspend fun readProfile(): Map<String, String> {
-    val out = Root.read("${read()} identity show").out.ifEmpty { return emptyMap() }
-    val keys = out.filter { it.startsWith("  ") }
-        .mapNotNull { line -> line.trim().split(Regex("\\s+"), limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
-        .filter { it.second != "(derived)" }
-    val profile = out.firstOrNull { it.startsWith("Profile: ") }?.removePrefix("Profile: ")?.removeSuffix(" (copy)")
-    return (keys + listOfNotNull(profile?.let { "profile" to it })).toMap()
-}
+suspend fun readProfile(): Map<String, String> = parseProfile(Root.read("${read()} identity show --json").out.joinToString("\n"))
+
+fun parseProfile(json: String): Map<String, String> = runCatching {
+    val o = JSONObject(json)
+    o.getJSONObject("keys").strings().filterValues { it.isNotEmpty() } +
+        mapOf("profile" to o.getString("profile"), "missing" to o.optString("missing"))
+}.getOrDefault(emptyMap())
 
 // Whether Droidspaces is installed, and its running containers by name, which tether --gateway
 // takes; [running] is null when they could not be read, which is not the same as none
@@ -158,7 +162,8 @@ suspend fun rootInfo(): Result<String> {
     val r = Root.read("id -u; su -v", timeoutMs)
     // The uid decides: the exit code is su -v's, which a root shell without su on its PATH fails
     return when {
-        r.out.firstOrNull() == "0" -> Result.success(r.out.getOrNull(1).orEmpty())
+        // A root shell with no su on its PATH: what it said, or that there is none
+        r.out.firstOrNull() == "0" -> Result.success(r.out.getOrNull(1) ?: r.err.lastOrNull()?.takeIf(String::isNotBlank) ?: "(no su)")
         r.code == NO_ROOT && r.out.isEmpty() -> Result.failure(SecurityException("su: inaccessible or not found"))
         r.timedOut -> Result.failure(SecurityException("su: no answer in ${timeoutMs / 1000}s"))
         else -> Result.failure(SecurityException(r.err.lastOrNull() ?: "su: permission denied"))
@@ -233,6 +238,8 @@ data class GadgetStatus(
     val setup: Map<String, String> = emptyMap(),
     val running: Map<String, String> = emptyMap(),
     val pending: Map<String, Boolean> = emptyMap(),
+    // The bus speed the host gave the gadget (full-speed, high-speed, super-speed); empty unbound
+    val speed: String = "",
     val raw: String = "",
 )
 
@@ -252,7 +259,6 @@ fun parseCheck(json: String): Capabilities = with(JSONObject(json)) {
     )
 }
 
-private fun JSONObject.strings() = keys().asSequence().associateWith { getString(it) }
 
 fun parseStatus(json: String): GadgetStatus = with(JSONObject(json)) {
     GadgetStatus(
@@ -284,6 +290,7 @@ fun parseStatus(json: String): GadgetStatus = with(JSONObject(json)) {
         setup = optJSONObject("setup")?.strings().orEmpty(),
         running = optJSONObject("running")?.strings().orEmpty(),
         pending = optJSONObject("pending")?.let { o -> o.keys().asSequence().associateWith { o.getInt(it) == 1 } }.orEmpty(),
+        speed = optString("speed"),
         raw = json,
     )
 }

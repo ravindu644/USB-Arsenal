@@ -152,10 +152,10 @@ void ua_gadget_unlink(struct ua_gadget *g, const char *func);
 int ua_gadget_remove(struct ua_gadget *g, const char *func);
 int ua_gadget_commit(struct ua_gadget *g);
 void ua_gadget_teardown(struct ua_gadget *g);
-/* Ends a critical section a command opened with begin and did not close with
- * commit (apply swaps a function inside another command's begin) */
-void ua_gadget_hold(void);
-void ua_gadget_leave(void);
+/* The critical section begin opens and commit closes; apply swaps a function
+ * inside another command's begin and closes it with ua_crit_leave */
+void ua_crit_enter(void);
+void ua_crit_leave(void);
 void ua_boot_marker(char *out, size_t size);
 int ua_fn_linked(const struct ua_gadget *g, enum ua_fn fn);
 int ua_gadget_func_dir(const struct ua_gadget *g, const char *func, char *dir,
@@ -191,7 +191,6 @@ int ua_table_load(const char *path, const struct ua_key *keys, size_t nkeys,
                   void *base);
 int ua_write_atomic(const char *path, mode_t mode,
                     void (*body)(FILE *, const void *), const void *arg);
-int ua_in_choices(const char *v, const char *choices);
 
 struct ua_config {
   char source[PATH_MAX]; /* the profile in force, "" = built-in */
@@ -226,14 +225,10 @@ struct ua_setup {
   unsigned hid_interval;
 };
 
-void ua_setup_defaults(struct ua_setup *s);
 void ua_setup_load(struct ua_setup *s);
 void ua_running_load(struct ua_setup *s);
 int ua_setup_save(const struct ua_setup *s);
-int ua_setup_set(struct ua_setup *s, const char *assignment, int report);
-/* Splits a LUN spec into its mode and path; -1 for an empty one */
-int ua_lun_spec(const char *spec, char *mode, size_t msize, char *path,
-                size_t psize);
+int ua_setup_set(struct ua_setup *s, const char *assignment);
 /* Running takes fn's keys from the setup; for storage only the LUNs in mask */
 int ua_running_take(enum ua_fn fn, unsigned mask);
 int ua_running_clear(enum ua_fn fn);

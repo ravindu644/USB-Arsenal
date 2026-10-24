@@ -171,6 +171,27 @@ object ReturnFocus {
     var returning by mutableStateOf<String?>(null)
 }
 
+/*
+ * Initial focus, the one rule for every screen: the primary key or first row asks once per
+ * [key], from an effect, never the body. A shade or sheet open at that moment holds the ask
+ * until it closes (Welcome under the no-root shade), and a screen Back returns to lets its
+ * opener win instead.
+ */
+@Composable
+fun focusOn(key: Any? = Unit): FocusRequester {
+    val focus = remember { FocusRequester() }
+    val asked = remember { arrayOfNulls<Any?>(1).also { it[0] = Asked } }
+    val clear = SheetsOpen.count == 0
+    LaunchedEffect(key, clear) {
+        if (!clear || asked[0] == key) return@LaunchedEffect
+        asked[0] = key
+        if (ReturnFocus.returning == null) runCatching { focus.requestFocus() }
+    }
+    return focus
+}
+
+private object Asked
+
 // ponytail: composed{} as lcdClickable is; a Modifier.Node if it ever shows in a trace
 fun Modifier.opener(id: String): Modifier = composed {
     val focus = remember { FocusRequester() }
@@ -459,9 +480,9 @@ fun Key(
 
 // "< Back" in the top bar: the same as the system Back, so a screen's BackHandler decides
 @Composable
-fun BackKey(modifier: Modifier = Modifier) {
+fun BackKey(modifier: Modifier = Modifier, enabled: Boolean = true) {
     val dispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
-    Key("< Back", modifier.semantics { contentDescription = "Back" }) { dispatcher?.onBackPressed() }
+    Key("< Back", modifier.semantics { contentDescription = "Back" }, enabled = enabled) { dispatcher?.onBackPressed() }
 }
 
 // .top: 44dp, even when empty, so titles line up from screen to screen
@@ -665,12 +686,14 @@ fun Terminal(lines: List<String>, modifier: Modifier = Modifier, live: Boolean =
     val list = rememberLazyListState(if (live) lines.lastIndex.coerceAtLeast(0) else 0)
     val page = rememberScrollState()
     Inverted {
-        val panel = modifier.keyScroll(if (live) list else page, cursor)
+        val state = if (live) list else page
+        // Nothing to scroll is no Tab stop
+        val panel = modifier.keyScroll(state, cursor, enabled = state.canScrollForward || state.canScrollBackward)
             .fillMaxWidth()
             .background(LocalLcd.current.ground)
         if (live) TerminalList(lines, list, cursor, panel)
-        // In the terminal's 10dp padding, 3dp from its edge, as the log's
-        else Column(panel.lcdScroll(page, inset = 1.dp).padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        // In the terminal's 10dp padding, 4dp from its edge, as the log's
+        else Column(panel.lcdScroll(page, inset = 0.dp).padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             for (line in lines) TerminalLine(line, newest = false, cursor)
         }
     }
@@ -699,8 +722,8 @@ private fun TerminalList(lines: List<String>, list: LazyListState, cursor: Color
                 val seen = info.visibleItemsInfo.size
                 if (seen in 1 until total) {
                     val first = list.firstVisibleItemIndex.toFloat()
-                    // In the terminal's 10dp padding, 3dp from its edge
-                    thumb(ink, size.width - 7.dp.toPx(), size.height, size.height * total / seen, first / (total - seen).coerceAtLeast(1))
+                    // In the terminal's 10dp padding, 4dp from its edge, as every scrollbar
+                    thumb(ink, size.width - 8.dp.toPx(), size.height, size.height * total / seen, first / (total - seen).coerceAtLeast(1))
                 }
             }
             .padding(10.dp),

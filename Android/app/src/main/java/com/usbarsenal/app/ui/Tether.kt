@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import com.usbarsenal.app.backend.Cache
 import com.usbarsenal.app.backend.readDroidspaces
@@ -69,6 +70,7 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
                     listOf("NCM", "RNDIS"),
                     if (tetherFunction(plan, profile, caps) == "rndis") 1 else 0,
                     { set(plan.copy(function = if (it == 1) "rndis" else "ncm")) },
+                    Modifier.focusRequester(focusOn()),
                     enabled = { if (it == 0) caps.ncmOk() else caps.rndisOk() },
                 )
                 Column {
@@ -86,7 +88,7 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
                     )
                     // Values are live only: off, the rows below already say what a start would use
                     if (gatewayLive) {
-                        val name = live?.gatewayContainer?.ifEmpty { null } ?: plan.container.ifEmpty { "container" }
+                        val name = live?.gatewayContainer?.ifEmpty { null } ?: plan.container.ifEmpty { "Container" }
                         Node(name, if (live?.gatewayWaiting == true) "waiting" else live?.gatewayIface)
                     } else {
                         Node("Upstream", live?.upstream?.ifEmpty { null })
@@ -106,12 +108,12 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
                         Dip(plan.gateway, { if (it) choosing = true else set(plan.copy(container = "")) }, "Gateway mode", enabled = ds?.installed != false)
                     }
                     if (plan.gateway) {
-                        LinkRow("Container", plan.container, { choosing = true }, Modifier.opener("tether/container"))
-                        if (containers != null && plan.container !in containers) Note("not running")
-                        TypedRow("Its iface", plan.iface, "usb0", "an interface name, up to 15 characters".takeUnless { validIface(plan.iface) }) {
+                        val stopped = containers != null && plan.container !in containers
+                        LinkRow("Container", if (stopped) "${plan.container} · not running" else plan.container, { choosing = true }, Modifier.opener("tether/container"))
+                        TypedRow("Its iface", plan.iface, "usb0", "an interface name, up to 15 characters".takeUnless { plan.iface.isBlank() || validIface(plan.iface) }) {
                             set(plan.copy(iface = it))
                         }
-                        Kv("Host IPv4") { Text("by ${plan.container.ifEmpty { "the container" }}", LcdType.data) }
+                        Kv("Host IPv4") { Text("by the container", LcdType.data) }
                     } else {
                         // Without NAT in the kernel only --no-net can start
                         Kv("DHCP and NAT") {
@@ -127,7 +129,7 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
                             Kv("Host IPv6") { Text(live?.ipv6?.ifEmpty { null } ?: "-", LcdType.data) }
                             TypedRow(
                                 "DNS", plan.dns, profile["tether_dns"]?.replace(",", ", ") ?: "1.1.1.1, 8.8.8.8",
-                                "IPv4 addresses, comma-separated".takeUnless { plan.dns.isBlank() || validDns(plan.dns) },
+                                "IPv4 addresses, comma-separated, 127 characters at most".takeUnless { plan.dns.isBlank() || validDns(plan.dns) },
                             ) { set(plan.copy(dns = it)) }
                             TypedRow(
                                 "Upstream", plan.upstream, profile["tether_upstream"] ?: "auto",
