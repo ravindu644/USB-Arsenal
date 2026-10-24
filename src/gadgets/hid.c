@@ -97,8 +97,15 @@ void ua_help_hid(void) {
  * run before commit links it */
 static int setup_fn(struct ua_gadget *g, const struct hid_fn *f, int *created,
                     unsigned interval) {
-  char dir[PATH_MAX];
+  char dir[PATH_MAX], ip[PATH_MAX];
   ua_gadget_func_dir(g, f->func, dir, sizeof(dir));
+  snprintf(ip, sizeof(ip), "%s/interval", dir);
+  /* No interval asked is the kernel's default, and only a fresh function has
+   * it: one a crash left behind holds the last start's value, and no value
+   * written means "default" everywhere (0 is our patch's default, but
+   * mainline's own attribute takes it as bInterval 0, which hosts drop) */
+  if (!interval && access(ip, F_OK) == 0)
+    ua_gadget_remove(g, f->func);
   *created = access(dir, F_OK) != 0;
   if (ua_gadget_add(g, f->func, dir, sizeof(dir)) < 0)
     return -1;
@@ -114,17 +121,13 @@ static int setup_fn(struct ua_gadget *g, const struct hid_fn *f, int *created,
   }
   /* The interrupt endpoint's bInterval is set by the kernel's f_hid, not the
    * report descriptor. Stock f_hid hardcodes it (1 ms at high speed); our patch
-   * adds a writable "interval" attribute, so write it when it is there and fall
-   * back with a note when it is not. Written even when none was asked (0, the
-   * patch's "keep the compiled-in default"): a directory a crash left behind
-   * still holds the last start's value. */
-  char ip[PATH_MAX];
-  snprintf(ip, sizeof(ip), "%s/interval", dir);
+   * and mainline (6.x) add a writable "interval" attribute, so write it when
+   * one was asked and it is there, and fall back with a note when it is not */
+  if (!interval)
+    return 0;
   if (access(ip, F_OK) != 0) {
-    if (interval)
-      ua_warn(
-          "This kernel has no f_hid 'interval' control; --interval needs the "
-          "USB Arsenal f_hid patch. Using the kernel default.");
+    ua_warn("This kernel has no f_hid 'interval' control; --interval needs the "
+            "USB Arsenal f_hid patch. Using the kernel default.");
   } else {
     char v[8];
     int n = snprintf(v, sizeof(v), "%u", interval);

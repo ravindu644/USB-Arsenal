@@ -191,8 +191,9 @@ The nodes are `0660 root` by default, or the profile's `hid_perm` and `hid_group
 and `--group` (a name, or a number on Android) widen that for as long as HID runs: a later
 bare `start` or `apply` keeps them, `hid stop` and `stop` drop them, and the access is
 re-applied each time the gadget re-plugs. Anyone who can write a node can type on the host.
-Without `--interval` the f_hid patch's `interval` attribute is written as `0` (the kernel's
-default), so a function a crash left behind does not keep an old one.
+Without `--interval` nothing is written to `interval`, and a function a crash left behind is
+made anew, so the kernel's own default applies. Writing `0` would not do: mainline's `interval`
+(6.x) takes it as a real bInterval of 0, which a host drops.
 
 `hid write NODE SIZE` is the writer a program keeps open on a node: it reads stdin in
 reports of `SIZE` bytes (1 to 64, short reads joined), and writes each to `NODE`, which must

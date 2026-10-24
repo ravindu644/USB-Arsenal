@@ -95,9 +95,6 @@ grep -q "$TMP/plain2.iso" $G/functions/mass_storage.ua/lun.0/file || die "apply 
 "$B" $A setup set storage_lun1= || die "setup set (clear)"
 "$B" $A storage apply || die "storage apply (eject)"
 [ -z "$(cat $G/functions/mass_storage.ua/lun.1/file)" ] || die "apply did not eject LUN 1"
-# Without --interval the patched f_hid's attribute is written as 0, the default
-IV=$G/functions/hid.ua_kbd/interval
-[ ! -e $IV ] || [ "$(cat $IV)" = 0 ] || die "a start without --interval left interval at $(cat $IV)"
 "$B" $A setup set hid_interval=3 || die "setup set hid_interval"
 "$B" $A status --json | grep -q '"hid":1}' || die "a changed interval should read as pending"
 "$B" $A hid apply || die "hid apply"
