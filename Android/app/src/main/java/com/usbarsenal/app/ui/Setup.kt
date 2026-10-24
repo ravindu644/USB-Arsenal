@@ -233,7 +233,7 @@ fun App() {
             }
             // In setup it leads on to Check; asked for at a launch, it goes back to Home
             Step.CONTROLLER -> ControllerScreen(setup, back = ::pop) { if (setup) push(Step.CHECK) else pop() }
-            Step.CHECK -> CheckScreen(back = ::pop) {
+            Step.CHECK -> CheckScreen(setup, back = ::pop) {
                 Setup.fresh()
                 push(Step.INSTALL)
             }
@@ -257,6 +257,8 @@ fun App() {
                 back = ::pop,
                 openIdentity = { push(Step.IDENTITY) },
                 openFonts = { push(Step.FONTS) },
+                // A fresh check each time: the kernel may have been updated since the last
+                openCheck = { Setup.check = null; push(Step.CHECK) },
                 fix = fix,
             )
             Step.FONTS -> FontsScreen(back = ::pop)
@@ -381,10 +383,11 @@ private const val CHECK = "usb-arsenal check"
  * The bundled binary checks the kernel before anything is installed, played as a root shell
  * like Backend's: a comment says what is happening, the command types, check runs the moment
  * it has typed, and its own report is the output. A result that was already there (Back from
- * Backend) shows at once; Recheck starts the session over.
+ * Backend) shows at once; Recheck starts the session over. Opened from Settings ([setup] false)
+ * it runs afresh each time, so its one key is Done, back to Settings.
  */
 @Composable
-private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
+private fun CheckScreen(setup: Boolean, back: () -> Unit, next: () -> Unit) {
     val context = LocalContext.current
     val haptics = LocalHaptics.current
     var run by remember { mutableIntStateOf(0) }
@@ -414,7 +417,7 @@ private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
         // A check that could not finish says why in the shell, under what it printed
         Setup.report = report + listOfNotNull(r.exceptionOrNull()?.let { it.message ?: "check failed" })
         Setup.check = r
-        r.getOrNull()?.let { Gadget.caps = it }
+        r.getOrNull()?.let { Gadget.caps = it; Cache.caps = it }
     }
     val caps = result?.getOrNull()
     // Done only once the report has typed, so the keys never run ahead of what the shell says
@@ -427,22 +430,26 @@ private fun CheckScreen(back: () -> Unit, next: () -> Unit) {
     Screen(
         footer = {
             KeyRow {
-                Key(
-                    "Recheck",
-                    Modifier.weight(1f).then(if (done && !canNext) Modifier.focusRequester(focus) else Modifier),
-                    enabled = done,
-                ) { run++ }
-                Key(
-                    "Next",
-                    Modifier.weight(1f).then(if (canNext) Modifier.focusRequester(focus) else Modifier),
-                    primary = true,
-                    enabled = canNext,
-                    onClick = next,
-                )
+                if (setup) {
+                    Key(
+                        "Recheck",
+                        Modifier.weight(1f).then(if (done && !canNext) Modifier.focusRequester(focus) else Modifier),
+                        enabled = done,
+                    ) { run++ }
+                    Key(
+                        "Next",
+                        Modifier.weight(1f).then(if (canNext) Modifier.focusRequester(focus) else Modifier),
+                        primary = true,
+                        enabled = canNext,
+                        onClick = next,
+                    )
+                } else {
+                    Key("Done", Modifier.weight(1f).focusRequester(focus), primary = true, enabled = done, onClick = back)
+                }
             }
         },
     ) {
-        Top { Steps(setupSteps() - 1, setupSteps()) }
+        Top { if (setup) Steps(setupSteps() - 1, setupSteps()) else BackKey(enabled = done || step < enter) }
         Title("Check")
         Shell("sh", if (!done) Led.BUSY else if (canNext) Led.ON else Led.OFF, session.shownAt(step), Modifier.fill(min = 200.dp))
     }

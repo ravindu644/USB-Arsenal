@@ -609,9 +609,11 @@ Tether's counters from `CONFIGURE`, HID's cards from `Interval`, Keys + mouse's 
 `CONFIGURE`).
 
 ### Settings
-In sections, a rule between each: `APP` (Motion, Haptics), `IDENTITY` (one row, `Profile` and the
-profile in force by its name as the VT323 value, `Built-in` with none, opening Identity),
-`BACKEND` (System path, Reinstall), `CREDITS` (Fonts) and `ABOUT` (App, Source), last. System
+In sections, a rule between each: `IDENTITY` (one row, `Profile` and the profile in force by its
+name as the VT323 value, `Built-in` with none, opening Identity), `BACKEND` (System path, then
+`Requirements` and `Reinstall`, full-width keys), `APP` (Motion, Haptics), `CREDITS` (Fonts) and
+`ABOUT` (App, Source), last. Requirements opens Check, run afresh, so a kernel update can be
+checked again; there its one key is `Done`, back to Settings, as nothing follows it. System
 path is held until read, and while no backend is installed. Under it one line is kept, so the
 sections below never move: a failed write's fault, or, once it is away from what it was first
 read as, the warning `applies from the next boot`. With more than
@@ -924,7 +926,7 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | Log | the output of every command the app ran this session, as it printed it; no tabs, no log file |
 | Function names in the bind screen | `mass_storage.ua`, `ncm.ua`, `hid.ua_kbd`, `hid.ua_mouse` |
 | Root screen | `id -u; su -v` (prints `3.3.0:KernelSU` or `<version>:MAGISK`), shown as a shell session; its `#` comments are the app's narration |
-| Check screen | `check --json`, run with the bundled binary before anything is installed |
+| Check screen | `check --json`, run with the bundled binary before anything is installed, and again from Settings' Requirements |
 | Controller step, Settings' Controller | `/sys/class/udc/*` and each one's `state`; the pick is `setup set udc=NAME`, which every command then uses |
 | Backend screen | the ported installer: the binary to `/data/local/USB-Arsenal/bin`, `module/` to `/data/adb/modules/usb-arsenal`, each step printing what it really printed, then `[+] Installed`, and `[!] Reboot to load the SELinux rule` only when the module had no rule before. `./install-backend.sh` is how the session shows it; there is no such script. The version is the app's own, never asked of root |
 | Home attention key | the installer's backend check: not installed, module missing, corrupted, update available (no root is the shade) |

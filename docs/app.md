@@ -65,7 +65,8 @@ stick moves the pointer; A and X click.
 
 **Settings**: motion and haptics, the identity profile ([identity.md](identity.md); profiles
 live in `/sdcard/USB-Arsenal/Profiles`), the controller on phones with several,
-`usb-arsenal` on PATH for root shells, and Reinstall.
+`usb-arsenal` on PATH for root shells, Requirements (the kernel check again, after a kernel
+update) and Reinstall.
 
 **What each screen sets up is the backend's.** The picks, the tether options, the HID interval
 and the controller live in `/data/local/USB-Arsenal/Gadget/setup.conf`, the same file
