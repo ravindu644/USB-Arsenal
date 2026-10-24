@@ -3,4 +3,4 @@ name=USB Arsenal
 version=v1.2.0
 versionCode=1200
 author=ravindu644
-description=Composite USB gadget daemon: bootable storage, USB tethering and HID from one cable.
+description=Composite USB gadget builder: bootable storage, USB tethering and HID from one cable.

@@ -10,15 +10,12 @@ against the kernel's `dummy_hcd` virtual controller, whose host side is the same
 `dummy_udc.*` is never picked by itself (every GKI phone has one), so the script names it with
 `--udc`; do the same when running commands against it by hand.
 
-What needs root but no controller (`identity`, `setup`, the daemon and its relay, `hid write`
-against a pty) runs without sudo in a user namespace, with a tmpfs over `/var/lib` so the
+What needs root but no controller (`identity`, `setup`, `hid write` against a pty) runs without sudo in a user namespace, with a tmpfs over `/var/lib` so the
 workspace is owned by the namespace's root:
 
 ```sh
 unshare -rm sh -c 'mount -t tmpfs none /var/lib && output/usb-arsenal setup show'
 ```
-
-The daemon needs `--gid 0` there, since gid 3460 is not mapped.
 
 ## On a phone
 

@@ -10,14 +10,12 @@
  * values, a bad value warned about and left at its default, atomic writes.
  *
  * One profile is active at a time: <workspace>/Gadget/identity.conf, a
- * symlink to the user's file, or a copy of it when the daemon could not see
- * the user's file (a container's private path).
+ * symlink to the user's file.
  */
 
 #include "usbarsenal.h"
 
 #define PROFILE_LEAF "identity.conf"
-#define COPY_TAG "# copied from "
 
 #define F(field) offsetof(struct ua_config, field)
 #define S(field) sizeof(((struct ua_config *)0)->field)
@@ -268,10 +266,10 @@ static void active_path(char *out, size_t size) {
   ua_ws_path("Gadget", PROFILE_LEAF, out, size);
 }
 
-/* The profile in force: the user's file through the symlink, or the copy.
+/* The profile in force: the user's file through the symlink.
  * No profile is fine and silent; one that has gone missing is reported. */
 void ua_config_active(struct ua_config *c) {
-  char p[PATH_MAX], target[PATH_MAX], first[PATH_MAX + 32];
+  char p[PATH_MAX], target[PATH_MAX];
   struct stat st;
   ua_config_defaults(c);
   active_path(p, sizeof(p));
@@ -288,18 +286,9 @@ void ua_config_active(struct ua_config *c) {
     safe_strncpy(c->source, target, sizeof(c->source));
     return;
   }
-  if (ua_table_load(p, keys, NKEYS, c) < 0)
-    return;
-  c->copied = 1;
-  safe_strncpy(c->source, p, sizeof(c->source));
-  FILE *f = fopen(p, "re");
-  if (f && fgets(first, sizeof(first), f) &&
-      !strncmp(first, COPY_TAG, strlen(COPY_TAG))) {
-    first[strcspn(first, "\n")] = '\0';
-    safe_strncpy(c->source, first + strlen(COPY_TAG), sizeof(c->source));
-  }
-  if (f)
-    fclose(f);
+  /* A plain file: an older version's copy of a profile */
+  if (ua_table_load(p, keys, NKEYS, c) == 0)
+    safe_strncpy(c->source, p, sizeof(c->source));
 }
 
 /* mkstemp next to path, write, fsync, rename, fsync the directory: the
@@ -358,21 +347,6 @@ static void template_body(FILE *f, const void *arg) {
   }
 }
 
-struct copy_arg {
-  int fd;
-  const char *from;
-};
-
-static void copy_body(FILE *f, const void *arg) {
-  const struct copy_arg *a = arg;
-  char buf[4096];
-  ssize_t n;
-  fprintf(f, COPY_TAG "%s\n", a->from);
-  lseek(a->fd, 0, SEEK_SET);
-  while ((n = read(a->fd, buf, sizeof(buf))) > 0)
-    fwrite(buf, 1, (size_t)n, f);
-}
-
 void ua_help_identity(void) {
   printf(
       "Usage: " UA_NAME " identity <action> [options] [FILE]\n\n"
@@ -390,15 +364,14 @@ void ua_help_identity(void) {
       "  unset          Back to the built-in defaults\n\n"
       "Options:\n"
       "      --force    Let generate overwrite FILE\n"
-      "      --json     show as JSON: {profile, copy, missing, keys}, or with\n"
+      "      --json     show as JSON: {profile, missing, keys}, or with\n"
       "                 FILEs an array of {path, errors, keys}. A derived\n"
       "                 value is \"\"; errors is -1 for a FILE that cannot\n"
       "                 be read.\n"
       "  -h, --help     Show this help\n\n"
-      "The active profile is a symlink at <workspace>/Gadget/identity.conf.\n"
-      "When the daemon cannot see FILE (a path private to a container), it\n"
-      "keeps a copy instead; run `identity set` again after editing it.\n"
-      "A profile that has gone missing is reported, and the built-in\n"
+      "The active profile is a symlink at <workspace>/Gadget/identity.conf,\n"
+      "so an edit of FILE counts from the next start. A profile that has\n"
+      "gone missing is reported, and the built-in\n"
       "defaults are used.\n\n"
       "Examples:\n"
       "  " UA_NAME " identity generate ~/pixel.conf\n"
@@ -420,60 +393,36 @@ static int replug_if_live(void) {
   return ua_gadget_commit(&g);
 }
 
-/* set: link to the user's file when we can see that very file, else keep a
- * copy. fd/from come from a client relay (its open file and the path it has
- * on its side); without them FILE is ours to resolve. */
-static int do_set(const char *file, int fd, const char *from) {
-  char real[PATH_MAX], active[PATH_MAX], tmp[PATH_MAX + 8], src[64];
+/* set: link to the user's file, by its canonical path */
+static int do_set(const char *file) {
+  char real[PATH_MAX], active[PATH_MAX], tmp[PATH_MAX + 8];
   struct ua_config c;
-  struct stat a, b;
-  int link_ok;
 
   if (geteuid() != 0) {
     ua_error("Must be run as root");
     return UA_EXIT_FAIL;
   }
-  if (fd >= 0) {
-    snprintf(src, sizeof(src), "/proc/self/fd/%d", fd);
-    safe_strncpy(real, from ? from : "", sizeof(real));
-    link_ok = from && fstat(fd, &a) == 0 && stat(from, &b) == 0 &&
-              a.st_dev == b.st_dev && a.st_ino == b.st_ino;
-  } else {
-    if (!realpath(file, real)) {
-      ua_error("%s: %s", file, strerror(errno));
-      return UA_EXIT_FAIL;
-    }
-    link_ok = 1;
+  if (!realpath(file, real)) {
+    ua_error("%s: %s", file, strerror(errno));
+    return UA_EXIT_FAIL;
   }
-
   ua_config_defaults(&c);
-  int bad = ua_table_load(fd >= 0 ? src : real, keys, NKEYS, &c);
+  int bad = ua_table_load(real, keys, NKEYS, &c);
   if (bad != 0) {
     ua_error(bad < 0 ? "Cannot read %s" : "%s has errors (see above); not set",
-             real[0] ? real : file);
+             real);
     return UA_EXIT_FAIL;
   }
 
   active_path(active, sizeof(active));
   snprintf(tmp, sizeof(tmp), "%s.new", active);
   unlink(tmp);
-  if (link_ok) {
-    if (symlink(real, tmp) < 0 || rename(tmp, active) < 0) {
-      ua_error("Cannot link %s: %s", active, strerror(errno));
-      unlink(tmp);
-      return UA_EXIT_FAIL;
-    }
-    ua_log("Active profile: %s", real);
-  } else {
-    struct copy_arg ca = {fd, real};
-    if (ua_write_atomic(active, 0644, copy_body, &ca) < 0) {
-      ua_error("Cannot write %s: %s", active, strerror(errno));
-      return UA_EXIT_FAIL;
-    }
-    ua_log("Active profile: a copy of %s (the daemon cannot see that path; "
-           "run `identity set` again after editing it)",
-           real);
+  if (symlink(real, tmp) < 0 || rename(tmp, active) < 0) {
+    ua_error("Cannot link %s: %s", active, strerror(errno));
+    unlink(tmp);
+    return UA_EXIT_FAIL;
   }
+  ua_log("Active profile: %s", real);
   return replug_if_live() < 0 ? UA_EXIT_FAIL : UA_EXIT_OK;
 }
 
@@ -516,7 +465,6 @@ static int do_show(char **files, int nfiles, int json) {
       first = 1;
       printf("{");
       ua_json_str("profile", c.source, &first);
-      printf(",\"copy\":%s", c.copied ? "true" : "false");
       ua_json_str("missing", missing, &first);
       printf(",");
       print_keys(&c, 1);
@@ -525,8 +473,7 @@ static int do_show(char **files, int nfiles, int json) {
       if (missing[0])
         printf("Profile: %s (missing)\n", missing);
       else
-        printf("Profile: %s%s\n", c.source[0] ? c.source : "built-in defaults",
-               c.copied ? " (copy)" : "");
+        printf("Profile: %s\n", c.source[0] ? c.source : "built-in defaults");
       print_keys(&c, 0);
     }
     return UA_EXIT_OK;
@@ -581,17 +528,14 @@ static int do_unset(void) {
 }
 
 int ua_cmd_identity(int argc, char **argv) {
-  enum { OPT_FORCE = 256, OPT_FD, OPT_PATH, OPT_JSON };
+  enum { OPT_FORCE = 256, OPT_JSON };
   static const struct option opts[] = {
       {"force", no_argument, NULL, OPT_FORCE},
       {"json", no_argument, NULL, OPT_JSON},
-      {"fd", required_argument, NULL, OPT_FD},     /* set by the relay */
-      {"path", required_argument, NULL, OPT_PATH}, /* set by the relay */
       {"help", no_argument, NULL, 'h'},
       {NULL, 0, NULL, 0},
   };
-  int force = 0, fd = -1, json = 0, c;
-  const char *from = NULL;
+  int force = 0, json = 0, c;
   if (argc < 2 || ua_want_help(argc, argv)) {
     ua_help_identity();
     return UA_EXIT_OK;
@@ -603,12 +547,6 @@ int ua_cmd_identity(int argc, char **argv) {
       break;
     case OPT_JSON:
       json = 1;
-      break;
-    case OPT_FD:
-      fd = atoi(optarg);
-      break;
-    case OPT_PATH:
-      from = optarg;
       break;
     case 'h':
       ua_help_identity();
@@ -630,8 +568,7 @@ int ua_cmd_identity(int argc, char **argv) {
   }
   if (!strcmp(action, "show"))
     return do_show(argv + optind + 1, nargs - 1, json);
-  int want =
-      !strcmp(action, "generate") || (!strcmp(action, "set") && fd < 0) ? 2 : 1;
+  int want = !strcmp(action, "generate") || !strcmp(action, "set") ? 2 : 1;
   if (nargs != want) {
     ua_usage_error("identity", nargs < want ? "Missing FILE"
                                             : "Too many "
@@ -653,7 +590,7 @@ int ua_cmd_identity(int argc, char **argv) {
     return UA_EXIT_OK;
   }
   if (!strcmp(action, "set"))
-    return do_set(file, fd, from);
+    return do_set(file);
   if (!strcmp(action, "unset"))
     return do_unset();
   ua_usage_error("identity", "Unknown action '%s'", action);

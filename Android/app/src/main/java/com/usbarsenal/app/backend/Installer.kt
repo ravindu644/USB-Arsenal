@@ -16,7 +16,7 @@ const val MODULE = "/data/adb/modules/usb-arsenal"
 // The PATH link Droidspaces' SymlinkInstaller makes: the binary stays in the workspace, and this
 // links to it only while the user has asked for it
 private const val MODULE_LINK = "$MODULE/system/bin/usb-arsenal"
-private val MODULE_FILES = listOf("module.prop", "service.sh", "uninstall.sh", "sepolicy.rule")
+private val MODULE_FILES = listOf("module.prop", "uninstall.sh", "sepolicy.rule")
 
 // The binary suffix for this device's primary ABI, or null when we ship none for it
 fun deviceArch(): String? = when (Build.SUPPORTED_ABIS.firstOrNull()) {
@@ -70,10 +70,9 @@ private suspend fun assetMd5(context: Context): String? {
 }
 
 /*
- * Droidspaces' install: the binary into the workspace, the boot module's four files beside it
- * (never customize.sh, which only the zip runs), each step reporting what it really printed. The daemon is not this install's business: Settings' daemon
- * mode writes the marker the boot module starts it on. The module zip's customize.sh lands the
- * same files.
+ * Droidspaces' install: the binary into the workspace, the module's three files beside it
+ * (never customize.sh, which only the zip runs), each step reporting what it really printed.
+ * The module zip's customize.sh lands the same files.
  */
 suspend fun installBackend(context: Context, log: (String) -> Unit): Boolean =
     withContext(NonCancellable) { installing.withLock { install(context, log) } }
@@ -107,9 +106,8 @@ private suspend fun install(context: Context, log: (String) -> Unit): Boolean {
 
         log("[+] Installing the binary in $WORKSPACE/bin")
         // Copied beside the target and renamed over it, so a hard reboot leaves the old binary or
-        // the new one, and a daemon still running the old one is never written to (Droidspaces'
-        // installFileDurably); it runs the new one from its next start. It also replaces the link
-        // an older install left here
+        // the new one, and a copy still running the old one is never written to (Droidspaces'
+        // installFileDurably). It also replaces the link an older install left here
         val binary = Root.change(
             """
             mkdir -p $WORKSPACE/bin &&
@@ -129,7 +127,7 @@ private suspend fun install(context: Context, log: (String) -> Unit): Boolean {
             { [ -L $MODULE_LINK ] || rm -rf $MODULE/system; } &&
             mkdir -p $MODULE &&
             for f in ${MODULE_FILES.joinToString(" ")}; do cp $s/${'$'}f $MODULE/${'$'}f || exit 1; done &&
-            chmod 755 $MODULE/service.sh $MODULE/uninstall.sh &&
+            chmod 755 $MODULE/uninstall.sh &&
             chmod 644 $MODULE/module.prop $MODULE/sepolicy.rule
             """.trimIndent(),
         )
@@ -170,17 +168,6 @@ suspend fun stageBinary(context: Context, dir: File = File(context.cacheDir, "ch
         }
     }
 }
-
-// Droidspaces' DaemonModeRepository: the boot module starts the daemon only while this reads 1
-private const val DAEMON_MODE = "$WORKSPACE/.daemon_mode"
-
-// Null when root cannot be asked; no file, or an empty one, is off
-suspend fun daemonMode(): Boolean? = Root.read("cat $DAEMON_MODE 2>/dev/null; true").takeIf { it.ok }?.let { it.out.firstOrNull()?.trim() == "1" }
-
-// Never a marker for a binary that is not there: the boot module would start nothing
-suspend fun setDaemonMode(on: Boolean) = Root.change(
-    (if (on) "test -x $UA || { echo '[-] Install the backend first' >&2; exit 1; }; " else "") + "echo ${if (on) 1 else 0} > $DAEMON_MODE",
-)
 
 // Droidspaces' SymlinkInstaller: usb-arsenal on PATH is the module's system/bin link to the workspace binary
 suspend fun pathLinked(): Boolean? = Root.read("test -L $MODULE_LINK && echo 1 || echo 0").takeIf { it.ok }?.out?.firstOrNull()?.let { it == "1" }

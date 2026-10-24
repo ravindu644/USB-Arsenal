@@ -64,10 +64,6 @@ object Cache {
         get() = text("udcs")?.let { parseUdcs(it.lines()) }
         set(v) = put("udcs", v?.joinToString("\n") { "${it.name} ${it.state}" })
 
-    var daemonMode: Boolean?
-        get() = text("daemon")?.toBooleanStrictOrNull()
-        set(v) = put("daemon", v?.toString())
-
     var pathLinked: Boolean?
         get() = text("linked")?.toBooleanStrictOrNull()
         set(v) = put("linked", v?.toString())

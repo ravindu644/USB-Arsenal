@@ -65,7 +65,9 @@ void ua_help_hid(void) {
       "          /dev/hidgN, without ever blocking: while the host is not\n"
       "          reading, only the newest unsent report is kept, and it goes\n"
       "          out as soon as the host reads again. Exits 0 at the end of\n"
-      "          stdin, non-zero when NODE fails (the host went away).\n\n"
+      "          stdin once the last report went out (a second at most),\n"
+      "          non-zero when it did not or NODE fails (the host went "
+      "away).\n\n"
       "Options:\n"
       "  -p, --perm MODE    Octal permissions for the nodes (default: 0660)\n"
       "  -g, --group GROUP  Group owning the nodes, name or GID (default:\n"
@@ -312,8 +314,9 @@ static int do_stop(void) {
 }
 
 /* Bring HID to its setup: nothing when it runs unchanged, a swap inside one
- * critical section when the interval changed (the gadget stays bound, the
- * other functions keep serving), a start when it is not running */
+ * critical section when the interval changed (one replug of the whole
+ * gadget, as configfs swaps a function only unbound, but the port never goes
+ * back to Android), a start when it is not running */
 static int do_apply(mode_t perm, gid_t gid, int perm_given, unsigned interval) {
   struct ua_setup s, r;
   struct ua_gadget g;
@@ -384,9 +387,10 @@ static int send_report(int fd, const unsigned char *r, size_t size) {
 /* hid write NODE SIZE: the reports on stdin, SIZE bytes each, onto NODE.
  * f_hid sends one report per write and, opened non-blocking, answers EAGAIN
  * while the host has not taken the one before. Nothing queues here: an unsent
- * report is replaced by the next, so the host always ends in the latest state
- * (a key release is never lost), and a host waking from sleep gets no backlog
- * replayed. No lock, no daemon: it only writes a node the caller can open. */
+ * report is replaced by the next, so while the writer runs the host ends in
+ * the latest state (a release is not lost behind a press), and a host waking
+ * from sleep gets no backlog replayed. No lock: it only writes a node the
+ * caller can open. */
 static int do_write(const char *node, const char *size_arg) {
   unsigned char rep[64], pend[64];
   struct stat st;
@@ -436,12 +440,19 @@ static int do_write(const char *node, const char *size_arg) {
     if (pending)
       pending = r == 0;
   }
-  /* stdin is done: one last try at the newest report, 100 ms at most */
+  /* stdin is done: the newest report still goes, a second at most. A host
+   * that takes nothing that long never gets it (a release among them), which
+   * is a failure, not a clean end */
   if (pending) {
     struct pollfd p = {fd, POLLOUT, 0};
-    poll(&p, 1, 100);
-    if (send_report(fd, pend, size) < 0)
+    poll(&p, 1, 1000);
+    if ((r = send_report(fd, pend, size)) < 0)
       goto fail;
+    if (r == 0) {
+      ua_error("%s: the host did not take the last report", node);
+      close(fd);
+      return UA_EXIT_FAIL;
+    }
   }
   close(fd);
   return UA_EXIT_OK;

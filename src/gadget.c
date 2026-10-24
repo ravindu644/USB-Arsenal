@@ -461,14 +461,13 @@ int ua_gadget_begin(struct ua_gadget *g) {
   safe_strncpy(h.udc, g->udc, sizeof(h.udc));
   ua_boot_marker(h.boot, sizeof(h.boot));
 
-  /* Android's gadget but no Android userspace: a container or chroot running
-   * us directly. Its workspace is not Android's, so a copy run from Android
-   * would keep a second hand-back record for the same controller. */
+  /* Android's gadget but no Android userspace: a container or chroot. Unless
+   * Android's workspace is bind-mounted over ours, a copy run from Android
+   * (the app) keeps a second hand-back record for the same controller */
   if (g->android_gadget && !is_android())
-    ua_warn("Running directly inside a container: the hand-back record is "
-            "in %s. Do not run USB Arsenal from Android at the same time; "
-            "bind-mount the daemon's Run/ to go through it instead (see "
-            "docs/containers.md).",
+    ua_warn("Running inside a container: the hand-back record is in %s. "
+            "Bind-mount /data/local/USB-Arsenal there, or do not run USB "
+            "Arsenal from Android at the same time (see docs/containers.md).",
             ua_workspace());
 
   char owner[256] = "";

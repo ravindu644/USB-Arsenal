@@ -140,3 +140,13 @@ are fixes of their own. Agent claims that turned out wrong are not listed here; 
 - [x] Install's FAILED footer swaps `Home` for `Copy log` and `Retry`, which DESIGN.md does not have (`ui/Setup.kt:504-517`). Add them to DESIGN.md or keep `Home` and put Retry in the shell. Kept, and recorded in DESIGN.md.
 - [x] The terminal's scrollbar sits 3 dp from the panel edge against 4 dp elsewhere (`ui/Parts.kt:703`). Decide and record in DESIGN.md. 4 dp, as lcd.css; recorded.
 - [x] The scrim tap dismisses a sheet though DESIGN.md names only Back or Cancel (`ui/Controls.kt`). Record it in DESIGN.md. Recorded in DESIGN.md.
+
+## The 2026-10-24 code review
+
+- [x] Any `usb-arsenal` group member could make the root daemon open any file: a saved setup path was reopened as root by a bare `storage start`. Fixed by removing the daemon: every copy acts as whoever runs it; containers run the binary directly ([containers.md](../containers.md)).
+- [x] `identity show FILE` was kept from the daemon only by the client's relay rule. Gone with the daemon.
+- [x] `copy_fn` copied the controller (`udc`) with every function, so `setup reset hid` or `setup revert storage` wiped or reverted the controller pick. Only a whole-setup copy takes it; `ua_running_take` copies it itself.
+- [x] `tether apply` and `hid apply` were described as keeping the gadget bound; configfs swaps a function only unbound, so each is one replug of the whole gadget. The comments, DESIGN.md, architecture.md and the Not applied sheet now say so.
+- [x] `hid write` exited 0 after dropping a report the host had not taken 100 ms after stdin ended. It now waits a second and exits 1 with a message if the host still has not.
+- [x] `tests/dummy_hcd.sh` reused a loaded `dummy_hcd` and whatever setup, running or identity state a failed run left. It now stops, reloads the module and resets them first.
+- [ ] `pullup()` and `wait_configured()` trust the UDC's `state` file, which dummy_udc never resets on a disconnect. Real controllers update it; low priority.
