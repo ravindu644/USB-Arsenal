@@ -207,7 +207,7 @@ private fun Seg(label: String, spoken: String?, on: Boolean, enabled: Boolean, m
         // Disabled is the .d50 shade behind the label; a ghost's dither would eat Silkscreen's strokes
         Box(
             Modifier.fillMaxWidth().heightIn(min = Lcd.touch).background(c.ground)
-                .then(if (enabled) Modifier else Modifier.dither(Dither.D50, c.ink))
+                .then(if (enabled) Modifier else Modifier.dither(Dither.D50, c))
                 .padding(horizontal = 4.dp),
             contentAlignment = Alignment.Center,
         ) { Text(label, LcdType.labelStrong, maxLines = 1) }
@@ -277,7 +277,7 @@ fun Dip(on: Boolean, onToggle: (Boolean) -> Unit, label: String, modifier: Modif
                 .size(68.dp, 32.dp)
                 .then(
                     when {
-                        !enabled -> Modifier.dither(Dither.D50, ink).border(Lcd.pixel, ink)
+                        !enabled -> Modifier.dither(Dither.D50, LocalLcd.current).border(Lcd.pixel, ink)
                         held -> Modifier.dashedRect(ink, -Lcd.pixel)
                         else -> Modifier.border(Lcd.pixel, ink)
                     },
@@ -382,6 +382,7 @@ private fun at(x: Float, width: Int, thumb: Float, range: IntRange) =
  * an inverted box with [pin] and [text] steps in over it, 2 frames on. Nothing behind takes focus
  * while it shows (SheetsOpen), and Back still leaves. No key: what it asks for is done elsewhere.
  * [light] is for a box over an inverted panel (Root's terminal), where an inverted one vanishes.
+ * On a negative theme the box is plain too: inverted, it would be the brightest thing on the screen.
  */
 @Composable
 fun Shade(text: String, light: Boolean = false, pin: @Composable () -> Unit) {
@@ -399,12 +400,12 @@ fun Shade(text: String, light: Boolean = false, pin: @Composable () -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
-            .dither(Dither.D50, ink)
+            .dither(Dither.D50, LocalLcd.current)
             .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } },
         contentAlignment = Alignment.Center,
     ) {
         if (shown) {
-            Inverted(!light) {
+            Inverted(!light && LocalLcd.current.lit) {
                 Column(
                     Modifier.padding(horizontal = 36.dp).background(LocalLcd.current.ground).padding(horizontal = 16.dp, vertical = 18.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -670,7 +671,7 @@ fun Sheet(
         }
     }
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().dither(Dither.D50, ink).pointerInput(Unit) { detectTapGestures { dismiss() } })
+        Box(Modifier.fillMaxSize().dither(Dither.D50, LocalLcd.current).pointerInput(Unit) { detectTapGestures { dismiss() } })
         /*
          * The sheet is drawn beside Screen, not in it, so Screen's keyboard padding never reaches
          * it: it pads for the keyboard itself (safeDrawing, the bars, cutout and keyboard as one,

@@ -309,7 +309,11 @@ How colour is used:
   else is inverted.
 - **Shade is dither, never grey.** 25% (`.d25`) for large panels like the trackpad, 50%
   (`.d50`) for a disabled state, and `.ghost` (amber dither knocked out of an ink sprite) for an
-  empty slot such as a missing disc.
+  empty slot such as a missing disc. On a negative theme the ink is the light colour, and a 50%
+  shade of it lights half the glass, so there every shade is 25%: dimmer, with labels still solid.
+  The box over a shade (`Enable HID on Home`, `Grant root`) is inverted on a lit theme and plain
+  on a negative one, where inverted would make it the brightest thing on the screen: the box is
+  always the dark colour of the pair.
 - **Themes never add a colour.** Night is the dark mode: the same pair, swapped. Nothing in a
   theme is a third value.
 
@@ -612,7 +616,7 @@ cards: `Keyboard and mouse` (the nodes while HID runs, `a trackpad and keys` bef
     are 44px tall. The box keeps its text across a trip to the Mouse tab.
   - Modifier keys latch, shown inverted, for the next key or character.
   - With HID off the page is drawn under a D50 dither that takes no touch or focus, and an
-    inverted box with Pin, `Enable HID on Home to use this page`, steps in over it; a kernel with
+    inverted box (plain on a negative theme) with Pin, `Enable HID on Home to use this page`, steps in over it; a kernel with
     no HID says `No HID in this kernel` instead.
 - **Quacky:** not built yet. The duck beside Pin and `Under construction`; never shaded.
 

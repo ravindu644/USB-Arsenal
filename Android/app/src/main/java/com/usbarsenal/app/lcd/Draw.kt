@@ -52,8 +52,9 @@ enum class Dither(internal val lit: List<Pair<Int, Int>>) {
     D50(listOf(1 to 0, 0 to 1)),
 }
 
-fun Modifier.dither(level: Dither, ink: Color) = drawWithCache {
-    val brush = pattern(2.dp, 2, ink, level.lit)
+// On a negative theme the ink is the light colour, so a 50% shade of it lights half the glass: there every shade is 25%
+fun Modifier.dither(level: Dither, colors: LcdColors) = drawWithCache {
+    val brush = pattern(2.dp, 2, colors.ink, (if (colors.lit) level else Dither.D25).lit)
     onDrawBehind { drawRect(brush) }
 }
 
