@@ -127,6 +127,23 @@ jobs:
         if-no-files-found: error
         retention-days: 14
 
+    # Every commit since the previous tag, as Droidspaces lists them: GitHub's
+    # own notes only list pull requests, and this repo has none. On a tag push
+    # HEAD is the tag, so the previous one is found from its parent; a manual
+    # run for a tag not made yet ends at HEAD
+    - name: Generate Changelog
+      if: env.TAG != ''
+      run: |
+        END=HEAD
+        git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null && END="${TAG}"
+        PREV=$(git describe --tags --abbrev=0 "${END}^" 2>/dev/null || true)
+        echo "Previous tag: ${PREV:-none}"
+        {
+          echo "## What's Changed"
+          git log --no-merges --pretty=format:"* %s (%h)" ${PREV:+${PREV}..}${END}
+          echo
+        } > dist/CHANGELOG.md
+
     - name: Publish GitHub Release
       if: env.TAG != ''
       uses: softprops/action-gh-release@v2
@@ -137,6 +154,7 @@ jobs:
           dist/*.zip
           dist/*.apk
           dist/SHA256SUMS
+        body_path: dist/CHANGELOG.md
         generate_release_notes: true
         draft: false
         prerelease: false
