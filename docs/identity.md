@@ -42,21 +42,17 @@ this phone runs, the profile is what it falls back to.
 ## Where the active profile lives
 
 `<workspace>/Gadget/identity.conf` (`/data/local/USB-Arsenal/...` on Android,
-`/var/lib/USB-Arsenal/...` on Linux) can be one of three things:
-- **A symlink to your file.** Edits take effect at the next bind, with no further `set`.
-- **A copy, when the daemon cannot see your file.** The usual case is a path private to
-  a container (`/root/pixel.conf`). The client relay sends the file open, and the daemon
-  checks whether the path it was given reaches the very same file (same device and
-  inode). If not, it keeps a copy with a `# copied from <path>` header. Run `set` again
-  after editing.
+`/var/lib/USB-Arsenal/...` on Linux) is one of two things:
+- **A symlink to your file,** by its canonical path. Edits take effect at the next bind,
+  with no further `set`. From a container, keep the file on a path Android sees too
+  ([containers.md](containers.md)).
 - **Missing.** The built-in defaults are used, silently.
 
 If the symlink's target disappears, every command says
 `Profile <path> is gone; using the built-in defaults` and carries on with the defaults.
 
 `identity set` while the gadget is live re-plugs it once, so the host sees the new IDs
-at once. `generate` never goes through the daemon: it only writes your own file and
-needs no root.
+at once. `generate` only writes your own file and needs no root.
 
 ## Things to know
 

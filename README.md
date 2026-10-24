@@ -26,8 +26,8 @@ Android when it is done, so ADB and MTP return.
 - **A keyboard and a mouse.** `/dev/hidg*` nodes that any program can write reports to.
 - **All of it at once.** Storage, network and HID share one cable and survive each other
   being added or removed, and a cable replug.
-- **Works from containers.** A root daemon on the Android side owns the port, so the same
-  commands run from a Droidspaces container, network included.
+- **Runs in containers.** A privileged Droidspaces container runs the binary itself (HID
+  from one was tested); tethering from one needs host networking.
 - **Your own identity.** Vendor and product IDs, names, serial number and defaults come
   from editable profile files.
 - **Fails safe.** The port is handed back after every command, error, crash or kill, and
@@ -54,7 +54,7 @@ Android when it is done, so ADB and MTP return.
 **Android**
 
 1. Build the module with `make module`, or take the zip from a release.
-2. Flash `usb-arsenal-v<version>.zip` in KernelSU and reboot. The daemon starts at boot.
+2. Flash `usb-arsenal-v<version>.zip` in KernelSU and reboot.
 3. Run `usb-arsenal check` in a root shell.
 
 Or install the app's APK from a release: it checks the kernel, installs the module and drives
@@ -90,7 +90,7 @@ devices, and got online through the tether. An MSI laptop booted Alpine Linux fr
 ISO on the S10 (UEFI, as a disk and as a CD-ROM) and a 4.9 GB Windows PE ISO in `dvd`
 mode. A 2012 Samsung laptop booted the same ISO as a DVD-ROM (patched kernel) in legacy
 BIOS and UEFI mode, but not in `dvd` mode, which needs newer firmware. The KernelSU module
-was flashed on the S10 and starts the daemon at boot. Other phones, kernels and hosts are
+was flashed on the S10. Other phones, kernels and hosts are
 untested; reports are welcome.
 
 ## Security
@@ -102,9 +102,6 @@ untested; reports are welcome.
 > Anyone who can write to a `/dev/hidg*` node can type on the computer it is plugged
 > into. The nodes are `0660 root` by default; widen that only on purpose.
 >
-> The daemon accepts root and members of the `usb-arsenal` group (gid 3460). Membership
-> means control of the USB port, so grant it like `sudo`.
->
 > A profile can borrow a real vendor's USB IDs. That is your choice to make.
 
 ## Documentation
@@ -115,7 +112,7 @@ untested; reports are welcome.
 | [The app](docs/app.md) | The Android app: setup, every screen, keys and TalkBack. |
 | [Usage](docs/usage.md) | Every command and option, with examples. |
 | [Tethering](docs/tethering.md) | NAT mode, OpenWrt gateway mode, the host side. |
-| [Containers](docs/containers.md) | The daemon, and using USB Arsenal from inside a container. |
+| [Containers](docs/containers.md) | Running USB Arsenal inside a container. |
 | [Identity profiles](docs/identity.md) | Vendor and product IDs, names, serial, defaults. |
 | [Kernel requirements](docs/kernel-requirements.md) | Kernel options, Samsung quirks, the patches in `kernel-patches/`. |
 | [Troubleshooting](docs/troubleshooting.md) | Symptoms, causes and fixes. |
@@ -128,7 +125,7 @@ Developer notes (architecture, kernel research, roadmap) live in
 - The Linux USB gadget subsystem: `f_mass_storage`, `f_hid`, `f_ncm`, `f_rndis` and
   configfs do the real work.
 - [Droidspaces](https://github.com/ravindu644/Droidspaces-OSS): the networking code
-  (netlink, DHCP, NAT) and the daemon design come from it, by the same author.
+  (netlink, DHCP, NAT) and the installer come from it, by the same author.
 - VirtualAP, whose managed mode inspired the OpenWrt gateway mode.
 - DriveDroid, which showed a phone can boot a PC.
 

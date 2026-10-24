@@ -11,10 +11,9 @@ controller, and always hands the controller back. Research behind the decisions 
 | File | Role |
 |---|---|
 | `src/include/usbarsenal.h` | the one header every `.c` includes |
-| `src/main.c` | global options, command table, help, the client relay |
+| `src/main.c` | global options, command table, help |
 | `src/gadget.c` | the gadget core: open, begin, add, commit, teardown, hand-back |
 | `src/check.c` | capability probing, `check`, the NCM safety rule |
-| `src/daemon.c` | the daemon, its authorisation, sessions, and the client half |
 | `src/config.c` | profiles: loader, `generate`, `set`, the active profile |
 | `src/utils.c` | logging, file and process helpers, workspace paths, fd passing |
 | `src/gadgets/{storage,hid,tether}.c` | the three commands |
@@ -131,48 +130,14 @@ modular builds count. The probe instance does not start with `ua`, so a probe le
 behind by a crash is never linked. `ua_check_requirements` is the quick gate before each
 action; `check` prints the full report.
 
-## The daemon (`src/daemon.c`)
-
-A port of Droidspaces' daemon with two deliberate differences:
-- **A filesystem socket, `Run/usb-arsenal.sock`,** instead of an abstract one, which
-  would be confined to one network namespace.
-- **Authorisation without Droidspaces' same-pid-namespace rule,** which would refuse
-  every container.
-
-Details:
-- **Authorisation** (fail closed): `SO_PEERCRED` uid 0; or gid 3460 as the primary
-  group, in `SO_PEERGROUPS`, or in `/proc/<pid>/status` `Groups:` when the peer shares
-  our pid namespace. The socket is `0660 root:<gid>` in a `0750` `Run/`, which is the
-  first gate.
-- **Wire format:**
-  - request: `u32 "UARS" | u16 version | u16 nfds | u32 argc`, then length-prefixed
-    argv, with up to 8 fds on the first `sendmsg`;
-  - replies: frames `u8 type | u32 len | payload` (OUT, ERR, EXIT).
-- **Sessions:** fork per client; the command executes the file at the daemon's own
-  path with `UA_NO_PROXY=1`, the passed fds as 3, 4, ..., and stdout/stderr piped back. A
-  client hangup sends the command SIGTERM.
-- **Updates:** before each `accept`, the daemon compares its binary on disk (device,
-  inode, mtime) with what it started from. When an update replaced it, the daemon
-  re-executes the new file with `daemon --foreground --gid N` and the listening socket
-  in `UA_DAEMON_FD`, so the pid, the pid file and the socket stay, the waiting client is
-  served by the new code, and sessions already running finish in their own processes.
-  A failed exec logs and keeps the old one running.
-- **Relay rules** (`src/main.c` `relay()`):
-  - everything is relayed except `daemon`, `help`, `version`, `--help`,
-    `identity generate`, `identity show FILE` (it reads the caller's files with the
-    caller's permissions, never as root) and `hid write` (its stdin is the report
-    stream, and it only writes a node the caller can open);
-  - `storage start` opens IMAGE on the client side and swaps it for `--fd=3`; the kernel
-    is given `/proc/self/fd/N`, which follows the magic link to the real file;
-  - `identity set` sends its file the same way plus `--path=<client realpath>`, and the
-    daemon symlinks when `fstat(fd)` matches `stat(path)`, else keeps a copy.
-- **SIGTERM** removes the socket and pid file but leaves the gadget alone.
-
 ## The workspace
 
 `/data/local/USB-Arsenal` on Android, `/var/lib/USB-Arsenal` on Linux and in containers,
-laid out like Droidspaces' (`Logs`, `Pids`, `Net`, plus `Gadget`, `Run`, `bin`).
-- `ua_ws_path()` creates directories only as root; a non-root client only gets paths.
+laid out like Droidspaces' (`Logs`, `Pids`, `Net`, plus `Gadget`, `bin`). There is no
+daemon: every copy of the binary acts itself, as root. A container runs it directly and
+shares Android's hand-back record by bind-mounting the Android workspace over its own
+([containers.md](../containers.md)).
+- `ua_ws_path()` creates directories only as root; a non-root caller only gets paths.
 - The workspace must be root-owned and not group- or world-writable, or the command
   refuses before anything changes hands.
 
@@ -184,7 +149,7 @@ Droidspaces' `config.c`:
 - a bad value or an unknown key warns and keeps the default;
 - writes are atomic (mkstemp, fsync, rename, then fsync the directory).
 
-The active profile is `Gadget/identity.conf` (a symlink, or a copy). `build_skeleton()`
+The active profile is `Gadget/identity.conf`, a symlink to the user's file. `build_skeleton()`
 reads it on every take and rebind; the commands read their defaults from it.
 
 ## The setup (`src/setup.c`)
@@ -201,8 +166,9 @@ What each function starts with, in the same format and through the same table ma
 
 `<function> apply` brings what runs to the setup, deciding against the kernel: storage LUN by
 LUN (eject, in-place swap under the lock, one commit for the rest, nothing for a LUN already
-serving its file), tether and HID by swapping the function inside the caller's `begin` so the
-gadget stays bound (`ua_gadget_leave` closes that section when `do_start` committed).
+serving its file), tether and HID by swapping the function inside the caller's `begin`, one replug of the whole
+gadget that never hands the port back to Android (`ua_crit_leave` closes that section when
+`do_start` committed).
 `status --json` prints `boot_id`, `setup`, `running` and `pending` (linked and the two differ,
 empty values compared as the profile's). The Android app is one client of this: it edits the
 setup, starts bare, applies, and shows `pending`; it keeps no setup of its own

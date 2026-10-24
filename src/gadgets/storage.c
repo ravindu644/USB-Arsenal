@@ -379,11 +379,10 @@ struct load {
 };
 
 /* Everything about one image before the gadget changes: its mode, the size
- * checks, SELinux, the loop device behind dvd. The image arrives open, either
- * opened here or by a client in another mount namespace and passed over the
- * daemon socket. The kernel gets /proc/self/fd/N: it follows the magic link
- * to the real file wherever that lives, so no path ever has to mean the same
- * thing on both sides. name is only for messages. */
+ * checks, SELinux, the loop device behind dvd. The image arrives open. The
+ * kernel gets /proc/self/fd/N: it follows the magic link to the file we
+ * opened, wherever that lives in our mount namespace. name is only for
+ * messages. */
 static int prepare(struct load *l, int android_gadget) {
   snprintf(l->path, sizeof(l->path), "/proc/self/fd/%d", l->fd);
   /* lseek works for block devices too, no BLKGETSIZE64 needed */
@@ -521,7 +520,7 @@ static int do_start(struct load *ls, int n) {
     if (prepare(&ls[i], g.android_gadget) < 0)
       return UA_EXIT_FAIL;
 
-  char fdir[PATH_MAX], ldir[UA_MAX_FDS][PATH_MAX];
+  char fdir[PATH_MAX], ldir[UA_LUNS][PATH_MAX];
   if (ua_gadget_func_dir(&g, FUNC, fdir, sizeof(fdir)) < 0)
     return UA_EXIT_FAIL;
   for (int i = 0; i < n; i++)
@@ -570,7 +569,7 @@ static int do_start(struct load *ls, int n) {
     ua_debug("host holds the medium lock, rebinding to release it");
   }
 
-  int existed = access(fdir, F_OK) == 0, made[UA_MAX_FDS] = {0}, unlinked = 0,
+  int existed = access(fdir, F_OK) == 0, made[UA_LUNS] = {0}, unlinked = 0,
       reached = 0, failed = -1;
   if (ua_gadget_begin(&g) < 0)
     return UA_EXIT_FAIL;
@@ -752,7 +751,7 @@ static int start_loads(struct load *ls, int n) {
 static int do_apply(void) {
   struct ua_setup s, r;
   struct ua_gadget g;
-  struct load ls[UA_MAX_FDS];
+  struct load ls[UA_LUNS];
   char fdir[PATH_MAX];
   int any = 0, n = 0;
   unsigned eject = 0;
@@ -785,7 +784,7 @@ static int do_apply(void) {
     }
     if (loaded && !strcmp(s.lun[lun], r.lun[lun]))
       continue;
-    if (n == UA_MAX_FDS)
+    if (n == UA_LUNS)
       break;
     if (load_from_spec(&ls[n], lun, s.lun[lun]) < 0) {
       close_loads(ls, n);
@@ -862,45 +861,40 @@ void ua_status_storage(const struct ua_gadget *g, int json) {
   }
 }
 
-/* One IMAGE of a start: argv index, or fd when the client relay opened it */
+/* One IMAGE of a start: its argv index */
 struct simg {
-  int lun, fd, image, mode_set;
+  int lun, image, mode_set;
   enum mode mode;
 };
 
 struct sargs {
   int lun, nimg; /* lun: the last --lun, for eject */
   const char *action;
-  struct simg img[UA_MAX_FDS];
+  struct simg img[UA_LUNS];
 };
 
 /* An IMAGE takes the --lun and --mode given since the one before it; with
  * no --lun, the LUN after that one's */
-static int add_image(struct sargs *a, int fd, int image, int *lun, int *mode,
-                     int report) {
-  if (a->nimg == UA_MAX_FDS) {
-    if (report)
-      ua_usage_error("storage", "start takes at most %d IMAGEs", UA_MAX_FDS);
+static int add_image(struct sargs *a, int image, int *lun, int *mode) {
+  if (a->nimg == UA_LUNS) {
+    ua_usage_error("storage", "start takes at most %d IMAGEs", UA_LUNS);
     return -1;
   }
   struct simg *m = &a->img[a->nimg];
   m->lun = *lun >= 0 ? *lun : a->nimg ? a->img[a->nimg - 1].lun + 1 : 0;
   m->mode_set = *mode >= 0;
   m->mode = m->mode_set ? (enum mode) * mode : MODE_AUTO;
-  m->fd = fd;
   m->image = image;
   for (int i = 0; i < a->nimg; i++)
     if (a->img[i].lun == m->lun) {
-      if (report)
-        ua_usage_error("storage", "LUN %d is given twice", m->lun);
+      ua_usage_error("storage", "LUN %d is given twice", m->lun);
       return -1;
     }
   if (m->lun > 7) {
     /* only reachable without --lun: it was checked when it was read */
-    if (report)
-      ua_usage_error("storage",
-                     "%s would take LUN 8, past the last; give it a --lun",
-                     image ? "an IMAGE" : "a descriptor");
+    ua_usage_error("storage",
+                   "An IMAGE would take LUN 8, past the last; give it a "
+                   "--lun");
     return -1;
   }
   a->nimg++;
@@ -910,30 +904,24 @@ static int add_image(struct sargs *a, int fd, int image, int *lun, int *mode,
 
 /* A word that is not an option: the action first, then IMAGEs, which only
  * start takes */
-static int operand(struct sargs *a, int i, char **argv, int *lun, int *mode,
-                   int report) {
+static int operand(struct sargs *a, int i, char **argv, int *lun, int *mode) {
   if (!a->action[0]) {
     a->action = argv[i];
     return 0;
   }
   if (strcmp(a->action, "start")) {
-    if (report)
-      ua_usage_error("storage", "Too many arguments");
+    ua_usage_error("storage", "Too many arguments");
     return -1;
   }
-  return add_image(a, -1, i, lun, mode, report);
+  return add_image(a, i, lun, mode);
 }
 
-/* Shared by the command and by a client about to relay it: the client has
- * to find each IMAGE to open it on its side. report=0 parses silently and
- * leaves the complaining to the daemon. Returns -1 to go on, else an exit
- * code. Options are read in order ("-" in the option string), so each one
- * applies to the IMAGE after it. */
-static int parse(int argc, char **argv, struct sargs *a, int report) {
+/* Returns -1 to go on, else an exit code. Options are read in order ("-" in
+ * the option string), so each one applies to the IMAGE after it. */
+static int parse(int argc, char **argv, struct sargs *a) {
   static const struct option opts[] = {
       {"mode", required_argument, NULL, 'm'},
       {"lun", required_argument, NULL, 'l'},
-      {"fd", required_argument, NULL, 'F'}, /* set by the client relay */
       {"help", no_argument, NULL, 'h'},
       {NULL, 0, NULL, 0},
   };
@@ -945,60 +933,42 @@ static int parse(int argc, char **argv, struct sargs *a, int report) {
   while ((c = getopt_long(argc, argv, "-:m:l:h", opts, NULL)) != -1) {
     switch (c) {
     case 1: /* not an option: the action, then IMAGEs */
-      if (operand(a, optind - 1, argv, &lun, &mode, report) < 0)
+      if (operand(a, optind - 1, argv, &lun, &mode) < 0)
         return UA_EXIT_USAGE;
       break;
     case 'm':
       if ((mode = mode_of(optarg)) < 0) {
-        if (report)
-          ua_usage_error("storage", "Unknown mode '%s'", optarg);
+        ua_usage_error("storage", "Unknown mode '%s'", optarg);
         return UA_EXIT_USAGE;
       }
       break;
     case 'l': {
       long v = strtol(optarg, &end, 10);
       if (*optarg == '\0' || *end || v < 0 || v > 7) {
-        if (report)
-          ua_usage_error("storage", "--lun takes a number from 0 to 7");
+        ua_usage_error("storage", "--lun takes a number from 0 to 7");
         return UA_EXIT_USAGE;
       }
       lun = a->lun = (int)v;
       break;
     }
-    case 'F': {
-      long v = strtol(optarg, &end, 10);
-      if (*optarg == '\0' || *end || v < 3) {
-        if (report)
-          ua_usage_error("storage", "--fd takes an open descriptor number");
-        return UA_EXIT_USAGE;
-      }
-      if (add_image(a, (int)v, 0, &lun, &mode, report) < 0)
-        return UA_EXIT_USAGE;
-      break;
-    }
     case 'h':
-      if (report)
-        ua_help_storage();
+      ua_help_storage();
       return UA_EXIT_OK;
     case ':':
-      if (report)
-        ua_usage_error("storage", "Option '%s' needs a value",
-                       argv[optind - 1]);
+      ua_usage_error("storage", "Option '%s' needs a value", argv[optind - 1]);
       return UA_EXIT_USAGE;
     default:
-      if (report)
-        ua_usage_error("storage", "Bad option '%s'", ua_bad_option(argv));
+      ua_usage_error("storage", "Bad option '%s'", ua_bad_option(argv));
       return UA_EXIT_USAGE;
     }
   }
   /* getopt stops at "--"; what follows it is operands, so an IMAGE whose
    * name starts with '-' can still be given */
   for (; optind < argc; optind++)
-    if (operand(a, optind, argv, &lun, &mode, report) < 0)
+    if (operand(a, optind, argv, &lun, &mode) < 0)
       return UA_EXIT_USAGE;
   if (!a->action[0]) {
-    if (report)
-      ua_usage_error("storage", "Missing action");
+    ua_usage_error("storage", "Missing action");
     return UA_EXIT_USAGE;
   }
   if (strcmp(a->action, "start"))
@@ -1007,9 +977,8 @@ static int parse(int argc, char **argv, struct sargs *a, int report) {
    * always were; with several there is no telling which they meant */
   if (a->nimg && (lun >= 0 || mode >= 0)) {
     if (a->nimg > 1) {
-      if (report)
-        ua_usage_error("storage",
-                       "--lun and --mode go before the IMAGE they are for");
+      ua_usage_error("storage",
+                     "--lun and --mode go before the IMAGE they are for");
       return UA_EXIT_USAGE;
     }
     if (lun >= 0)
@@ -1024,43 +993,20 @@ static int open_image(const char *image, enum mode mode) {
   return open(image, (mode == MODE_RW ? O_RDWR : O_RDONLY) | O_CLOEXEC);
 }
 
-/* For the client relay: open every IMAGE here, in the caller's namespaces and
- * with the caller's own permissions, and say where each sits in argv so the
- * relay can swap it for --fd. Returns how many, 0 when there is nothing to
- * open, -1 when one cannot be opened (already reported). */
-int ua_storage_client_fds(int argc, char **argv, int *fds, int *idx) {
-  struct sargs a;
-  if (parse(argc, argv, &a, 0) != -1 || strcmp(a.action, "start"))
-    return 0;
-  int n = 0;
-  for (int i = 0; i < a.nimg; i++) {
-    if (!a.img[i].image)
-      continue;
-    if ((fds[n] = open_image(argv[a.img[i].image], a.img[i].mode)) < 0) {
-      ua_error("%s: %s", argv[a.img[i].image], strerror(errno));
-      while (n--)
-        close(fds[n]);
-      return -1;
-    }
-    idx[n++] = a.img[i].image;
-  }
-  return n;
-}
-
 int ua_cmd_storage(int argc, char **argv) {
   struct sargs a;
   if (argc < 2 || ua_want_help(argc, argv)) {
     ua_help_storage();
     return UA_EXIT_OK;
   }
-  int r = parse(argc, argv, &a, 1);
+  int r = parse(argc, argv, &a);
   if (r != -1)
     return r;
   struct ua_config cfg;
   ua_config_active(&cfg);
   safe_strncpy(inquiry, cfg.storage_inquiry, sizeof(inquiry));
   if (!strcmp(a.action, "start")) {
-    struct load ls[UA_MAX_FDS];
+    struct load ls[UA_LUNS];
     struct ua_setup s;
     int n = 0;
     ua_setup_load(&s);
@@ -1086,33 +1032,24 @@ int ua_cmd_storage(int argc, char **argv) {
     for (; n < a.nimg; n++) {
       struct simg *m = &a.img[n];
       struct load *l = &ls[n];
+      const char *image = argv[m->image];
       l->lun = m->lun;
       l->loop_fd = -1;
-      l->name[0] = '\0';
       l->mode = m->mode;
       if (!m->mode_set && mode_of(cfg.storage_mode) >= 0)
         l->mode = (enum mode)mode_of(cfg.storage_mode);
-      if ((l->fd = m->fd) >= 0) {
-        char link[64];
-        snprintf(link, sizeof(link), "/proc/self/fd/%d", l->fd);
-        ssize_t len = readlink(link, l->name, sizeof(l->name) - 1);
-        l->name[len > 0 ? len : 0] = '\0';
-      } else {
-        const char *image = argv[m->image];
-        if ((l->fd = open_image(image, l->mode)) < 0) {
-          ua_error("%s: %s", image, strerror(errno));
-          close_loads(ls, n);
-          return UA_EXIT_FAIL;
-        }
-        if (!realpath(image, l->name))
-          safe_strncpy(l->name, image, sizeof(l->name));
+      if ((l->fd = open_image(image, l->mode)) < 0) {
+        ua_error("%s: %s", image, strerror(errno));
+        close_loads(ls, n);
+        return UA_EXIT_FAIL;
       }
-      if (!l->name[0])
-        safe_strncpy(l->name, "image", sizeof(l->name));
+      if (!realpath(image, l->name))
+        safe_strncpy(l->name, image, sizeof(l->name));
     }
     /* The IMAGEs given become the setup, as Droidspaces saves a start's
-     * flags, so a later bare start needs nothing. A name the daemon cannot
-     * open later (a container's private path) fails that start, naming it. */
+     * flags, so a later bare start needs nothing. A name that means nothing
+     * where a later start runs (a container's private path, started again
+     * from Android) fails that start, naming it. */
     for (int i = 0; i < n; i++)
       snprintf(s.lun[ls[i].lun], UA_LUN_SPEC, "%s:%s", mode_names[ls[i].mode],
                ls[i].name);

@@ -37,8 +37,6 @@ static const struct command commands[] = {
      "Profiles: IDs, strings, serial, defaults"},
     {"setup", ua_cmd_setup, ua_help_setup,
      "What each function starts with, shared with the app"},
-    {"daemon", ua_cmd_daemon, ua_help_daemon,
-     "Run the root daemon other copies relay to"},
     {"help", cmd_help, NULL, "Show help for a command"},
     {"version", cmd_version, NULL, "Print the version"},
 };
@@ -269,107 +267,8 @@ static int cmd_help(int argc, char **argv) {
 static int cmd_version(int argc, char **argv) {
   (void)argc;
   (void)argv;
-  char sock[PATH_MAX];
-  ua_socket_path(sock, sizeof(sock));
   printf(UA_NAME " " UA_VERSION "\n");
-  int d = ua_daemon_probe();
-  if (d == 1)
-    printf("mode: daemon (%s)\n", sock);
-  else if (d < 0)
-    printf("mode: daemon, but no access (%s; join the usb-arsenal group, "
-           "gid %d)\n",
-           sock, UA_DAEMON_GID);
-  else
-    printf("mode: direct\n");
   return UA_EXIT_OK;
-}
-
-/* Hand the whole command line to the daemon, globals included, so it runs
- * exactly as typed but on the host. -2 means no daemon: run it here. For
- * `storage start`, each IMAGE is opened on this side and travels as its own
- * fd, the first as 3, the next as 4; identity set's FILE travels as 3. */
-static int relay(int argc, char **argv, int cmd_index) {
-  char *av[128];
-  int fds[UA_MAX_FDS], idx[UA_MAX_FDS], nfds = 0, n = 0;
-  if (argc > 120)
-    return -2;
-  if (!strcmp(argv[cmd_index], "storage")) {
-    /* parse() may permute; a scratch copy keeps argv intact */
-    char *scratch[128];
-    int sc = argc - cmd_index;
-    for (int i = 0; i < sc; i++)
-      scratch[i] = argv[cmd_index + i];
-    scratch[sc] = NULL;
-    if ((nfds = ua_storage_client_fds(sc, scratch, fds, idx)) < 0)
-      return UA_EXIT_FAIL;
-    /* find each of those same strings in the original argv */
-    for (int k = 0; k < nfds; k++) {
-      const char *image = scratch[idx[k]];
-      for (int i = cmd_index + 1; i < argc; i++)
-        if (argv[i] == image)
-          idx[k] = i;
-    }
-  }
-  /* identity: generate only writes the user's own file, so it never goes to
-   * the daemon. set sends its FILE open, plus the path it has here: the
-   * daemon links to it when it sees that very file, else keeps a copy. */
-  static char pathopt[PATH_MAX + 8];
-  if (!strcmp(argv[cmd_index], "identity")) {
-    int act = 0;
-    for (int i = cmd_index + 1; i < argc; i++)
-      if (act && !strcmp(argv[act], "show") &&
-          (argv[i][0] != '-' || !strcmp(argv[i], "--")))
-        /* show FILE reads the caller's own files, with the caller's own
-         * permissions; the daemon would read them as root */
-        return -2;
-      else if (argv[i][0] != '-') {
-        if (!act) {
-          act = i;
-          if (!strcmp(argv[i], "generate"))
-            return -2;
-          if (strcmp(argv[i], "set") && strcmp(argv[i], "show"))
-            break;
-        } else {
-          char real[PATH_MAX];
-          if ((fds[0] = open(argv[i], O_RDONLY | O_CLOEXEC)) < 0 ||
-              !realpath(argv[i], real)) {
-            ua_error("%s: %s", argv[i], strerror(errno));
-            if (fds[0] >= 0)
-              close(fds[0]);
-            return UA_EXIT_FAIL;
-          }
-          snprintf(pathopt, sizeof(pathopt), "--path=%s", real);
-          idx[0] = i;
-          nfds = 1;
-          break;
-        }
-      }
-  }
-  static char fdopt[UA_MAX_FDS][16];
-  int dashes = 0;
-  for (int i = 1; i < argc; i++) {
-    /* Each IMAGE becomes an --fd option, which a "--" before it would turn
-     * back into an operand; with the names gone, the "--" has no job left */
-    if (nfds && !dashes && i > cmd_index && !strcmp(argv[i], "--") &&
-        !strcmp(argv[cmd_index], "storage")) {
-      dashes = 1;
-      continue;
-    }
-    av[n] = argv[i];
-    for (int k = 0; k < nfds; k++)
-      if (i == idx[k]) {
-        snprintf(fdopt[k], sizeof(fdopt[k]), "--fd=%d", 3 + k);
-        av[n] = fdopt[k];
-      }
-    n++;
-  }
-  if (pathopt[0])
-    av[n++] = pathopt;
-  av[n] = NULL;
-  int r = ua_client_run(n, av, fds, nfds);
-  while (nfds--)
-    close(fds[nfds]);
-  return r;
 }
 
 int main(int argc, char **argv) {
@@ -381,8 +280,8 @@ int main(int argc, char **argv) {
       {NULL, 0, NULL, 0},
   };
   int c;
-  /* A pipe (the app, the daemon's session) would get stdout in one block at
-   * exit, after every warning on stderr; per line they stay in order */
+  /* A pipe (the app) would get stdout in one block at exit, after every
+   * warning on stderr; per line they stay in order */
   setvbuf(stdout, NULL, _IOLBF, 0);
   /* Taking the controller from Android stops adbd, and with it the shell
    * this may have been started from. Finishing the handoff matters more than
@@ -434,19 +333,6 @@ int main(int argc, char **argv) {
   /* Commands parse their own argv with getopt_long; optind 0 makes both
    * glibc and musl forget the "+" mode used above */
   int cmd_index = optind;
-  const char *no_proxy = getenv("UA_NO_PROXY");
-  /* hid write only writes a node the caller can open itself, and its stdin
-   * is the report stream, which the daemon does not carry */
-  int hid_write = cmd->fn == ua_cmd_hid && cmd_index + 1 < argc &&
-                  !strcmp(argv[cmd_index + 1], "write");
-  if (cmd->fn != ua_cmd_daemon && cmd->fn != cmd_help &&
-      cmd->fn != cmd_version && !hid_write &&
-      !(no_proxy && no_proxy[0] == '1') &&
-      !ua_want_help(argc - cmd_index, argv + cmd_index)) {
-    int r = relay(argc, argv, cmd_index);
-    if (r != -2)
-      return r;
-  }
   int sub_argc = argc - cmd_index;
   char **sub_argv = argv + cmd_index;
   optind = 0;

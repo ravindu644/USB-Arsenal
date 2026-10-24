@@ -25,7 +25,7 @@ suspend fun profilesDir(): String = Root.read("mkdir -p $PROFILES && readlink -f
 // The folder's profiles, each read by config.c's own loader (`identity show --json FILE...`), so
 // the app reads a file exactly as `identity set` will; the JSON as printed, which the cache keeps
 suspend fun listProfilesJson(dir: String): String? = Root.read(
-    "set -- ${shellQuote(dir)}/*.conf; [ -e \"\$1\" ] || { echo '[]'; exit 0; }; ${read()} identity show --json \"\$@\"",
+    "set -- ${shellQuote(dir)}/*.conf; [ -e \"\$1\" ] || { echo '[]'; exit 0; }; $UA identity show --json \"\$@\"",
 ).out.joinToString("\n").takeIf { it.startsWith("[") }
 
 // "0x18d1" as config.c prints an id: four lower-case hex digits, as the screen shows it

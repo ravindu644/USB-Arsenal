@@ -111,7 +111,7 @@ abstract class BackendAssets : DefaultTask() {
         fs.sync {
             from(dir.resolve("bin")) { into("binaries") }
             from(dir) {
-                include("module.prop", "service.sh", "uninstall.sh", "sepolicy.rule")
+                include("module.prop", "uninstall.sh", "sepolicy.rule")
                 into("boot-module")
             }
             into(outputDir)

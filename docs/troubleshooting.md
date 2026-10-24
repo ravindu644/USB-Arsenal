@@ -72,10 +72,6 @@ A stock Samsung 4.x kernel: its configfs cannot build a gadget next to Android's
 `mkdir` fails as ENOMEM, and nothing is changed). USB Arsenal does not run on it;
 patches `0001` and `0002` in `kernel-patches/4.14/` fix the kernel. See [kernel-requirements.md](kernel-requirements.md).
 
-**"Permission denied" talking to the daemon.**
-Only root and the `usb-arsenal` group (gid 3460) may use it. `usb-arsenal version` says
-"no access" in that case. See [containers.md](containers.md#who-may-use-it).
-
 **"More than one USB device controller".**
 Pick one with `--udc NAME`; `check` lists them. `dummy_udc.*`, which every GKI kernel builds in,
 is never counted, so it does not cause this.
@@ -92,6 +88,6 @@ restored it.
 
 **Profile changes do not show on the host.**
 `identity set` re-plugs the gadget only if it is live; otherwise the change applies at the
-next start. If the active profile is a copy (made from a container path the daemon cannot
-see), run `identity set` again after editing the original. `identity show` says which it
-is.
+next start. An edit of the active profile counts from the next start too, since the active
+profile is a link to your file. `identity show` names a linked file that has gone
+(`(missing)`): the host then gets the built-in defaults.

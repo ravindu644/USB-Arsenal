@@ -584,3 +584,18 @@ Tick a box only when the item is merged and verified as described in its phase.
   a16xm (5.15): the app's own backend update, storage and HID bound with `speed` high-speed,
   `hid write` from the app's Keys + mouse (one writer per node, gone with HID), `identity show
   --json` both forms, a clean `stop` with no kernel warnings.
+- 2026-10-24: the daemon is gone. A code review found that it let any member of the
+  `usb-arsenal` group make root open any file, since a saved setup path was reopened by name,
+  as root. Now every copy of the binary acts as whoever runs it. The module keeps
+  `sepolicy.rule`, the uninstall hand-back and the PATH link. Settings lost Daemon mode, and
+  Log shows only the commands' output, with no tabs. `identity set` always links (no copy mode). A
+  container runs the binary directly, sharing Android's workspace by bind mount, and tethers
+  from Droidspaces' host networking mode. The same round fixed `setup reset FN` wiping the
+  controller pick, `hid write` exiting 0 with a report undelivered, and the dummy_hcd test
+  reusing a failed run's state.
+- 2026-10-25: a saved `tether_net=0` stopped a gateway start before it handed `usb0` over;
+  a gateway now always gets its network side, and `--no-net` forgets a saved gateway. Back a
+  beat after an edit skipped the Not applied sheet, since a sent edit stopped counting before a
+  status read said it was pending; the edit now counts until that read lands. Tether's settings
+  are back under Configure. `tests/device.sh` drives the whole app on a phone: 63 checks pass
+  on the a16xm, the OpenWrt gateway included.
