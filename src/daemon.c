@@ -43,6 +43,7 @@
 #define MSG_EXIT ((uint8_t)0xFF)
 
 static char self_path[PATH_MAX];
+static struct stat self_st; /* self_path as it was when we started */
 static gid_t ua_gid = UA_DAEMON_GID;
 
 void ua_socket_path(char *out, size_t size) {
@@ -377,14 +378,56 @@ static int daemon_stop(void) {
   return UA_EXIT_OK;
 }
 
+/* An update replaces bin/usb-arsenal while we run. Every session already
+ * executes the file at self_path, but this loop (the relay rules, the wire
+ * format) would stay the old one until a reboot, and the installer never
+ * restarts a daemon. So between connections the daemon re-executes the new
+ * file, handing its listening socket over: the client that woke us is served
+ * by the new one, and sessions already running finish in their own
+ * processes. */
+static int binary_changed(void) {
+  struct stat st;
+  return self_path[0] && stat(self_path, &st) == 0 && S_ISREG(st.st_mode) &&
+         (st.st_dev != self_st.st_dev || st.st_ino != self_st.st_ino ||
+          st.st_mtime != self_st.st_mtime);
+}
+
+static void reexec(int srv) {
+  char fdv[16], gidv[16];
+  char *argv[] = {UA_NAME, "daemon", "--foreground", "--gid", gidv, NULL};
+  snprintf(fdv, sizeof(fdv), "%d", srv);
+  snprintf(gidv, sizeof(gidv), "%u", (unsigned)ua_gid);
+  ua_log("%s changed on disk; re-executing it", self_path);
+  fcntl(srv, F_SETFD, 0);
+  setenv("UA_DAEMON_FD", fdv, 1);
+  execv(self_path, argv);
+  ua_warn("Cannot re-execute %s: %s; this one goes on", self_path,
+          strerror(errno));
+  unsetenv("UA_DAEMON_FD");
+  fcntl(srv, F_SETFD, FD_CLOEXEC);
+  stat(self_path, &self_st); /* do not retry on every connection */
+}
+
 static int daemon_run(int foreground) {
-  if (ua_daemon_probe() == 1) {
+  /* Set by reexec(): the socket is already ours and listening */
+  const char *inherited = getenv("UA_DAEMON_FD");
+  int srv = inherited ? atoi(inherited) : -1, on = 0;
+  socklen_t olen = sizeof(on);
+  unsetenv("UA_DAEMON_FD");
+  if (srv >= 0 &&
+      (getsockopt(srv, SOL_SOCKET, SO_ACCEPTCONN, &on, &olen) < 0 || !on))
+    srv = -1; /* not a listening socket: bind our own */
+  if (srv >= 0)
+    fcntl(srv, F_SETFD, FD_CLOEXEC);
+  else if (ua_daemon_probe() == 1) {
     ua_error("The daemon is already running");
     return UA_EXIT_FAIL;
   }
   daemonize(foreground);
   ssize_t n = readlink("/proc/self/exe", self_path, sizeof(self_path) - 1);
   self_path[n > 0 ? n : 0] = '\0';
+  if (stat(self_path, &self_st) < 0)
+    self_path[0] = '\0';
 
   char pidf[PATH_MAX], run[PATH_MAX];
   pid_path(pidf, sizeof(pidf));
@@ -397,23 +440,25 @@ static int daemon_run(int foreground) {
 
   struct sockaddr_un addr;
   socklen_t alen = make_addr(&addr);
-  /* Run/ is what containers bind-mount: traversable by the group only */
-  safe_strncpy(run, addr.sun_path, sizeof(run));
-  *strrchr(run, '/') = '\0';
-  mkdir(run, 0750);
-  if (chown(run, 0, ua_gid) < 0 || chmod(run, 0750) < 0)
-    ua_warn("Cannot set the owner of %s: %s", run, strerror(errno));
-  /* The probe above found nobody listening, so a socket file left here is
-   * from a daemon that died */
-  unlink(addr.sun_path);
+  if (srv < 0) {
+    /* Run/ is what containers bind-mount: traversable by the group only */
+    safe_strncpy(run, addr.sun_path, sizeof(run));
+    *strrchr(run, '/') = '\0';
+    mkdir(run, 0750);
+    if (chown(run, 0, ua_gid) < 0 || chmod(run, 0750) < 0)
+      ua_warn("Cannot set the owner of %s: %s", run, strerror(errno));
+    /* The probe above found nobody listening, so a socket file left here is
+     * from a daemon that died */
+    unlink(addr.sun_path);
 
-  int srv = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
-  if (srv < 0 || bind(srv, (struct sockaddr *)&addr, alen) < 0 ||
-      chown(addr.sun_path, 0, ua_gid) < 0 || chmod(addr.sun_path, 0660) < 0 ||
-      listen(srv, SOMAXCONN) < 0) {
-    ua_error("Cannot listen on %s: %s", addr.sun_path, strerror(errno));
-    unlink(pidf);
-    return UA_EXIT_FAIL;
+    srv = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (srv < 0 || bind(srv, (struct sockaddr *)&addr, alen) < 0 ||
+        chown(addr.sun_path, 0, ua_gid) < 0 || chmod(addr.sun_path, 0660) < 0 ||
+        listen(srv, SOMAXCONN) < 0) {
+      ua_error("Cannot listen on %s: %s", addr.sun_path, strerror(errno));
+      unlink(pidf);
+      return UA_EXIT_FAIL;
+    }
   }
 
   sigset_t set;
@@ -438,6 +483,8 @@ static int daemon_run(int foreground) {
     }
     if (pfd2[1].revents & POLLIN)
       break;
+    if (binary_changed())
+      reexec(srv);
     int conn = accept4(srv, NULL, NULL, SOCK_CLOEXEC);
     if (conn < 0)
       continue;

@@ -124,7 +124,9 @@ static void help_status(void) {
          "Show the backend, the controller and its state, and every live\n"
          "function: storage images, HID nodes, the tether interface.\n\n"
          "  --json    One JSON object instead: version, udc, udc_state,\n"
-         "            bound, the storage, hid and tether parts, then\n"
+         "            bound, speed (the UDC's current_speed, such as\n"
+         "            high-speed; empty while not bound), the storage,\n"
+         "            hid and tether parts, then\n"
          "            boot_id, setup, running and pending (see `setup`).\n"
          "            Every key is always present.\n\n"
          "Examples:\n"
@@ -157,10 +159,16 @@ static int cmd_status(int argc, char **argv) {
   if (ua_gadget_open(&g) < 0)
     return UA_EXIT_FAIL;
 
-  char p[PATH_MAX], state[64] = "unknown";
+  char p[PATH_MAX], state[64] = "unknown", speed[32] = "";
   snprintf(p, sizeof(p), "/sys/class/udc/%s/state", g.udc);
   read_file(p, state, sizeof(state));
   int live = ua_gadget_live(&g);
+  /* What the host negotiated with our gadget; the UDC says UNKNOWN while
+   * nothing runs, and Android's speed is none of our business */
+  snprintf(p, sizeof(p), "/sys/class/udc/%s/current_speed", g.udc);
+  if (!live || read_file(p, speed, sizeof(speed)) <= 0 ||
+      !strcmp(speed, "UNKNOWN"))
+    speed[0] = '\0';
   if (json) {
     /* Every key always present, so a reader never has to guess */
     int first = 1;
@@ -169,6 +177,7 @@ static int cmd_status(int argc, char **argv) {
     ua_json_str("udc", g.udc, &first);
     ua_json_str("udc_state", state, &first);
     ua_json_int("bound", live, &first);
+    ua_json_str("speed", speed, &first);
     printf(",\"storage\":[");
     if (live)
       ua_status_storage(&g, 1);
@@ -185,7 +194,8 @@ static int cmd_status(int argc, char **argv) {
     printf("}\n");
     return UA_EXIT_OK;
   }
-  printf("Controller: %s (%s)\n", g.udc, state);
+  printf("Controller: %s (%s%s%s)\n", g.udc, state, speed[0] ? ", " : "",
+         speed);
   if (!live) {
     printf("Gadget:     not active\n");
     return UA_EXIT_OK;
@@ -307,12 +317,17 @@ static int relay(int argc, char **argv, int cmd_index) {
   if (!strcmp(argv[cmd_index], "identity")) {
     int act = 0;
     for (int i = cmd_index + 1; i < argc; i++)
-      if (argv[i][0] != '-') {
+      if (act && !strcmp(argv[act], "show") &&
+          (argv[i][0] != '-' || !strcmp(argv[i], "--")))
+        /* show FILE reads the caller's own files, with the caller's own
+         * permissions; the daemon would read them as root */
+        return -2;
+      else if (argv[i][0] != '-') {
         if (!act) {
           act = i;
           if (!strcmp(argv[i], "generate"))
             return -2;
-          if (strcmp(argv[i], "set"))
+          if (strcmp(argv[i], "set") && strcmp(argv[i], "show"))
             break;
         } else {
           char real[PATH_MAX];
@@ -366,6 +381,9 @@ int main(int argc, char **argv) {
       {NULL, 0, NULL, 0},
   };
   int c;
+  /* A pipe (the app, the daemon's session) would get stdout in one block at
+   * exit, after every warning on stderr; per line they stay in order */
+  setvbuf(stdout, NULL, _IOLBF, 0);
   /* Taking the controller from Android stops adbd, and with it the shell
    * this may have been started from. Finishing the handoff matters more than
    * a dead terminal, so neither the hangup nor a write to it may kill us. */
@@ -417,8 +435,13 @@ int main(int argc, char **argv) {
    * glibc and musl forget the "+" mode used above */
   int cmd_index = optind;
   const char *no_proxy = getenv("UA_NO_PROXY");
+  /* hid write only writes a node the caller can open itself, and its stdin
+   * is the report stream, which the daemon does not carry */
+  int hid_write = cmd->fn == ua_cmd_hid && cmd_index + 1 < argc &&
+                  !strcmp(argv[cmd_index + 1], "write");
   if (cmd->fn != ua_cmd_daemon && cmd->fn != cmd_help &&
-      cmd->fn != cmd_version && !(no_proxy && no_proxy[0] == '1') &&
+      cmd->fn != cmd_version && !hid_write &&
+      !(no_proxy && no_proxy[0] == '1') &&
       !ua_want_help(argc - cmd_index, argv + cmd_index)) {
     int r = relay(argc, argv, cmd_index);
     if (r != -2)

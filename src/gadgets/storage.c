@@ -130,12 +130,19 @@ static int lun_eject(const char *ldir) {
   return write_attr(ldir, "file", "\n");
 }
 
-/* Eject, retrying while EBUSY for up to [tries] tenths of a second: a host's
- * medium lock lets go once the kernel has processed a disconnect */
-static int lun_eject_wait(const char *ldir, int tries) {
+/* Tenths of a second that every eject wait of one command shares. A host's
+ * medium lock lets go once the kernel has processed the disconnect, which
+ * every LUN sees at once; eight locked LUNs waiting in turn would add up past
+ * the app's 30 s timeout, whose kill lands mid-commit. */
+static int eject_budget = 50;
+
+/* Eject, retrying while EBUSY as long as the budget lasts */
+static int lun_eject_wait(const char *ldir) {
   int r;
-  while ((r = lun_eject(ldir)) < 0 && errno == EBUSY && --tries > 0)
+  while ((r = lun_eject(ldir)) < 0 && errno == EBUSY && eject_budget > 0) {
+    eject_budget--;
     usleep(100000);
+  }
   return r;
 }
 
@@ -143,30 +150,60 @@ static int lun_eject_wait(const char *ldir, int tries) {
  * the medium goes out first and the new one goes in last. */
 /* Returns -EBUSY, quietly, when the host holds a medium lock: the caller
  * decides whether a rebind (which clears it) is the way out. With wait set
- * the eject is retried while the kernel processes that disconnect. */
+ * the eject is retried while the kernel processes that disconnect. A medium
+ * the kernel refuses puts the old one back. */
 static int lun_load(const char *ldir, const char *path, enum mode mode,
                     int wait) {
-  char cur[PATH_MAX] = "", file[PATH_MAX + 2];
+  char cur[PATH_MAX] = "", file[PATH_MAX + 2], ro[4] = "", cdrom[4] = "";
+  int old = -1, r = -1;
   snprintf(file, sizeof(file), "%s/file", ldir);
-  if (read_file(file, cur, sizeof(cur)) > 0 &&
-      lun_eject_wait(ldir, wait ? 30 : 1) < 0)
-    return errno == EBUSY ? -EBUSY : -1;
+  if (read_file(file, cur, sizeof(cur)) > 0) {
+    /* Held across the swap so it can go back in: a dvd LUN's loop device
+     * would detach on eject (autoclear) with nobody else holding it */
+    snprintf(file, sizeof(file), "%s/ro", ldir);
+    read_file(file, ro, sizeof(ro));
+    snprintf(file, sizeof(file), "%s/cdrom", ldir);
+    read_file(file, cdrom, sizeof(cdrom));
+    old = open(cur, (ro[0] == '0' ? O_RDWR : O_RDONLY) | O_CLOEXEC);
+    if ((wait ? lun_eject_wait(ldir) : lun_eject(ldir)) < 0) {
+      r = errno == EBUSY ? -EBUSY : -1;
+      goto out;
+    }
+  }
   write_attr(ldir, "removable", "1");
   if (inquiry[0])
     write_attr(ldir, "inquiry_string", inquiry);
   if (write_attr(ldir, "cdrom", mode == MODE_CDROM ? "1" : "0") < 0 &&
       mode == MODE_CDROM) {
     ua_error("This kernel cannot emulate a CD-ROM (no lun.N/cdrom)");
-    return -1;
+    goto restore;
   }
   write_attr(ldir, "ro", mode == MODE_RW ? "0" : "1");
 
   snprintf(file, sizeof(file), "%s\n", path);
   if (write_attr(ldir, "file", file) < 0) {
     ua_error("The kernel refused %s: %s", path, strerror(errno));
-    return -1;
+    goto restore;
   }
-  return 0;
+  r = 0;
+  goto out;
+
+restore:
+  if (old >= 0) {
+    if (cdrom[0])
+      write_attr(ldir, "cdrom", cdrom);
+    if (ro[0])
+      write_attr(ldir, "ro", ro);
+    snprintf(file, sizeof(file), "/proc/self/fd/%d\n", old);
+    if (write_attr(ldir, "file", file) == 0)
+      ua_log("Put %s back", cur);
+    else
+      ua_warn("Cannot put %s back: %s", cur, strerror(errno));
+  }
+out:
+  if (old >= 0)
+    close(old);
+  return r;
 }
 
 /* f_mass_storage reads the image from a kernel thread, so SELinux checks the
@@ -534,7 +571,7 @@ static int do_start(struct load *ls, int n) {
   }
 
   int existed = access(fdir, F_OK) == 0, made[UA_MAX_FDS] = {0}, unlinked = 0,
-      reached = 0;
+      reached = 0, failed = -1;
   if (ua_gadget_begin(&g) < 0)
     return UA_EXIT_FAIL;
   if (ua_gadget_add(&g, FUNC, fdir, sizeof(fdir)) < 0)
@@ -556,6 +593,7 @@ static int do_start(struct load *ls, int n) {
     if (r < 0) {
       if (r == -EBUSY)
         ua_error("The host still holds the drive locked (EBUSY)");
+      failed = i;
       goto fail;
     }
   }
@@ -571,24 +609,28 @@ static int do_start(struct load *ls, int n) {
   return UA_EXIT_OK;
 
 fail:
-  /* Leave nothing of this call behind: LUNs it made go, LUNs it reached
+  /* Leave nothing of this call behind: LUNs it made go, LUNs it loaded
    * that were already there come back empty, their old medium having gone
-   * out first. Other LUNs and functions stay live. */
+   * out first. The one that failed kept or got back its old medium
+   * (lun_load). Other LUNs and functions stay live. */
   if (!existed)
     ua_gadget_remove(&g, FUNC);
   else
     for (int i = reached - 1; i >= 0; i--)
       if (made[i])
         rmdir(ldir[i]);
-      else
+      else if (i != failed)
         lun_eject(ldir[i]);
   ua_gadget_commit(&g);
   return UA_EXIT_FAIL;
 }
 
-static int do_eject(int lun) {
+/* Eject every LUN in mask. Those a host has locked all go out in one
+ * rebind, not one each. */
+static int do_eject(unsigned mask) {
   struct ua_gadget g;
   char fdir[PATH_MAX], ldir[PATH_MAX];
+  unsigned locked = 0;
   if (ua_gadget_open(&g) < 0 || ua_check_requirements(&g, 0) < 0)
     return UA_EXIT_FAIL;
   if (!ua_gadget_has(&g, FUNC)) {
@@ -596,36 +638,49 @@ static int do_eject(int lun) {
     return UA_EXIT_FAIL;
   }
   ua_gadget_func_dir(&g, FUNC, fdir, sizeof(fdir));
-  if (lun_dir(fdir, lun, ldir, sizeof(ldir)) < 0) {
-    ua_error("Eject failed: %s", strerror(errno));
-    return UA_EXIT_FAIL;
+  for (int lun = 0; lun < UA_LUNS; lun++) {
+    if (!(mask & (1u << lun)))
+      continue;
+    if (lun_dir(fdir, lun, ldir, sizeof(ldir)) < 0) {
+      ua_error("Eject failed: %s", strerror(errno));
+      return UA_EXIT_FAIL;
+    }
+    if (lun_eject(ldir) == 0) {
+      ua_log("LUN %d ejected", lun);
+      ua_running_clear_lun(lun);
+      continue;
+    }
+    /* Before 6.6 there is no forced_eject, and a host's medium lock makes
+     * the eject EBUSY. The disconnect of a rebind releases it, as start does
+     * for a swap; the eject is retried while the kernel processes it. */
+    if (errno != EBUSY || !ua_gadget_live(&g)) {
+      ua_error("Eject failed: %s", strerror(errno));
+      return UA_EXIT_FAIL;
+    }
+    locked |= 1u << lun;
   }
-  if (lun_eject(ldir) == 0) {
-    ua_log("LUN %d ejected", lun);
-    ua_running_clear_lun(lun);
+  if (!locked)
     return UA_EXIT_OK;
-  }
-  /* Before 6.6 there is no forced_eject, and a host's medium lock makes the
-   * eject EBUSY. The disconnect of a rebind releases it, as start does for a
-   * swap; the eject is retried while the kernel processes it. */
-  if (errno != EBUSY || !ua_gadget_live(&g)) {
-    ua_error("Eject failed: %s", strerror(errno));
-    return UA_EXIT_FAIL;
-  }
   ua_debug("host holds the medium lock, rebinding to release it");
   if (ua_gadget_begin(&g) < 0)
     return UA_EXIT_FAIL;
-  int r = lun_eject_wait(ldir, 30), err = errno;
+  int ret = UA_EXIT_OK;
+  for (int lun = 0; lun < UA_LUNS; lun++) {
+    if (!(locked & (1u << lun)) || lun_dir(fdir, lun, ldir, sizeof(ldir)) < 0)
+      continue;
+    if (lun_eject_wait(ldir) < 0) {
+      ua_error("Eject of LUN %d failed: %s%s", lun, strerror(errno),
+               errno == EBUSY ? " (the host still holds the drive locked)"
+                              : "");
+      ret = UA_EXIT_FAIL;
+      continue;
+    }
+    ua_log("LUN %d ejected (the host had it locked, so it was replugged)", lun);
+    ua_running_clear_lun(lun);
+  }
   if (ua_gadget_commit(&g) < 0)
     return UA_EXIT_FAIL;
-  if (r < 0) {
-    ua_error("Eject failed: %s%s", strerror(err),
-             err == EBUSY ? " (the host still holds the drive locked)" : "");
-    return UA_EXIT_FAIL;
-  }
-  ua_log("LUN %d ejected (the host had it locked, so it was replugged)", lun);
-  ua_running_clear_lun(lun);
-  return UA_EXIT_OK;
+  return ret;
 }
 
 static int do_stop(void) {
@@ -699,7 +754,8 @@ static int do_apply(void) {
   struct ua_gadget g;
   struct load ls[UA_MAX_FDS];
   char fdir[PATH_MAX];
-  int any = 0, n = 0, ejected = 0;
+  int any = 0, n = 0;
+  unsigned eject = 0;
   ua_setup_load(&s);
   ua_running_load(&r);
   for (int lun = 0; lun < UA_LUNS; lun++)
@@ -721,10 +777,9 @@ static int do_apply(void) {
                  (snprintf(p, sizeof(p), "%s/file", ldir),
                   read_file(p, file, sizeof(file)) > 0);
     if (!s.lun[lun][0]) {
-      if (loaded && do_eject(lun) != UA_EXIT_OK)
-        return UA_EXIT_FAIL;
-      ejected |= loaded;
-      if (r.lun[lun][0])
+      if (loaded)
+        eject |= 1u << lun;
+      else if (r.lun[lun][0])
         ua_running_clear_lun(lun);
       continue;
     }
@@ -738,9 +793,14 @@ static int do_apply(void) {
     }
     n++;
   }
+  /* Every image opened first, so a missing one fails before any eject */
+  if (eject && do_eject(eject) != UA_EXIT_OK) {
+    close_loads(ls, n);
+    return UA_EXIT_FAIL;
+  }
   if (!n) {
-    ua_log(ejected ? "Storage now runs its setup"
-                   : "Storage already runs its setup");
+    ua_log(eject ? "Storage now runs its setup"
+                 : "Storage already runs its setup");
     return UA_EXIT_OK;
   }
   return start_loads(ls, n);
@@ -1065,7 +1125,7 @@ int ua_cmd_storage(int argc, char **argv) {
   if (!strcmp(a.action, "apply"))
     return do_apply();
   if (!strcmp(a.action, "eject")) {
-    r = do_eject(a.lun);
+    r = do_eject(1u << a.lun);
     if (r == UA_EXIT_OK) {
       /* An eject from the command line is an edit of the setup too */
       struct ua_setup s;

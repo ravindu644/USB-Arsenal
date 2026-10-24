@@ -111,6 +111,10 @@ int ua_valid_dns(const char *v) {
   char tmp[128], *save = NULL;
   struct in_addr a;
   int n = 0;
+  /* As long as the key's own field holds, or a list cut short here would be
+   * checked and then stored shorter than it was given */
+  if (strlen(v) >= sizeof(tmp))
+    return 0;
   safe_strncpy(tmp, v, sizeof(tmp));
   for (char *t = strtok_r(tmp, ",", &save); t; t = strtok_r(NULL, ",", &save))
     if (inet_pton(AF_INET, trim(t), &a) != 1)
@@ -380,10 +384,16 @@ void ua_help_identity(void) {
       "                 Refuses an existing file unless --force.\n"
       "  set FILE       Make FILE the active profile. A live gadget re-plugs\n"
       "                 once so the host sees the change now.\n"
-      "  show           Print the values in force and where they come from\n"
+      "  show [FILE...] Print the values in force and where they come from;\n"
+      "                 with FILEs, what each one gives, read as set reads\n"
+      "                 it (a bad line keeps that key's default)\n"
       "  unset          Back to the built-in defaults\n\n"
       "Options:\n"
       "      --force    Let generate overwrite FILE\n"
+      "      --json     show as JSON: {profile, copy, missing, keys}, or with\n"
+      "                 FILEs an array of {path, errors, keys}. A derived\n"
+      "                 value is \"\"; errors is -1 for a FILE that cannot\n"
+      "                 be read.\n"
       "  -h, --help     Show this help\n\n"
       "The active profile is a symlink at <workspace>/Gadget/identity.conf.\n"
       "When the daemon cannot see FILE (a path private to a container), it\n"
@@ -394,6 +404,7 @@ void ua_help_identity(void) {
       "  " UA_NAME " identity generate ~/pixel.conf\n"
       "  " UA_NAME " identity set ~/pixel.conf\n"
       "  " UA_NAME " identity show\n"
+      "  " UA_NAME " identity show --json ~/pixel.conf ~/other.conf\n"
       "  " UA_NAME " identity unset\n");
 }
 
@@ -466,17 +477,92 @@ static int do_set(const char *file, int fd, const char *from) {
   return replug_if_live() < 0 ? UA_EXIT_FAIL : UA_EXIT_OK;
 }
 
-static int do_show(void) {
-  struct ua_config c;
-  ua_config_active(&c);
-  printf("Profile: %s%s\n", c.source[0] ? c.source : "built-in defaults",
-         c.copied ? " (copy)" : "");
+/* c's values as ua_key_get prints them: a "keys" JSON object, or a line each
+ */
+static void print_keys(const struct ua_config *c, int json) {
+  int first = 1;
+  if (json)
+    printf("\"keys\":{");
   for (size_t i = 0; i < NKEYS; i++) {
     char v[160];
-    ua_key_get(&c, &keys[i], v, sizeof(v));
-    printf("  %-16s %s\n", keys[i].name, v[0] ? v : "(derived)");
+    ua_key_get(c, &keys[i], v, sizeof(v));
+    if (json)
+      ua_json_str(keys[i].name, v, &first);
+    else
+      printf("  %-16s %s\n", keys[i].name, v[0] ? v : "(derived)");
   }
-  return UA_EXIT_OK;
+  if (json)
+    printf("}");
+}
+
+/* The profile in force, or with FILEs each of them read through the same
+ * loader `set` uses, so a client never has to parse a profile itself */
+static int do_show(char **files, int nfiles, int json) {
+  struct ua_config c;
+  int ret = UA_EXIT_OK, first;
+  if (!nfiles) {
+    char p[PATH_MAX], missing[PATH_MAX] = "";
+    struct stat st;
+    ua_config_active(&c);
+    /* A link to a deleted file reads as the built-in defaults; say which file
+     * went, or the user only sees their profile silently ignored */
+    active_path(p, sizeof(p));
+    if (lstat(p, &st) == 0 && S_ISLNK(st.st_mode) && stat(p, &st) < 0 &&
+        errno == ENOENT) {
+      ssize_t n = readlink(p, missing, sizeof(missing) - 1);
+      missing[n > 0 ? n : 0] = '\0';
+    }
+    if (json) {
+      first = 1;
+      printf("{");
+      ua_json_str("profile", c.source, &first);
+      printf(",\"copy\":%s", c.copied ? "true" : "false");
+      ua_json_str("missing", missing, &first);
+      printf(",");
+      print_keys(&c, 1);
+      printf("}\n");
+    } else {
+      if (missing[0])
+        printf("Profile: %s (missing)\n", missing);
+      else
+        printf("Profile: %s%s\n", c.source[0] ? c.source : "built-in defaults",
+               c.copied ? " (copy)" : "");
+      print_keys(&c, 0);
+    }
+    return UA_EXIT_OK;
+  }
+  if (json)
+    printf("[");
+  for (int i = 0; i < nfiles; i++) {
+    char real[PATH_MAX];
+    ua_config_defaults(&c);
+    int bad = ua_table_load(files[i], keys, NKEYS, &c);
+    if (bad < 0) {
+      ua_error("Cannot read %s: %s", files[i], strerror(errno));
+      ret = UA_EXIT_FAIL;
+    }
+    if (!realpath(files[i], real))
+      safe_strncpy(real, files[i], sizeof(real));
+    if (json) {
+      first = 1;
+      printf("%s{", i ? "," : "");
+      ua_json_str("path", real, &first);
+      ua_json_int("errors", bad, &first);
+      printf(",");
+      print_keys(&c, 1);
+      printf("}");
+    } else {
+      printf("Profile: %s", real);
+      if (bad)
+        printf(bad < 0 ? " (cannot read)" : " (%d bad lines, defaults kept)",
+               bad);
+      printf("\n");
+      print_keys(&c, 0);
+    }
+  }
+  if (json)
+    printf("]\n");
+  return ret;
 }
 
 static int do_unset(void) {
@@ -495,15 +581,16 @@ static int do_unset(void) {
 }
 
 int ua_cmd_identity(int argc, char **argv) {
-  enum { OPT_FORCE = 256, OPT_FD, OPT_PATH };
+  enum { OPT_FORCE = 256, OPT_FD, OPT_PATH, OPT_JSON };
   static const struct option opts[] = {
       {"force", no_argument, NULL, OPT_FORCE},
+      {"json", no_argument, NULL, OPT_JSON},
       {"fd", required_argument, NULL, OPT_FD},     /* set by the relay */
       {"path", required_argument, NULL, OPT_PATH}, /* set by the relay */
       {"help", no_argument, NULL, 'h'},
       {NULL, 0, NULL, 0},
   };
-  int force = 0, fd = -1, c;
+  int force = 0, fd = -1, json = 0, c;
   const char *from = NULL;
   if (argc < 2 || ua_want_help(argc, argv)) {
     ua_help_identity();
@@ -513,6 +600,9 @@ int ua_cmd_identity(int argc, char **argv) {
     switch (c) {
     case OPT_FORCE:
       force = 1;
+      break;
+    case OPT_JSON:
+      json = 1;
       break;
     case OPT_FD:
       fd = atoi(optarg);
@@ -534,6 +624,12 @@ int ua_cmd_identity(int argc, char **argv) {
   int nargs = argc - optind;
   const char *action = nargs ? argv[optind] : "";
   const char *file = nargs > 1 ? argv[optind + 1] : NULL;
+  if (json && strcmp(action, "show")) {
+    ua_usage_error("identity", "--json goes with show");
+    return UA_EXIT_USAGE;
+  }
+  if (!strcmp(action, "show"))
+    return do_show(argv + optind + 1, nargs - 1, json);
   int want =
       !strcmp(action, "generate") || (!strcmp(action, "set") && fd < 0) ? 2 : 1;
   if (nargs != want) {
@@ -558,8 +654,6 @@ int ua_cmd_identity(int argc, char **argv) {
   }
   if (!strcmp(action, "set"))
     return do_set(file, fd, from);
-  if (!strcmp(action, "show"))
-    return do_show();
   if (!strcmp(action, "unset"))
     return do_unset();
   ua_usage_error("identity", "Unknown action '%s'", action);

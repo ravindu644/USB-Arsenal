@@ -46,6 +46,7 @@ The exit code is the same as the text report's.
 |---|---|
 | `version`, `udc`, `udc_state` | the binary's version, the controller, its state (`configured`, `not attached`, ...) |
 | `bound` | `1` while our gadget holds the controller, `0` when it is with its owner |
+| `speed` | what the host negotiated, the UDC's `current_speed` (`full-speed`, `high-speed`, `super-speed`, ...); empty while not bound. The text form adds it to the `Controller:` line |
 | `storage` | one object per LUN: `lun`, `file`, `mode` (`cdrom`, `dvd`, `disk`, `rw`), `access` (`ro`, `rw`); an ejected LUN has empty strings |
 | `hid` | one object per node: `function` (`keyboard`, `mouse`), `node` (`/dev/hidgN`, empty until it appears), `interval` (the poll interval exponent it runs with: `0` for the kernel's default, 1 ms; `-1` where the kernel has no control for it) |
 | `tether` | `null`, or `function` (`ncm`, `rndis`), `iface`, `running` (the network side is up), `address`, `ipv6`, `upstream`, `gateway` (`1` in gateway mode), `gateway_container`, `gateway_iface`, `gateway_waiting` (the container is not running yet), `tx_bytes` and `rx_bytes` (what the phone's end of the link has sent and received, `-1` when unread) |
@@ -147,6 +148,14 @@ Several images on live LUNs of the same type are swapped in place in one go.
   or in `/data/local/tmp` carry an SELinux label the kernel's mass-storage thread cannot
   read, so USB Arsenal relabels them to the label `/sdcard` files use, and says so.
 
+An image whose name starts with `-` goes after `--`: `storage start -- -old.iso`. The
+setup's `storage_lunN` paths are absolute and never read as options.
+
+A swap whose new medium the kernel refuses puts the old one back. A host that holds a drive
+locked (before 6.6, which has `forced_eject`) is released by one replug for every LUN
+together, and every eject of one command shares a 5 s wait, so `start`, `apply` and `eject`
+finish well inside a client's 30 s timeout.
+
 Make a blank 4 GB pen drive: `truncate -s 4G pendrive.img`, then
 `usb-arsenal storage start --mode rw pendrive.img` and format it from the host.
 
@@ -156,6 +165,7 @@ Make a blank 4 GB pen drive: `truncate -s 4G pendrive.img`, then
 usb-arsenal hid start [--perm MODE] [--group GROUP] [--interval N]
 usb-arsenal hid apply                      # restart with the setup's interval if it changed
 usb-arsenal hid stop
+usb-arsenal hid write NODE SIZE            # stdin's reports onto NODE, never blocking
 ```
 
 `--interval` is saved as the setup's `hid_interval`; a bare `start` uses it. On a running HID
@@ -177,9 +187,24 @@ printf '\0\0\0\0\0\0\0\0' > /dev/hidg0     # release
 printf '\0\x0a\0\0' > /dev/hidg1           # mouse 10 px right
 ```
 
-The nodes are `0660 root` by default. `--perm` and `--group` (a name, or a number on
-Android) widen that, and the setting is re-applied each time the gadget re-plugs.
-Anyone who can write a node can type on the host.
+The nodes are `0660 root` by default, or the profile's `hid_perm` and `hid_group`. `--perm`
+and `--group` (a name, or a number on Android) widen that for as long as HID runs: a later
+bare `start` or `apply` keeps them, `hid stop` and `stop` drop them, and the access is
+re-applied each time the gadget re-plugs. Anyone who can write a node can type on the host.
+Without `--interval` the f_hid patch's `interval` attribute is written as `0` (the kernel's
+default), so a function a crash left behind does not keep an old one.
+
+`hid write NODE SIZE` is the writer a program keeps open on a node: it reads stdin in
+reports of `SIZE` bytes (1 to 64, short reads joined), and writes each to `NODE`, which must
+be a character device, opened non-blocking. f_hid sends one report per write. While the host
+is not reading (asleep, or slower than the reports come), only the newest unsent report is
+kept and it goes out as soon as the node is writable again: the host always ends in the
+latest state and never gets a backlog replayed. A report that a newer one replaces before the
+host took it is never sent, so a key press needs its own poll interval before its release.
+It exits `0` at the end of stdin (after one last try at the pending report, 100 ms at most),
+and `1` with a message when the node cannot be opened or a write fails with anything but
+`EAGAIN` (`ESHUTDOWN` once the host has gone). It takes no lock and never goes through the
+daemon.
 
 ## tether
 
@@ -206,9 +231,28 @@ covers both modes and the host side.
 ```sh
 usb-arsenal identity generate ~/my.conf   # every setting, with its default
 usb-arsenal identity set ~/my.conf        # make it active
-usb-arsenal identity show
+usb-arsenal identity show [--json]
+usb-arsenal identity show [--json] FILE...  # what each file gives, read as `set` reads it
 usb-arsenal identity unset
 ```
+
+`identity show` names a profile whose file has gone: `Profile: /path/x.conf (missing)`, then
+the built-in values in force. `identity show --json` prints one object:
+
+```json
+{"profile":"/sdcard/x.conf","copy":false,"missing":"","keys":{"id_vendor":"0x1d6b",...}}
+```
+
+`profile` is the active profile (empty for the built-in defaults), `copy` is `true` when the
+daemon keeps a copy of it, `missing` is the path a dangling link names, and `keys` holds every
+key with the value in force, `""` for a derived one. With FILEs it prints an array, one
+object per FILE: `{"path":"<realpath>","errors":N,"keys":{...}}`. Each FILE goes through the
+loader `identity set` uses, so `0104` is octal as C reads it, ` key = v` spacing works, and a
+missing or bad key comes back at its default; `errors` counts the bad lines (`-1`: the file
+cannot be read, and the exit code is `1`). Values are printed one way: IDs as `0x%04x`
+(`0x0104`), `max_power` and `hid_group` in decimal, `hid_perm` in octal with a leading `0`
+(`0660`), strings as they are. `show FILE` runs in the caller's own process, with its own
+permissions, even when a daemon listens.
 
 See [identity.md](identity.md).
 
@@ -220,7 +264,9 @@ usb-arsenal daemon stop
 ```
 
 See [containers.md](containers.md). When a daemon is running, every command except
-`daemon`, `help`, `version` and `identity generate` runs through it. `UA_NO_PROXY=1`
+`daemon`, `help`, `version`, `identity generate`, `identity show FILE` and `hid write` runs
+through it. A daemon whose binary is replaced on disk (an update) re-executes the new one
+before it serves the next client, keeping its socket and pid, so it never needs a restart. `UA_NO_PROXY=1`
 makes a command act directly. A path a container client saves into the setup (a bare `start`
 later opens it on the daemon's side) must be one the daemon can see.
 

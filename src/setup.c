@@ -216,6 +216,12 @@ int ua_running_take(enum ua_fn fn, unsigned mask) {
 int ua_running_clear(enum ua_fn fn) {
   struct ua_setup r, d;
   char p[PATH_MAX];
+  /* A --perm or --group given to `hid start` lasts as long as that HID
+   * (hid.c save_perm); the next one starts from the profile's */
+  if (fn == UA_FN_ALL || fn == UA_FN_HID) {
+    ua_ws_path("Gadget", "hid.perm", p, sizeof(p));
+    unlink(p);
+  }
   if (fn == UA_FN_ALL) {
     ua_ws_path("Gadget", RUNNING_LEAF, p, sizeof(p));
     return unlink(p) < 0 && errno != ENOENT ? -1 : 0;

@@ -300,11 +300,14 @@ int ua_gadget_open(struct ua_gadget *g) {
       (pathf(p, sizeof(p), "%s/g1", g->cfs) == 0 && access(p, F_OK) == 0 &&
        access("/sys/class/android_usb", F_OK) == 0);
 
-  if (access(own, F_OK) != 0) {
-    /* Stock Samsung configfs names every gadget's uevent device android0, so a
-     * second one fails in device_create() before anything is set up and the
-     * mkdir returns ENOMEM. Nothing changes; it is the cheapest detector. */
-    if (mkdir(own, 0755) < 0) {
+  /* Stock Samsung configfs names every gadget's uevent device android0, so a
+   * second one fails in device_create() before anything is set up and the
+   * mkdir returns ENOMEM. Nothing changes; it is the cheapest detector. The
+   * gadget made here is kept (keep_gadget), so probes run inside it. Without
+   * android_usb there is no such kernel, and a mkdir and rmdir on every
+   * open would race a command's build_skeleton for `status`; begin makes it. */
+  if (keep_gadget() && access(own, F_OK) != 0) {
+    if (mkdir(own, 0755) < 0 && errno != EEXIST) {
       int err = errno;
       if (err == ENOMEM && g->android_gadget &&
           access("/sys/class/android_usb/android0/functions", F_OK) == 0) {
@@ -318,8 +321,6 @@ int ua_gadget_open(struct ua_gadget *g) {
       }
       return -1;
     }
-    if (!keep_gadget())
-      rmdir(own);
   }
 
   safe_strncpy(g->path, own, sizeof(g->path));
@@ -676,8 +677,9 @@ int ua_gadget_commit(struct ua_gadget *g) {
   }
   pullup(g);
   wait_configured(g);
-  ua_crit_leave();
+  /* Inside the section: a client hangup's SIGTERM must not land mid-chown */
   ua_hid_reapply(g);
+  ua_crit_leave();
   return 0;
 
 fail:
