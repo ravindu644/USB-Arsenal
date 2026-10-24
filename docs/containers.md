@@ -52,7 +52,7 @@ Everything USB Arsenal keeps lives in one directory:
 
 | Path | Holds |
 |---|---|
-| `Logs/` | `tether.log` |
+| `Logs/` | `usb-arsenal.log`, every run and the tether process, one timestamped line each |
 | `Pids/`, `Net/` | the tether process's pid and status |
 | `Gadget/` | the hand-back record, the lock, the setup, the active profile, HID permissions |
 | `bin/` | the binary |

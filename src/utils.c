@@ -12,6 +12,52 @@
 
 int ua_verbose;
 
+/* One log for every run, the app's or a shell's, and the tether daemon's:
+ * Logs/usb-arsenal.log, a timestamped line per message, tagged ones too.
+ * Each line is one open, write and close: O_APPEND lands it whole beside
+ * another process's, and the daemon follows a rotation by opening the
+ * path afresh. ponytail: two runs rotating in the same instant may lose the
+ * old file; a lock is not worth a log */
+static char log_path[PATH_MAX];
+static char log_who[32];
+
+static void log_line(const char *prefix, const char *msg) {
+  char line[4096 + 96], stamp[32];
+  struct timespec ts;
+  struct tm tm;
+  if (!log_path[0])
+    return;
+  /* UTC, marked: a static binary has no zone data, the app shows local time */
+  clock_gettime(CLOCK_REALTIME, &ts);
+  gmtime_r(&ts.tv_sec, &tm);
+  strftime(stamp, sizeof(stamp), "%Y-%m-%dT%H:%M:%S", &tm);
+  int n = snprintf(line, sizeof(line), "%s.%03ldZ %s[%d] [%s] %s\n", stamp,
+                   ts.tv_nsec / 1000000, log_who, (int)getpid(), prefix, msg);
+  int fd = open(log_path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0600);
+  if (fd < 0)
+    return;
+  if (n > 0 && write(fd, line, (size_t)n) < 0)
+    log_path[0] = '\0';
+  close(fd);
+}
+
+void ua_log_open(const char *who, const char *invocation) {
+  char old[PATH_MAX];
+  struct stat st;
+  if (geteuid() != 0)
+    return;
+  ua_ws_path("Logs", "usb-arsenal.log", log_path, sizeof(log_path));
+  /* Past 1 MiB the file steps aside; one old file stays */
+  if (stat(log_path, &st) == 0 && st.st_size > 1024 * 1024) {
+    ua_ws_path("Logs", "usb-arsenal.log.1", old, sizeof(old));
+    rename(log_path, old);
+  }
+  safe_strncpy(log_who, who, sizeof(log_who));
+  /* The command line as a prompt line, in the file only: whoever typed it
+   * has it on screen already */
+  log_line("$", invocation);
+}
+
 void ua_log_internal(const char *prefix, const char *color, int is_err,
                      const char *fmt, ...) {
   char msg[4096];
@@ -20,6 +66,7 @@ void ua_log_internal(const char *prefix, const char *color, int is_err,
   vsnprintf(msg, sizeof(msg), fmt, ap);
   va_end(ap);
 
+  log_line(prefix, msg);
   if (!is_err && !ua_verbose && msg[0] == '[' &&
       (strncmp(msg, "[DEBUG]", 7) == 0 || strncmp(msg, "[IPT]", 5) == 0 ||
        strncmp(msg, "[NET]", 5) == 0 || strncmp(msg, "[DHCP]", 6) == 0))

@@ -89,6 +89,9 @@ extern int ua_verbose;
 void ua_log_internal(const char *prefix, const char *color, int is_err,
                      const char *fmt, ...)
     __attribute__((format(printf, 4, 5)));
+/* Opens Logs/usb-arsenal.log for this run, [who] naming it in every line,
+ * and logs the command line there */
+void ua_log_open(const char *who, const char *invocation);
 #define ua_log(fmt, ...) ua_log_internal("+", C_GREEN, 0, fmt, ##__VA_ARGS__)
 #define ua_warn(fmt, ...) ua_log_internal("!", C_YELLOW, 1, fmt, ##__VA_ARGS__)
 #define ua_error(fmt, ...) ua_log_internal("-", C_RED, 1, fmt, ##__VA_ARGS__)

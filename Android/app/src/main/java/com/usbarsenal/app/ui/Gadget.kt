@@ -23,16 +23,22 @@ import com.usbarsenal.app.backend.Capabilities
 import com.usbarsenal.app.backend.Controller
 import com.usbarsenal.app.backend.Droidspaces
 import com.usbarsenal.app.backend.GadgetStatus
+import com.usbarsenal.app.backend.LOG
 import com.usbarsenal.app.backend.Probe
 import com.usbarsenal.app.backend.Root
 import com.usbarsenal.app.backend.UA
 import com.usbarsenal.app.backend.backendState
 import com.usbarsenal.app.backend.plain
 import com.usbarsenal.app.backend.readCheck
+import com.usbarsenal.app.backend.readLog
 import com.usbarsenal.app.backend.readDroidspaces
 import com.usbarsenal.app.backend.readProfile
 import com.usbarsenal.app.backend.readStatus
 import com.usbarsenal.app.backend.shellQuote
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -68,8 +74,9 @@ fun says(args: List<String>): String {
 // The functions Home lists, in its order; [prefix] is their keys' in the setup
 enum class Fn(val label: String, val prefix: String) { STORAGE("Storage", "storage_"), TETHER("Tether", "tether_"), HID("HID", "hid_") }
 
-// What a log on screen keeps; the files keep the rest
+// What a log on screen keeps; the file keeps the rest, and the cache the newest few hundred
 const val LOG_KEEP = 2_000
+const val LOG_CACHE = 300
 
 fun MutableList<String>.keepLast() {
     if (size > LOG_KEEP) subList(0, size - LOG_KEEP).clear()
@@ -121,7 +128,42 @@ object Gadget {
     // An apply at work, so Back does not ask again meanwhile
     var applying by mutableStateOf<Fn?>(null)
     var fault by mutableStateOf<Fault?>(null)
-    val cli = mutableStateListOf<String>()
+
+    // The backend's log as last read: every run, the app's or a shell's, and tether's daemon
+    val log = mutableStateListOf<String>().also { it.addAll(Cache.log.orEmpty()) }
+    private var logAt = 0L
+
+    private val stamp = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
+
+    // A line of the app's own, in the log's form, where no backend run wrote one: into the same
+    // file, so it keeps its place in time and outlives the process like every other line
+    fun note(line: String) {
+        val stamped = "${stamp.format(Date())} app[0] $line"
+        scope.launch { Root.read("mkdir -p ${LOG.substringBeforeLast('/')} && echo ${shellQuote(stamped)} >> $LOG") }
+    }
+
+    // The log since the last read; its newest lines the first time, and again after it was
+    // emptied or stepped aside (the file smaller than what was read)
+    suspend fun readLogTail() {
+        var tail = readLog(logAt, LOG_KEEP) ?: return
+        if (tail.size < logAt) {
+            logAt = 0
+            tail = readLog(0, LOG_KEEP) ?: return
+        }
+        if (logAt > 0 && tail.lines.isEmpty()) return
+        if (logAt == 0L) log.clear()
+        logAt = tail.end
+        log += tail.lines
+        log.keepLast()
+        Cache.log = log.takeLast(LOG_CACHE)
+    }
+
+    suspend fun clearLog() {
+        Root.read(": > $LOG")
+        log.clear()
+        logAt = 0
+        Cache.log = null
+    }
 
     // Commands outlive the screen that started them, as the install does
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -162,9 +204,8 @@ object Gadget {
             batch.forEach { (k, v) -> if (edits[k] == v) edits.remove(k) }
             Cache.edits = edits
         } else {
-            cli += "# usb-arsenal setup set ..."
-            (r.out + r.err).forEach { cli += plain(it) }
             fault = Fault(null, r.err.lastOrNull()?.let(::plain) ?: "[-] setup set failed (exit ${r.code})")
+            if (r.err.isEmpty()) note(fault!!.message)
             fails++
             // Refused, they are dropped: the setup stays what the backend holds, and a batch it
             // refused would otherwise fail every flush after it, the one before a start too
@@ -244,6 +285,7 @@ object Gadget {
         if (busy != null) {
             // Refused, as a tap that lands in the beat before the keys are held: say so
             fault = Fault(fn, "[-] Another command is running", identity = args.firstOrNull() == "identity")
+            note(fault!!.message)
             fails++
             return false
         }
@@ -256,14 +298,11 @@ object Gadget {
             flushJob?.cancel()
             flush()
             val r = Root.change("$UA " + args.joinToString(" ", transform = ::shellQuote))
-            // Root's prompt: every command runs as root
-            cli += "# usb-arsenal $typed"
-            (r.out + r.err).forEach { cli += plain(it) }
-            cli.keepLast()
             if (!r.ok) {
+                // The backend logged what it said itself; what it could not say is noted here
                 val why = when {
-                    r.timedOut -> "[-] Timed out (${CHANGE_TIMEOUT_MS / 1000}s)"
-                    else -> r.err.lastOrNull()?.let(::plain) ?: "[-] Failed (exit ${r.code})"
+                    r.timedOut -> "[-] Timed out (${CHANGE_TIMEOUT_MS / 1000}s)".also(::note)
+                    else -> r.err.lastOrNull()?.let(::plain) ?: "[-] Failed (exit ${r.code})".also(::note)
                 }
                 fault = Fault(fn, why, identity = args.firstOrNull() == "identity")
                 fails++

@@ -317,9 +317,34 @@ int main(int argc, char **argv) {
     return UA_EXIT_OK;
   }
 
-  const struct command *cmd = find_command(argv[optind]);
+  /* Every run that may change something goes into the one log, its command
+   * line first, a command that does not exist too. The reads stay out:
+   * status runs every second from the app, check and identity show on a
+   * launch, and hid write carries every report */
+  const char *name = argv[optind];
+  const char *sub = optind + 1 < argc ? argv[optind + 1] : "";
+  int reads = !strcmp(name, "status") || !strcmp(name, "check") ||
+              !strcmp(name, "help") || !strcmp(name, "version") ||
+              (!strcmp(name, "identity") && !strcmp(sub, "show")) ||
+              (!strcmp(name, "hid") && !strcmp(sub, "write"));
+  if (!reads) {
+    char line[1024];
+    size_t len = 0;
+    for (int i = 1; i < argc; i++) {
+      size_t n = strlen(argv[i]);
+      if (len + n + 2 > sizeof(line))
+        break;
+      if (len)
+        line[len++] = ' ';
+      memcpy(line + len, argv[i], n);
+      len += n;
+    }
+    line[len] = '\0';
+    ua_log_open(name, line);
+  }
+  const struct command *cmd = find_command(name);
   if (!cmd) {
-    ua_usage_error(NULL, "No such command: %s", argv[optind]);
+    ua_usage_error(NULL, "No such command: %s", name);
     return UA_EXIT_USAGE;
   }
   /* The setup's controller stands in for --udc, so a phone with two needs

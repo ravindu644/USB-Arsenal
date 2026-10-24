@@ -5,11 +5,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
@@ -18,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -45,12 +51,26 @@ private fun TypedRow(
     onChange: (String) -> Unit,
 ) {
     var text by remember(value) { mutableStateOf(value) }
+    var focused by remember { mutableStateOf(false) }
     val ok = text.isBlank() || valid(text)
+    // Set when the field is left, not on every keystroke: a name typed in steps was set in
+    // steps, one `setup set` per pause. Leaving is a tap elsewhere, the keyboard going (Back
+    // closes it first, so the next Back finds the value set and can ask about it), or the screen
+    val commit by rememberUpdatedState({ if (ok && text != value) onChange(text) })
+    val keyboardUp = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    LaunchedEffect(focused, keyboardUp) { if (focused && !keyboardUp) commit() }
+    DisposableEffect(Unit) { onDispose { commit() } }
     Kv(label) {
-        Input(text, {
-            text = filter(it)
-            if (text.isBlank() || valid(text)) onChange(text)
-        }, Modifier.width(200.dp).padding(vertical = 4.dp), placeholder = placeholder, keyboard = keyboard)
+        Input(
+            text,
+            { text = filter(it) },
+            Modifier.width(200.dp).padding(vertical = 4.dp).onFocusChanged {
+                focused = it.isFocused
+                if (!it.isFocused) commit()
+            },
+            placeholder = placeholder,
+            keyboard = keyboard,
+        )
     }
     if (!ok) Warn(problem)
 }

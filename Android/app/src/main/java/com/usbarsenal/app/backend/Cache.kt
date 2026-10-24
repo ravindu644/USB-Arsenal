@@ -81,6 +81,11 @@ object Cache {
         get() = text("uplinks")?.lines()?.filter { it.isNotEmpty() }
         set(v) = put("uplinks", v?.joinToString("\n"))
 
+    // The log's newest lines as last read, so the Log screen never opens empty
+    var log: List<String>?
+        get() = text("log")?.lines()?.filter { it.isNotEmpty() }
+        set(v) = put("log", v?.joinToString("\n"))
+
     var free: Long?
         get() = text("free")?.toLongOrNull()
         set(v) = put("free", v?.toString())

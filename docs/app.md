@@ -63,7 +63,8 @@ whose text the host receives as typed. Speed and Natural scroll sit under the tr
 full-screen button turns the phone into one wide trackpad in landscape. A gamepad's left
 stick moves the pointer; A and X click.
 
-**Log** shows every command the app ran this session and what it printed. Clear empties it.
+**Log** shows the backend's log: every command run from the app or a shell and what it printed,
+the tether process's lines too, in time order, kept across launches. Clear empties it.
 
 **Settings**: motion, haptics and the theme (eleven two-colour LCD looks, Amber by default),
 the identity profile ([identity.md](identity.md); profiles

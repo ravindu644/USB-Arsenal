@@ -157,7 +157,7 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
         if (uri != null) {
             scope.launch {
                 realPath(context, uri)
-                    .onSuccess { if (isImage(it)) serve(it, mode) else Gadget.fault = Fault(Fn.STORAGE, NOT_IMAGE) }
+                    .onSuccess { if (isImage(it)) serve(it, mode) else { Gadget.fault = Fault(Fn.STORAGE, NOT_IMAGE); Gadget.note(NOT_IMAGE) } }
                     .onFailure { Gadget.fault = Fault(Fn.STORAGE, it.message ?: NO_PATH) }
             }
         }

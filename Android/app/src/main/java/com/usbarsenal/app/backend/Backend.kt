@@ -3,6 +3,9 @@ package com.usbarsenal.app.backend
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -129,6 +132,44 @@ suspend fun readDroidspaces(): Droidspaces {
     if (r.code == 3) return Droidspaces(false, null)
     return Droidspaces(true, if (r.ok) runCatching { parseContainers(r.out.joinToString("\n")) }.getOrNull() else null)
 }
+
+const val LOG = "$WORKSPACE/Logs/usb-arsenal.log"
+
+// A line of the backend's log, "2026-10-25T18:21:03.123Z tether[1234] [+] NCM is up on usb0",
+// as the screen shows it: "23:51:03: tether [+]: NCM is up on usb0", the time the phone's. A
+// command line drops the command the process is named after ("hid [$]: start"). Null for a
+// tagged chatter line ("[*] [DEBUG] ...", "[+] [NET] ..."), which the terminal shows only with
+// -v; a tagged warning or error stays, it says why something did not work
+private val LOG_LINE = Regex("""^(\S+Z) (\S+)\[\d+\] \[(.)\] (.*)$""")
+private val CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss")
+fun logView(line: String, zone: ZoneId = ZoneId.systemDefault()): String? {
+    val (at, who, glyph, msg) = LOG_LINE.matchEntire(line)?.destructured ?: return line
+    if (glyph !in "!-" && msg.startsWith("[")) return null
+    val time = runCatching { Instant.parse(at).atZone(zone).format(CLOCK) }.getOrNull() ?: return line
+    val said = if (glyph == "$") msg.removePrefix("$who ") else msg
+    return "$time: $who [$glyph]: $said"
+}
+
+// The log past byte [from]: the lines since, and where they end, which is where the next read
+// starts (every backend write is one whole line, so the bytes read are the offset; a size read
+// beside the tail would miss a line landing in between and show it twice). From 0 it is the last
+// [keep] lines, the file's start being the oldest and the least worth a read. The file's size
+// comes last, after the tail: below the offset, the file was emptied or stepped aside. Null when
+// the file could not be read
+suspend fun readLog(from: Long, keep: Int): LogTail? {
+    val since = if (from > 0) "tail -c +${from + 1}" else "tail -n $keep"
+    val r = Root.read("f=$LOG; [ -e \"\$f\" ] || exit 0; $since \"\$f\"; echo \"$LOG_SIZE \$(wc -c < \"\$f\")\"")
+    if (!r.ok) return null
+    val size = r.out.lastOrNull()?.takeIf { it.startsWith(LOG_SIZE) }?.substringAfter(' ')?.trim()?.toLongOrNull() ?: return LogTail(emptyList(), 0, 0)
+    val lines = r.out.dropLast(1)
+    val bytes = lines.sumOf { it.toByteArray().size + 1L }
+    // From the start, the tail's end is the file's end
+    return LogTail(lines.map(::plain), if (from > 0) from + bytes else size, size)
+}
+
+data class LogTail(val lines: List<String>, val end: Long, val size: Long)
+
+private const val LOG_SIZE = "__size__"
 
 // The interfaces a default route leaves by, in any table: the phone's uplinks (Droidspaces' rule);
 // null when they could not be read

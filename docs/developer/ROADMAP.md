@@ -612,3 +612,7 @@ Tick a box only when the item is merged and verified as described in its phase.
   only `.iso .img .bin .raw .ima .dd`, and Create gives a bare name `.img`. Tether's Upstream
   is picked from the interfaces with a default route (Droidspaces' rule); text fields keep only
   what their value can hold, and an invalid Tether value is never sent, so Back drops it.
+- 2026-10-25: one log, `Logs/usb-arsenal.log`: every run but the reads (`status`, `check`, `identity show`,
+  `hid write`, `version`, `help`) writes its command line and every message there with a timestamp, the tether
+  process too (`tether.log` is gone), and the app's Log screen tails it and adds its own faults. `tether start` refuses a gateway cable name already taken in the container
+  (VirtualAP's `vaplan0`) instead of reporting a start that serves nothing.

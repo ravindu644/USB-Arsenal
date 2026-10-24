@@ -71,6 +71,19 @@ class ParsersTest {
     // /sys/class/udc, a controller a line with its state, which can be several words. GKI's
     // dummy_udc.0 never counts
     @Test
+    fun logLinesShowTimeAndWho() {
+        val colombo = java.time.ZoneId.of("Asia/Colombo")
+        assertEquals("23:51:03: tether [+]: NCM is up on usb0", logView("2026-10-25T18:21:03.123Z tether[1234] [+] NCM is up on usb0", colombo))
+        assertEquals("05:32:10: app [-]: Timed out (30s)", logView("2026-10-26T00:02:10.000Z app[0] [-] Timed out (30s)", colombo))
+        assertEquals("23:51:03: hid [$]: start", logView("2026-10-25T18:21:03.123Z hid[12] [$] hid start", colombo))
+        assertEquals("23:51:03: stop [$]: stop", logView("2026-10-25T18:21:03.123Z stop[12] [$] stop", colombo))
+        assertEquals("a line of another shape", logView("a line of another shape", colombo))
+        assertNull(logView("2026-10-25T18:21:03.123Z tether[1234] [*] [DEBUG] setprop sys.usb.config none", colombo))
+        assertNull(logView("2026-10-25T18:21:03.123Z tether[1234] [+] [NET] Stopping tethering on usb0", colombo))
+        assertEquals("23:51:03: tether [!]: [NET] The cable is in but not up yet", logView("2026-10-25T18:21:03.123Z tether[1234] [!] [NET] The cable is in but not up yet", colombo))
+    }
+
+    @Test
     fun controllers() {
         assertEquals(
             listOf(Udc("a600000.dwc3", "configured"), Udc("bare", "")),

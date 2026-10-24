@@ -461,7 +461,7 @@ static void sync_uplink(struct tether *t, int quiet) {
   int table = 0;
   const char *how = ua_find_uplink(t->upstream, iface, &table, t->nat6);
   if (!how) {
-    /* Once per loss, not every tick: this goes to tether.log */
+    /* Once per loss, not every tick: this goes to the log */
     if (!quiet || t->uplink[0])
       ua_warn("[NET] No internet connection to share yet; the host gets a "
               "link but no route out until one comes up");
@@ -916,15 +916,12 @@ static int spawn_daemon(struct tether *t) {
     setsid();
     if (chdir("/") < 0)
       _exit(1);
-    char p[PATH_MAX];
-    ua_ws_path("Logs", "tether.log", p, sizeof(p));
-    int log = open(p, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
-    int null = open("/dev/null", O_RDONLY);
-    if (null >= 0)
+    /* Every line goes to the one log through ua_log; the terminal is gone */
+    int null = open("/dev/null", O_RDWR);
+    if (null >= 0) {
       dup2(null, STDIN_FILENO);
-    if (log >= 0) {
-      dup2(log, STDOUT_FILENO);
-      dup2(log, STDERR_FILENO);
+      dup2(null, STDOUT_FILENO);
+      dup2(null, STDERR_FILENO);
     }
     _exit(serve_owned(t, pfd[1]) == 0 ? 0 : 1);
   }
@@ -1057,9 +1054,7 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
     return serve_owned(t, -1) == 0 ? UA_EXIT_OK : undo(&g, func, added);
   }
   if (spawn_daemon(t) < 0) {
-    char p[PATH_MAX];
-    ua_ws_path("Logs", "tether.log", p, sizeof(p));
-    ua_error("The network side did not come up; see %s", p);
+    ua_error("The network side did not come up; see the log");
     return undo(&g, func, added);
   }
   ua_running_take(UA_FN_TETHER, 0);

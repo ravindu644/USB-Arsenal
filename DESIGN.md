@@ -537,7 +537,9 @@ Home's rows end their name.
 (`from this phone`).
 Selection handles are ink. The selection itself is ink at 40%, the one tint in the
 language: Compose draws it under text that keeps its own colour, so solid ink would hide what
-is selected. A tap on bare ground lets go of a focused field.
+is selected. A tap on bare ground lets go of a focused field. A field that sets the setup sets
+it when it is left (a tap elsewhere, the keyboard closing, Back), never on a keystroke, and only
+a valid or empty value: one `setup set` per edit, not one per pause in typing.
 
 ### Terminal (`.term`, `.ln`)
 An inverted panel that fills the free height. It fills from the top down like a terminal and
@@ -959,7 +961,7 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | HID period text | `status --json`'s `speed` (`full-speed` is a USB 1.1 host) and `hid[].interval` |
 | Quacky | nothing yet: a WIP page |
 | Identity | `identity show --json` (the profile in force, and `missing` for a link whose file is gone), `identity show --json FILE...` (the folder's profiles, read by the backend's own loader), `identity generate FILE --force` then the six keys written in (`product`, `manufacturer`, `serial`, `id_vendor`, `id_product`, `max_power`), an edit from the file as it is, through a rename, `identity set FILE`, `identity unset` for Built-in |
-| Log | the output of every command the app ran this session, as it printed it; no tabs, no log file |
+| Log | `Logs/usb-arsenal.log`, which the backend writes for every run but the reads (`status`, `check`, `identity show`, `hid write`, `version`, `help`): the command line as a `$` line, then what it printed, tagged lines too, and the tether process's lines; read as a tail once a second while the screen is open, shown as `time: who [glyph]: message` (a command line without the command the process is named after) and without the tagged chatter (`[*] [DEBUG]`, `[+] [NET]`), which Copy logs still copies; the app's own faults (a timeout, a refused image) are written into the same file as `app` |
 | Function names in the bind screen | `mass_storage.ua`, `ncm.ua`, `hid.ua_kbd`, `hid.ua_mouse` |
 | Root screen | `id -u; su -v` (prints `3.3.0:KernelSU` or `<version>:MAGISK`), shown as a shell session; its `#` comments are the app's narration |
 | Check screen | `check --json`, run with the bundled binary before anything is installed, and again from Settings' Requirements |
