@@ -550,7 +550,7 @@ static int do_start(struct load *ls, int n) {
   if (inplace) {
     /* The lock, so a command run meanwhile queues up behind the swap */
     int r = 0;
-    ua_gadget_hold();
+    ua_crit_enter();
     for (int i = 0; i < n && r == 0; i++) {
       if (serving(ldir[i], &ls[i])) {
         ua_log("LUN %d already holds %s (%s)", ls[i].lun, ls[i].name,
@@ -562,7 +562,7 @@ static int do_start(struct load *ls, int n) {
         ua_log("LUN %d now holds %s (%s)", ls[i].lun, ls[i].name,
                mode_names[ls[i].mode]);
     }
-    ua_gadget_leave();
+    ua_crit_leave();
     if (r == 0)
       return UA_EXIT_OK;
     if (r != -EBUSY)
@@ -705,7 +705,7 @@ static int do_stop(void) {
 static int load_from_spec(struct load *l, int lun, const char *spec) {
   char mode[8], path[PATH_MAX];
   int m;
-  if (ua_lun_spec(spec, mode, sizeof(mode), path, sizeof(path)) < 0 ||
+  if (sscanf(spec, "%7[^:]:%4095[^\n]", mode, path) != 2 ||
       (m = mode_of(mode)) < 0) {
     ua_error("Bad setup for LUN %d: '%s'", lun, spec);
     return -1;

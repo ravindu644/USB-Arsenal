@@ -117,7 +117,7 @@ static sigset_t crit_old;
  * lock, so two commands run at once queue up instead of both deciding they
  * are first and overwriting each other's handoff. Released before a tether
  * daemon forks, so it never inherits the lock. */
-static void ua_crit_enter(void) {
+void ua_crit_enter(void) {
   if (crit_depth++ == 0) {
     char p[PATH_MAX];
     ua_ws_path("Gadget", "lock", p, sizeof(p));
@@ -135,7 +135,7 @@ static void ua_crit_enter(void) {
   }
 }
 
-static void ua_crit_leave(void) {
+void ua_crit_leave(void) {
   if (crit_depth > 0 && --crit_depth == 0) {
     if (crit_lock >= 0)
       close(crit_lock);
@@ -143,9 +143,6 @@ static void ua_crit_leave(void) {
     sigprocmask(SIG_SETMASK, &crit_old, NULL);
   }
 }
-
-void ua_gadget_hold(void) { ua_crit_enter(); }
-void ua_gadget_leave(void) { ua_crit_leave(); }
 
 static int pathf(char *out, size_t size, const char *fmt, ...)
     __attribute__((format(printf, 3, 4)));

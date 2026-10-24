@@ -544,7 +544,7 @@ object IdentitySetup {
 }
 
 // The profile `identity show` says is in force; null for the built-in defaults
-fun activeProfile(profile: Map<String, String>): String? = profile["profile"]?.takeIf { it.isNotEmpty() && it != "built-in defaults" }
+fun activeProfile(profile: Map<String, String>): String? = profile["profile"]?.ifEmpty { null }
 
 // The name Settings shows for it: the file's, without .conf
 fun profileName(profile: Map<String, String>) = activeProfile(profile)?.substringAfterLast('/')?.removeSuffix(".conf") ?: "Built-in"

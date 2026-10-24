@@ -124,7 +124,7 @@ int ua_valid_dns(const char *v) {
   return n > 0;
 }
 
-int ua_in_choices(const char *v, const char *choices) {
+static int ua_in_choices(const char *v, const char *choices) {
   size_t n = strlen(v);
   for (const char *c = choices; n && (c = strstr(c, v)); c += n)
     if ((c == choices || c[-1] == ' ') && (c[n] == ' ' || !c[n]))

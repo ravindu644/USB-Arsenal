@@ -1093,7 +1093,7 @@ static int do_apply(struct tether *t, int rndis, int no_net) {
   /* do_start committed (and left the lock once) when it got that far; a
    * failure before that leaves the gadget unbound, so bind what is left */
   if (ua_gadget_live(&g))
-    ua_gadget_leave();
+    ua_crit_leave();
   else
     ua_gadget_commit(&g);
   return ret;
@@ -1202,8 +1202,7 @@ int ua_cmd_tether(int argc, char **argv) {
    * with options saves them (Droidspaces' rule), a bare one runs the setup */
   char kv[UA_LUN_SPEC];
 #define SET(fmt, ...)                                                          \
-  (snprintf(kv, sizeof(kv), fmt, __VA_ARGS__), edited = 1,                     \
-   ua_setup_set(&s, kv, 1))
+  (snprintf(kv, sizeof(kv), fmt, __VA_ARGS__), edited = 1, ua_setup_set(&s, kv))
   while ((c = getopt_long(argc, argv, ":u:a:d:fG:h", opts, NULL)) != -1) {
     switch (c) {
     case OPT_RNDIS:

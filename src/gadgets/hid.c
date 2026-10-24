@@ -330,7 +330,7 @@ static int do_apply(mode_t perm, gid_t gid, int perm_given, unsigned interval) {
   ua_gadget_remove(&g, MOUSE);
   int ret = do_start(perm, gid, perm_given, interval);
   if (ua_gadget_live(&g))
-    ua_gadget_leave();
+    ua_crit_leave();
   else
     ua_gadget_commit(&g);
   return ret;
