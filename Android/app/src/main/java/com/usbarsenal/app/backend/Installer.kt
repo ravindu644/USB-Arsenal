@@ -120,12 +120,10 @@ private suspend fun install(context: Context, log: (String) -> Unit): Boolean {
         log("[+] Installing the boot module in $MODULE")
         // A remove or disable mark from the manager, or a zip still pending in modules_update,
         // would undo this at the next boot. An older install kept the binary itself in
-        // system/bin; that goes, and a PATH link the user asked for stays. So does what an older
-        // version's daemon left: its boot script, its marker, its socket directory and pid
+        // system/bin; that goes, and a PATH link the user asked for stays
         val module = Root.change(
             """
-            rm -rf $MODULE/remove $MODULE/disable /data/adb/modules_update/usb-arsenal \
-              $MODULE/service.sh $WORKSPACE/.daemon_mode $WORKSPACE/Run $WORKSPACE/usb-arsenald.pid &&
+            rm -rf $MODULE/remove $MODULE/disable /data/adb/modules_update/usb-arsenal &&
             { [ -L $MODULE_LINK ] || rm -rf $MODULE/system; } &&
             mkdir -p $MODULE &&
             for f in ${MODULE_FILES.joinToString(" ")}; do cp $s/${'$'}f $MODULE/${'$'}f || exit 1; done &&

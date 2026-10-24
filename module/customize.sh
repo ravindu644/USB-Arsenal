@@ -27,7 +27,4 @@ rm -rf "$MODPATH/bin"
 mkdir -p "$MODPATH/system/bin"
 ln -sf "$UA" "$MODPATH/system/bin/usb-arsenal"
 
-# What an older version left: the daemon's marker and socket directory
-rm -rf /data/local/USB-Arsenal/.daemon_mode /data/local/USB-Arsenal/Run /data/local/USB-Arsenal/usb-arsenald.pid
-
 ui_print "- USB Arsenal for $ARCH installed"
