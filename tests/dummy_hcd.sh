@@ -27,6 +27,20 @@ modprobe libcomposite
 [ -e /sys/class/udc/$UDC ] || die "dummy_hcd gave no $UDC"
 # A dummy controller is never picked by itself, so it is always named
 A="--udc $UDC"
+# dummy_udc sets its state file to configured but never resets it on a
+# disconnect, so it cannot say whether the host still sees us: ask the host.
+# Its side of dummy_hcd is the root hub whose product names it
+HUB=$(grep -l "Dummy host" /sys/bus/usb/devices/usb*/product | head -n 1)
+DEV=/sys/bus/usb/devices/$(basename "$(dirname "$HUB")" | sed 's/^usb//')-1
+configured() {
+  for i in $(seq 50); do
+    [ "$(cat "$DEV/bConfigurationValue" 2>/dev/null)" = 1 ] && return 0
+    sleep 0.1
+  done
+  echo "# the host does not see the gadget configured; the kernel says:"
+  dmesg | tail -n 30 | sed 's/^/#   /'
+  return 1
+}
 
 "$B" $A check >/dev/null || die "check reports missing MUST HAVE features"
 ok "check passes"
@@ -35,7 +49,7 @@ ok "check passes"
 truncate -s 2M "$TMP/disk.img"
 printf '\125\252' | dd of="$TMP/disk.img" bs=1 seek=510 conv=notrunc 2>/dev/null
 "$B" $A storage start "$TMP/disk.img" || die "storage start"
-[ "$(cat /sys/class/udc/$UDC/state)" = configured ] || die "host did not configure the gadget"
+configured || die "host did not configure the gadget"
 grep -q 1 $G/functions/mass_storage.ua/lun.0/ro || die "auto mode should pick a read-only disk"
 grep -q 0 $G/functions/mass_storage.ua/lun.0/cdrom || die "MBR image must not be a CD-ROM"
 ok "storage start: bound, configured, disk mode"
@@ -45,18 +59,20 @@ truncate -s 2M "$TMP/plain.iso"
 "$B" $A storage start "$TMP/plain.iso" || die "storage hot-swap"
 grep -q 1 $G/functions/mass_storage.ua/lun.0/cdrom || die "plain image should be a CD-ROM"
 grep -q "$TMP/plain.iso" $G/functions/mass_storage.ua/lun.0/file || die "swap did not load the new image"
+configured || die "the host did not configure the gadget after the mode change"
 ok "storage switch to CD-ROM mode"
 
 # Same mode: a medium change in place (or a rebind if the host locked it)
 cp "$TMP/plain.iso" "$TMP/plain2.iso"
 "$B" $A storage start "$TMP/plain2.iso" || die "same-mode swap"
 grep -q "$TMP/plain2.iso" $G/functions/mass_storage.ua/lun.0/file || die "same-mode swap did not load"
-[ "$(cat /sys/class/udc/$UDC/state)" = configured ] || die "gadget not configured after swap"
+configured || die "gadget not configured after swap"
 ok "storage same-mode swap"
 
 "$B" $A hid start || die "hid start"
 [ -L $G/configs/c.1/hid.ua_kbd ] && [ -L $G/configs/c.1/hid.ua_mouse ] || die "hid functions not linked"
 grep -q "$TMP/plain2.iso" $G/functions/mass_storage.ua/lun.0/file || die "storage lost its image across the rebind"
+configured || die "the host did not configure the gadget with HID"
 ok "hid start alongside storage"
 
 # --perm given once lasts while HID runs: a bare start must not reset it
@@ -67,7 +83,9 @@ KBD=$("$B" $A status --json | sed -n 's/.*"function":"keyboard","node":"\([^"]*\
 [ "$(stat -c %a "$KBD")" = 600 ] || die "a bare hid start reset --perm"
 "$B" $A status --json | grep -q '"speed":"[a-z-]*speed"' || die "status --json has no speed while bound"
 # The non-blocking writer: an all-zero report is no key at all, so the host
-# (this PC) sees nothing; it must exit 0 at the end of stdin
+# (this PC) sees nothing; it must exit 0 at the end of stdin. f_hid answers
+# ESHUTDOWN while the host has not configured the interface
+configured || die "the host lost the gadget before hid write"
 printf '\0\0\0\0\0\0\0\0' | "$B" $A hid write "$KBD" 8 || die "hid write"
 "$B" $A hid write "$TMP/disk.img" 8 2>/dev/null && die "hid write must refuse a regular file"
 ok "hid: --perm kept, speed in status, hid write"
@@ -94,7 +112,7 @@ grep -q "$TMP/plain2.iso" $G/functions/mass_storage.ua/lun.0/file || die "apply 
 "$B" $A setup set hid_interval=3 || die "setup set hid_interval"
 "$B" $A status --json | grep -q '"hid":1}' || die "a changed interval should read as pending"
 "$B" $A hid apply || die "hid apply"
-[ "$(cat /sys/class/udc/$UDC/state)" = configured ] || die "gadget not configured after hid apply"
+configured || die "gadget not configured after hid apply"
 "$B" $A status --json | grep -q '"hid":0}' || die "hid apply should clear pending"
 "$B" $A setup set hid_interval=5 && "$B" $A setup revert hid || die "setup revert"
 "$B" $A setup show | grep -q "^hid_interval *3 " || die "revert did not take the running value"
@@ -106,7 +124,7 @@ ok "status"
 "$B" $A hid stop || die "hid stop"
 [ ! -e $G/functions/hid.ua_kbd ] || die "hid stop left the function behind"
 [ ! -e /var/lib/USB-Arsenal/Gadget/hid.perm ] || die "hid stop kept the --perm of the HID it removed"
-[ "$(cat /sys/class/udc/$UDC/state)" = configured ] || die "gadget did not come back after hid stop"
+configured || die "gadget did not come back after hid stop"
 ok "hid stop rebinds the rest"
 
 "$B" $A stop || die "stop"
