@@ -61,9 +61,7 @@ whose text the host receives as typed. Speed and Natural scroll sit under the tr
 full-screen button turns the phone into one wide trackpad in landscape. A gamepad's left
 stick moves the pointer; A and X click.
 
-**Log** has two tabs: CLI, every command the app ran this session and what it printed, and
-Tether, the tether process's log (DHCP, the uplink, the gateway). Clear empties the tab in
-front (on Tether, the file itself).
+**Log** shows every command the app ran this session and what it printed. Clear empties it.
 
 **Settings**: motion and haptics, the identity profile ([identity.md](identity.md); profiles
 live in `/sdcard/USB-Arsenal/Profiles`), the controller on phones with several,

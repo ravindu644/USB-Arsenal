@@ -434,7 +434,7 @@ The only button. Plain keys are amber; the primary action of a screen (`Create`,
 at most.
 
 ### Segmented control (`.segs`, `.seg`)
-One choice among several: storage mode, NCM or RNDIS, log file, profile, power. Options are
+One choice among several: storage mode, NCM or RNDIS, power. Options are
 divided by 2px ink. The chosen one is inverted. Labels must fit: `CD`, not `CDROM`. An option
 the kernel cannot honour sits on a `.d50` shade with its label in full ink (a ghost's dither
 would eat Silkscreen's strokes), and is never picked or focused.
@@ -924,7 +924,7 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | HID period text | `status --json`'s `speed` (`full-speed` is a USB 1.1 host) and `hid[].interval` |
 | Quacky | nothing yet: a WIP page |
 | Identity | `identity show --json` (the profile in force, and `missing` for a link whose file is gone), `identity show --json FILE...` (the folder's profiles, read by the backend's own loader), `identity generate FILE --force` then the six keys written in (`product`, `manufacturer`, `serial`, `id_vendor`, `id_product`, `max_power`), an edit from the file as it is, through a rename, `identity set FILE`, `identity unset` for Built-in |
-| Log tabs | command output (CLI) and `Logs/tether.log` (Tether: DHCP, the uplink, the gateway). Clear on Tether empties the file (`: >`, safe while the tether process appends) |
+| Log | the output of every command the app ran this session, as it printed it; no tabs, no log file |
 | Function names in the bind screen | `mass_storage.ua`, `ncm.ua`, `hid.ua_kbd`, `hid.ua_mouse` |
 | Root screen | `id -u; su -v` (prints `3.3.0:KernelSU` or `<version>:MAGISK`), shown as a shell session; its `#` comments are the app's narration |
 | Check screen | `check --json`, run with the bundled binary before anything is installed |
