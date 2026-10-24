@@ -15,8 +15,10 @@ nodes, all at once. It only drives the kernel's gadget subsystem: create functio
 attributes, link, bind, raise the pullup, and always hand the controller back so the
 phone's own USB (ADB/MTP) returns.
 
-A root daemon on the Android side owns the port. Every other copy of the binary,
-including one in a container, relays its command line to it over a filesystem socket.
+There is no daemon: every copy of the binary acts itself, as root, and exits (only `tether`
+leaves its network process running). A privileged container runs the binary directly
+([docs/containers.md](docs/containers.md)); the daemon that relayed for containers was
+removed because it let its group make root open any file.
 
 ## Build
 
@@ -52,7 +54,6 @@ including one in a container, relays its command line to it over a filesystem so
 | `src/include/usbarsenal.h` | the only header a `.c` includes (plus `src/net/net.h` for networking) |
 | `src/gadget.c` | the core every command goes through: open, begin, add, commit, teardown |
 | `src/gadgets/` | the commands: storage, hid, tether |
-| `src/daemon.c` | the daemon and the client relay |
 | `src/config.c` | identity profiles |
 | `src/check.c` | capability probing |
 | `src/net/` | lifted from Droidspaces; keep its `ds_` names so it can be re-synced |
@@ -118,7 +119,7 @@ Both are in kernel code that a plain configfs or sysfs write reaches. Details ar
 - **Never add a `Co-Authored-By:` trailer for an AI agent** in this repository. Human
   co-authors are fine.
 - Prefixes, matching the style Droidspaces uses: `fix:`, `refactor:`, `feat:`, `docs:`,
-  or a subsystem name (`gadget:`, `storage:`, `net:`, `hid:`, `daemon:`, `check:`). Use
+  or a subsystem name (`gadget:`, `storage:`, `net:`, `hid:`, `check:`). Use
   `fix(security):` for anything security related.
 
 ## Style
@@ -182,9 +183,8 @@ name.
   the UDC unbound kills ADB and MTP. The hand-back record stays until Android's gadget
   is really bound again. This is the one thing that must never break.
 - **Never unbind someone else's gadget off Android.** Name it and refuse.
-- **Root is required, and the daemon accepts only root or the `usb-arsenal` group** (gid
-  3460). Fail closed and loud when a configfs path, a permission or the workspace is
-  wrong.
+- **Root is required.** Fail closed and loud when a configfs path, a permission or the
+  workspace is wrong.
 
 ## Documentation
 
@@ -266,13 +266,10 @@ name.
 - **The installer is ported from Droidspaces** (`BinaryInstaller`, `ModuleInstaller`,
   `DeviceArch`, the backend checker), restyled to DESIGN.md. The boot module is `module/`.
   The binary lives in the workspace (`/data/local/USB-Arsenal/bin/usb-arsenal`); the module
-  only starts it. `/data/adb/modules/usb-arsenal/system/bin/usb-arsenal` is a link to it, there
+  holds `sepolicy.rule`, the uninstall hand-back and the PATH link, nothing that runs at boot. `/data/adb/modules/usb-arsenal/system/bin/usb-arsenal` is a link to it, there
   only while the user wants `usb-arsenal` on PATH (Droidspaces' `SymlinkInstaller`; the zip
   makes it, the app's Settings switch makes or removes it). The install is the binary,
-  then the module, and every step's real output goes to the screen. It never starts or stops
-  the daemon: daemon mode is a Settings switch that writes `1` to
-  `/data/local/USB-Arsenal/.daemon_mode`, and the boot module starts the daemon on it
-  (Droidspaces' marker).
+  then the module, and every step's real output goes to the screen.
 - **Never patch the live SELinux policy** (`ksud sepolicy patch`, `magiskpolicy --live`): root
   detectors watch for it. `sepolicy.rule` loads at boot; when the module had none before an
   install, the install says to reboot.

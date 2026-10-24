@@ -1068,9 +1068,10 @@ static int do_stop(void) {
 }
 
 /* Bring tethering to its setup. Running and unchanged: nothing. Changed: the
- * function is swapped inside one critical section, so the gadget stays bound,
- * the other functions keep serving and the port never goes back to Android
- * between the stop and the start. Not running: a start. */
+ * function is swapped inside one critical section: one replug of the whole
+ * gadget (configfs swaps a function only unbound, so every function
+ * reconnects), but the port never goes back to Android between the stop and
+ * the start. Not running: a start. */
 static int do_apply(struct tether *t, int rndis, int no_net) {
   struct ua_setup s, r;
   struct ua_gadget g;

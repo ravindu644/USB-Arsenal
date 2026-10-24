@@ -3,7 +3,6 @@
 # Give the controller back to Android before the binary goes away.
 
 UA=/data/local/USB-Arsenal/bin/usb-arsenal
-UA_NO_PROXY=1 "$UA" stop
-"$UA" daemon stop
+"$UA" stop
 # Only the binary goes; the rest of the workspace (profiles, logs) is the user's
 rm -f "$UA"

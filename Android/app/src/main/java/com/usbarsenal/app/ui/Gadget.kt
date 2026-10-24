@@ -297,8 +297,8 @@ fun canApply(fn: Fn) = Gadget.busy == null && !Gadget.backend.holds() && (starta
 // What applying does, for the sheet that asks: the consequence on the host
 private fun applyNote(fn: Fn) = when (fn) {
     Fn.STORAGE -> "The host still sees the drives as they were. Apply loads your changes, and may reconnect every drive; Discard puts your picks back."
-    Fn.TETHER -> "Tether still runs as it was. Apply restarts it, and the host loses its link for a moment; Discard puts your settings back."
-    Fn.HID -> "HID still runs as it was. Apply restarts it, and the host loses the keyboard and mouse for a moment."
+    Fn.TETHER -> "Tether still runs as it was. Apply reconnects the gadget, every drive and function with it, for a moment; Discard puts your settings back."
+    Fn.HID -> "HID still runs as it was. Apply reconnects the gadget, every drive and function with it, for a moment."
 }
 
 /*

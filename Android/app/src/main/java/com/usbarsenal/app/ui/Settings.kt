@@ -30,10 +30,8 @@ import com.usbarsenal.app.backend.BackendState
 import com.usbarsenal.app.backend.RootResult
 import com.usbarsenal.app.backend.Cache
 import com.usbarsenal.app.backend.backendState
-import com.usbarsenal.app.backend.daemonMode
 import com.usbarsenal.app.backend.pathLinked
 import com.usbarsenal.app.backend.readProfile
-import com.usbarsenal.app.backend.setDaemonMode
 import com.usbarsenal.app.backend.setPathLinked
 import com.usbarsenal.app.lcd.Lcd
 import com.usbarsenal.app.lcd.LcdType
@@ -53,9 +51,8 @@ private fun Section(label: String) {
 
 /*
  * Settings, in sections parted by rules: App (motion, haptics), Identity (the profile in force,
- * opening Identity), Backend (daemon mode and the PATH link, both read at the next boot, and
- * Reinstall), Credits (the fonts) and About. Daemon mode and the PATH link are Droidspaces'
- * switches, done the same way.
+ * opening Identity), Backend (the PATH link, read at the next boot, and Reinstall), Credits (the
+ * fonts) and About. The PATH link is Droidspaces' switch, done the same way.
  */
 @Composable
 fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> Unit, fix: (Backend) -> Unit) {
@@ -64,12 +61,11 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
     val switches = LocalSwitches.current
     val scope = rememberCoroutineScope()
     val backend = Gadget.backend
-    var daemon by remember { mutableStateOf(Cache.daemonMode) }
     var linked by remember { mutableStateOf(Cache.pathLinked) }
-    // Either switch away from what it was first read as in this process, the closest the app
-    // knows to what the boot read: then it takes effect at the next boot, which is worth saying
+    // The switch away from what it was first read as in this process, the closest the app knows
+    // to what the boot read: then it takes effect at the next boot, which is worth saying
     // ponytail: a change made in an earlier run since the boot reads as the boot's value
-    val changed = (BootValues.daemon != null && daemon != BootValues.daemon) || (BootValues.linked != null && linked != BootValues.linked)
+    val changed = BootLink.linked != null && linked != BootLink.linked
     // A switch whose write failed shakes, and stderr's last line sits under it
     var fault by remember { mutableStateOf<String?>(null) }
     val shake = rememberShake()
@@ -79,8 +75,7 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
     LaunchedEffect(Unit) {
         // Reads only, none behind the change lane; each replaces its cached value when it answers
         backendState(context).let { Gadget.backend = it; Cache.backend = it }
-        daemonMode()?.let { daemon = it; Cache.daemonMode = it; if (BootValues.daemon == null) BootValues.daemon = it }
-        pathLinked()?.let { linked = it; Cache.pathLinked = it; if (BootValues.linked == null) BootValues.linked = it }
+        pathLinked()?.let { linked = it; Cache.pathLinked = it; if (BootLink.linked == null) BootLink.linked = it }
         readProfile().takeIf { it.isNotEmpty() }?.let { Gadget.profile = it; Cache.profile = it }
     }
     fun write(r: RootResult, done: () -> Unit) {
@@ -115,22 +110,17 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
                 }
 
                 Section("Backend")
-                // Both write a file the boot module reads, so both are held until it is read, and
-                // without a backend installed: the marker and the link would name a binary not there
-                Column(Modifier.shake(shake)) {
-                    Kv("Daemon mode") {
-                        Dip(daemon == true, { on -> scope.launch { write(setDaemonMode(on)) { daemon = on } } }, "Daemon mode", held = daemon == null || !installed)
-                    }
-                    Kv("System path") {
-                        Dip(linked == true, { on -> scope.launch { write(setPathLinked(on)) { linked = on } } }, "System path", held = linked == null || !installed)
-                    }
+                // The link lives in the module, so it is held until read, and without a backend
+                // installed: it would name a binary not there
+                Kv("System path", Modifier.shake(shake)) {
+                    Dip(linked == true, { on -> scope.launch { write(setPathLinked(on)) { linked = on } } }, "System path", held = linked == null || !installed)
                 }
-                // One line kept for either, so the sections below never move when one shows
+                // One line kept for its fault or its warning, so the sections below never move
                 Box(Modifier.heightIn(min = Lcd.touch)) {
                     val f = fault
                     when {
                         f != null -> Fault(f, onLog = null)
-                        changed -> Warn("both apply from the next boot")
+                        changed -> Warn("applies from the next boot")
                     }
                 }
                 Key("Reinstall", Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp).opener("settings/reinstall"), enabled = backend != null) {
@@ -168,9 +158,8 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
     }
 }
 
-// The switches as first read in this process, for "both apply from the next boot"
-private object BootValues {
-    var daemon: Boolean? = null
+// The link as first read in this process, for "applies from the next boot"
+private object BootLink {
     var linked: Boolean? = null
 }
 

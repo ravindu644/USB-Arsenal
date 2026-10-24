@@ -142,8 +142,6 @@ Several images on live LUNs of the same type are swapped in place in one go.
     its MBR, which a plain ISO does not have, and older firmware may not take 2048-byte
     sectors on a disk. For older PCs, use `--mode cdrom` on a kernel with
     `kernel-patches/4.14/0004` to `0006` (or `6.12/0001`), which booted both laptops.
-- **Through the daemon, the image is opened on your side** and passed to the daemon as an
-  open file, so a path inside a container works as typed.
 - **On Android, an image the kernel may not read gets relabelled.** Files in a container
   or in `/data/local/tmp` carry an SELinux label the kernel's mass-storage thread cannot
   read, so USB Arsenal relabels them to the label `/sdcard` files use, and says so.
@@ -202,10 +200,9 @@ is not reading (asleep, or slower than the reports come), only the newest unsent
 kept and it goes out as soon as the node is writable again: the host always ends in the
 latest state and never gets a backlog replayed. A report that a newer one replaces before the
 host took it is never sent, so a key press needs its own poll interval before its release.
-It exits `0` at the end of stdin (after one last try at the pending report, 100 ms at most),
-and `1` with a message when the node cannot be opened or a write fails with anything but
-`EAGAIN` (`ESHUTDOWN` once the host has gone). It takes no lock and never goes through the
-daemon.
+It exits `0` at the end of stdin once the last report went out (it waits a second at most),
+and `1` with a message when the host did not take it, when the node cannot be opened, or when
+a write fails with anything but `EAGAIN` (`ESHUTDOWN` once the host has gone). It takes no lock.
 
 ## tether
 
@@ -241,35 +238,20 @@ usb-arsenal identity unset
 the built-in values in force. `identity show --json` prints one object:
 
 ```json
-{"profile":"/sdcard/x.conf","copy":false,"missing":"","keys":{"id_vendor":"0x1d6b",...}}
+{"profile":"/sdcard/x.conf","missing":"","keys":{"id_vendor":"0x1d6b",...}}
 ```
 
-`profile` is the active profile (empty for the built-in defaults), `copy` is `true` when the
-daemon keeps a copy of it, `missing` is the path a dangling link names, and `keys` holds every
+`profile` is the active profile (empty for the built-in defaults), `missing` is the path a
+dangling link names, and `keys` holds every
 key with the value in force, `""` for a derived one. With FILEs it prints an array, one
 object per FILE: `{"path":"<realpath>","errors":N,"keys":{...}}`. Each FILE goes through the
 loader `identity set` uses, so `0104` is octal as C reads it, ` key = v` spacing works, and a
 missing or bad key comes back at its default; `errors` counts the bad lines (`-1`: the file
 cannot be read, and the exit code is `1`). Values are printed one way: IDs as `0x%04x`
 (`0x0104`), `max_power` and `hid_group` in decimal, `hid_perm` in octal with a leading `0`
-(`0660`), strings as they are. `show FILE` runs in the caller's own process, with its own
-permissions, even when a daemon listens.
+(`0660`), strings as they are.
 
 See [identity.md](identity.md).
-
-## daemon
-
-```sh
-usb-arsenal daemon [--foreground] [--gid GID]
-usb-arsenal daemon stop
-```
-
-See [containers.md](containers.md). When a daemon is running, every command except
-`daemon`, `help`, `version`, `identity generate`, `identity show FILE` and `hid write` runs
-through it. A daemon whose binary is replaced on disk (an update) re-executes the new one
-before it serves the next client, keeping its socket and pid, so it never needs a restart. `UA_NO_PROXY=1`
-makes a command act directly. A path a container client saves into the setup (a bare `start`
-later opens it on the daemon's side) must be one the daemon can see.
 
 ## Exit codes
 

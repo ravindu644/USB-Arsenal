@@ -6,26 +6,16 @@ import androidx.compose.runtime.setValue
 import org.json.JSONArray
 import org.json.JSONObject
 
-// The one root runner every command goes through. The global mount namespace, as at boot: a daemon
-// started from here must see the mounts init sees, not the app's own view
+// The one root runner every command goes through. The global mount namespace, as at boot: an image
+// or the tether process started from here must see the mounts init sees, not the app's own view
 val Root = RootExec { ProcessBuilder("su", "--mount-master", "-c", it).start() }
 
-// ua_ws_path()'s workspace on Android; the binary lives in its bin/, the boot module only starts it
+// ua_ws_path()'s workspace on Android; the binary lives in its bin/
 const val WORKSPACE = "/data/local/USB-Arsenal"
 const val UA = "$WORKSPACE/bin/usb-arsenal"
 
-/*
- * Reads run here, not through the daemon (UA_NO_PROXY): as root they read the same configfs and
- * workspace, and Home re-reads status every 2s, which would fill the daemon's log with
- * `Running: status --json` and bury the commands that changed something.
- */
-private const val NO_PROXY = "UA_NO_PROXY=1"
-
-internal fun read() = "$NO_PROXY $UA"
-
 // Keys + mouse's writer for one node: reports of [size] bytes on stdin, each one write, never
-// blocking on the node (hid.c's `hid write`). The binary never relays it, so it needs no
-// UA_NO_PROXY, which a stream's `exec` would take for the command's name
+// blocking on the node (hid.c's `hid write`)
 suspend fun hidWrite(node: String, size: Int) = Root.stream("$UA hid write ${shellQuote(node)} $size")
 
 // A USB device controller as /sys/class/udc lists it, and its state ("configured": a host is
@@ -62,7 +52,7 @@ object Controller {
      * a controller gone to host mode comes back, and the user picks another in Settings.
      */
     suspend fun set(name: String, binary: String = UA): RootResult {
-        val r = Root.change("$NO_PROXY ${shellQuote(binary)} setup set ${shellQuote("udc=$name")}")
+        val r = Root.change("${shellQuote(binary)} setup set ${shellQuote("udc=$name")}")
         if (r.ok) picked = name
         return r
     }
@@ -80,7 +70,7 @@ object Controller {
 
 // check probes by creating functions in configfs, so once the gadget may be live it goes through
 // the change lane and never races a command
-suspend fun readCheck(): Result<Capabilities> = Root.change("${read()} check --json").json(::parseCheck)
+suspend fun readCheck(): Result<Capabilities> = Root.change("$UA check --json").json(::parseCheck)
 
 // The C side colours its [+] lines even through a pipe
 private val ANSI = Regex("\u001B\\[[0-9;]*[A-Za-z]")
@@ -110,7 +100,7 @@ fun splitCheck(out: List<String>): Pair<List<String>, List<String>> {
  * ponytail: check probes twice, once per format; one run that prints both if a kernel ever minds
  */
 suspend fun readCheckReport(binary: String): Pair<List<String>, Result<Capabilities>> {
-    val check = "$NO_PROXY ${shellQuote(binary)} check"
+    val check = "${shellQuote(binary)} check"
     val r = Root.read("$check 2>&1; echo $REPORT_END; $check --json", timeoutMs = 30_000)
     val (report, json) = splitCheck(r.out)
     return report to r.copy(out = json).json(::parseCheck)
@@ -121,7 +111,7 @@ suspend fun readCheckReport(binary: String): Pair<List<String>, Result<Capabilit
  * (the file, empty for the built-in defaults) and "missing" (a link to a file that is gone, whose
  * host gets the defaults). Empty when it could not be read.
  */
-suspend fun readProfile(): Map<String, String> = parseProfile(Root.read("${read()} identity show --json").out.joinToString("\n"))
+suspend fun readProfile(): Map<String, String> = parseProfile(Root.read("$UA identity show --json").out.joinToString("\n"))
 
 fun parseProfile(json: String): Map<String, String> = runCatching {
     val o = JSONObject(json)
@@ -151,7 +141,7 @@ const val DROIDSPACES = "/data/local/Droidspaces/bin/droidspaces"
 fun parseContainers(json: String): List<String> =
     JSONObject(json).optJSONArray("running")?.let { a -> (0 until a.length()).map { a.getJSONObject(it).getString("name") } }.orEmpty()
 
-suspend fun readStatus(): Result<GadgetStatus> = Root.read("${read()} status --json").json(::parseStatus)
+suspend fun readStatus(): Result<GadgetStatus> = Root.read("$UA status --json").json(::parseStatus)
 
 /*
  * What su -v prints, as it prints it: "3.3.0:KernelSU" on the a166p. A failure carries what a shell would have said. KernelSU hides su from an app it has not

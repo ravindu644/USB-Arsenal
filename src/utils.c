@@ -25,8 +25,8 @@ void ua_log_internal(const char *prefix, const char *color, int is_err,
        strncmp(msg, "[NET]", 5) == 0 || strncmp(msg, "[DHCP]", 6) == 0))
     return;
 
-  /* Always coloured, as in Droidspaces: a relayed command prints through the
-   * daemon's pipe, so an isatty() check here would strip it on the way back */
+  /* Always coloured, as in Droidspaces: the app reads it through a pipe and
+   * strips the codes itself */
   FILE *out = is_err ? stderr : stdout;
   fprintf(out, "[%s%s" C_RESET "] %s\n", color, prefix, msg);
   fflush(out);
@@ -325,8 +325,8 @@ int ua_wait(int (*get)(const char *, char *, size_t), const char *key,
 }
 
 /* One workspace, laid out like Droidspaces' /data/local/Droidspaces: Logs,
- * Pids, Net, plus Gadget (handoff, lock) and Run (the daemon socket). A
- * container gets the Linux path; its Run/ is where the host's is bind-mounted.
+ * Pids, Net, plus Gadget (handoff, lock, setup). A container gets the Linux
+ * path, where Android's is best bind-mounted, so both share one handoff.
  * Persistent on both; a stale handoff is voided by its boot marker. */
 const char *ua_workspace(void) {
   return is_android() ? UA_WORKSPACE_ANDROID : UA_WORKSPACE_LINUX;
@@ -370,8 +370,8 @@ void ua_ws_path(const char *sub, const char *leaf, char *out, size_t size) {
 }
 
 /* The pid in pidfile, if that process is still one of ours. Matched by
- * program name, not inode: replacing the binary while a daemon runs (adb
- * push, a module update) leaves its exe as "... (deleted)", and a stop may
+ * program name, not inode: replacing the binary while the tether process
+ * runs (adb push, an update) leaves its exe as "... (deleted)", and a stop may
  * come from a different copy than the start. A pid reused by something else
  * after a reboot must never get our signal. */
 pid_t ua_read_our_pid(const char *pidfile) {
@@ -392,72 +392,6 @@ pid_t ua_read_our_pid(const char *pidfile) {
     *del = '\0';
   const char *x = strrchr(exe, '/'), *y = strrchr(self, '/');
   return strcmp(x ? x + 1 : exe, y ? y + 1 : self) == 0 ? pid : 0;
-}
-
-/* SCM_RIGHTS helpers, lifted from Droidspaces (src/utils.c) */
-
-int ua_send_fds(int sock, const void *data, size_t len, const int *fds,
-                int count) {
-  if (count < 0 || count > UA_MAX_FDS)
-    return -1;
-  struct msghdr msg = {0};
-  char buf[CMSG_SPACE(sizeof(int) * UA_MAX_FDS)];
-  memset(buf, 0, sizeof(buf));
-  struct iovec io = {.iov_base = (void *)(uintptr_t)data, .iov_len = len};
-  msg.msg_iov = &io;
-  msg.msg_iovlen = 1;
-  if (count > 0) {
-    msg.msg_control = buf;
-    msg.msg_controllen = CMSG_SPACE(sizeof(int) * (size_t)count);
-    struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
-    cmsg->cmsg_level = SOL_SOCKET;
-    cmsg->cmsg_type = SCM_RIGHTS;
-    cmsg->cmsg_len = CMSG_LEN(sizeof(int) * (size_t)count);
-    memcpy(CMSG_DATA(cmsg), fds, sizeof(int) * (size_t)count);
-  }
-  ssize_t n = sendmsg(sock, &msg, MSG_NOSIGNAL);
-  return n == (ssize_t)len ? 0 : -1;
-}
-
-/* Up to max fds with the message; extras the sender attached are closed,
- * since the kernel has already installed them here. Returns the data bytes
- * read, -1 on error or a truncated control message. */
-ssize_t ua_recv_fds(int sock, void *data, size_t len, int *fds, int max,
-                    int *count) {
-  struct msghdr msg = {0};
-  char buf[CMSG_SPACE(sizeof(int) * UA_MAX_FDS)];
-  memset(buf, 0, sizeof(buf));
-  struct iovec io = {.iov_base = data, .iov_len = len};
-  msg.msg_iov = &io;
-  msg.msg_iovlen = 1;
-  msg.msg_control = buf;
-  msg.msg_controllen = sizeof(buf);
-  *count = 0;
-  ssize_t n = recvmsg(sock, &msg, MSG_CMSG_CLOEXEC);
-  if (n < 0)
-    return -1;
-  for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg); cmsg;
-       cmsg = CMSG_NXTHDR(&msg, cmsg)) {
-    if (cmsg->cmsg_level != SOL_SOCKET || cmsg->cmsg_type != SCM_RIGHTS)
-      continue;
-    int got = (int)((cmsg->cmsg_len - CMSG_LEN(0)) / sizeof(int));
-    const int *src = (const int *)CMSG_DATA(cmsg);
-    for (int i = 0; i < got; i++) {
-      int fd;
-      memcpy(&fd, src + i, sizeof(fd));
-      if (*count < max)
-        fds[(*count)++] = fd;
-      else
-        close(fd);
-    }
-  }
-  if (msg.msg_flags & MSG_CTRUNC) {
-    for (int i = 0; i < *count; i++)
-      close(fds[i]);
-    *count = 0;
-    return -1;
-  }
-  return n;
 }
 
 /* Something stable and unique to this machine: the phone's serial, else the

@@ -26,8 +26,6 @@ The first launch walks through setup:
 4. **Backend.** Installs the binary to `/data/local/USB-Arsenal/bin/usb-arsenal` and the boot
    module. When the module had no SELinux rule before, it says to reboot once.
 
-The app never starts or stops the daemon. Daemon mode is a Settings switch, read at boot.
-
 ## Use
 
 **Home** shows what is up. Each function has a row that opens its screen and a switch that
@@ -64,10 +62,11 @@ full-screen button turns the phone into one wide trackpad in landscape. A gamepa
 stick moves the pointer; A and X click.
 
 **Log** has two tabs: CLI, every command the app ran this session and what it printed, and
-Daemon, the daemon's log file. Clear empties the tab in front (on Daemon, the file itself).
+Tether, the tether process's log (DHCP, the uplink, the gateway). Clear empties the tab in
+front (on Tether, the file itself).
 
 **Settings**: motion and haptics, the identity profile ([identity.md](identity.md); profiles
-live in `/sdcard/USB-Arsenal/Profiles`), the controller on phones with several, daemon mode,
+live in `/sdcard/USB-Arsenal/Profiles`), the controller on phones with several,
 `usb-arsenal` on PATH for root shells, and Reinstall.
 
 **What each screen sets up is the backend's.** The picks, the tether options, the HID interval

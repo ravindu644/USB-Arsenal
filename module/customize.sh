@@ -14,7 +14,7 @@ esac
 [ -f "$MODPATH/bin/$BIN" ] || abort "! $BIN is missing from the zip"
 
 # The binary lives in the workspace, as the app installs it: copied beside the
-# target and renamed over it, so a running daemon's binary is never written to
+# target and renamed over it, so a binary that is running is never written to
 UA=/data/local/USB-Arsenal/bin/usb-arsenal
 mkdir -p /data/local/USB-Arsenal/bin
 cp "$MODPATH/bin/$BIN" "$UA.new" && chmod 755 "$UA.new" && mv -f "$UA.new" "$UA" ||
@@ -27,9 +27,7 @@ rm -rf "$MODPATH/bin"
 mkdir -p "$MODPATH/system/bin"
 ln -sf "$UA" "$MODPATH/system/bin/usb-arsenal"
 
-# For the same reason it turns daemon mode on, unless it was set before
-[ -f /data/local/USB-Arsenal/.daemon_mode ] || echo 1 > /data/local/USB-Arsenal/.daemon_mode
+# What an older version left: the daemon's marker and socket directory
+rm -rf /data/local/USB-Arsenal/.daemon_mode /data/local/USB-Arsenal/Run /data/local/USB-Arsenal/usb-arsenald.pid
 
 ui_print "- USB Arsenal for $ARCH installed"
-ui_print "- The daemon starts on boot; containers reach it by bind-mounting"
-ui_print "  /data/local/USB-Arsenal/Run to /var/lib/USB-Arsenal/Run"

@@ -34,7 +34,6 @@ SRCS = $(SRC_DIR)/main.c \
        $(SRC_DIR)/utils.c \
        $(SRC_DIR)/check.c \
        $(SRC_DIR)/gadget.c \
-       $(SRC_DIR)/daemon.c \
        $(SRC_DIR)/config.c \
        $(SRC_DIR)/setup.c \
        $(SRC_DIR)/gadgets/storage.c \
@@ -144,7 +143,7 @@ module:
 		$(MAKE) --no-print-directory $$a || exit 1; \
 		mv $(OUT_DIR)/$(BINARY_NAME) $(OUT_DIR)/module/bin/$(BINARY_NAME)-$$a || exit 1; \
 	done
-	@cp module/module.prop module/customize.sh module/service.sh module/uninstall.sh module/sepolicy.rule $(OUT_DIR)/module/
+	@cp module/module.prop module/customize.sh module/uninstall.sh module/sepolicy.rule $(OUT_DIR)/module/
 	@sed -i 's/^version=.*/version=v$(VERSION)/; s/^versionCode=.*/versionCode=$(VERSION_CODE)/' $(OUT_DIR)/module/module.prop
 	@cd $(OUT_DIR)/module && rm -f ../$(BINARY_NAME)-v$(VERSION).zip && zip -qr9 ../$(BINARY_NAME)-v$(VERSION).zip .
 	@echo "[+] Built: $(OUT_DIR)/$(BINARY_NAME)-v$(VERSION).zip"

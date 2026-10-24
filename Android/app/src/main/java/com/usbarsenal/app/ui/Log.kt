@@ -24,14 +24,15 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val DAEMON_LOG = "$WORKSPACE/Logs/usb-arsenald.log"
+// What the tether process (DHCP, the uplink, the gateway) writes; it appends, so Clear can empty it
+private const val TETHER_LOG = "$WORKSPACE/Logs/tether.log"
 
 /*
- * The Daemon tab's lines and how far into the file they reach, kept for the process like the
+ * The Tether tab's lines and how far into the file they reach, kept for the process like the
  * CLI tab's: coming back to the tab carries on from there, so nothing repeats and a Clear
  * stays cleared.
  */
-private object DaemonLog {
+private object TetherLog {
     val lines = mutableStateListOf<String>()
     var offset: Long? = null
     // Clears done so far; the tail that starts after one empties the tab
@@ -39,17 +40,17 @@ private object DaemonLog {
 }
 
 /*
- * Log: CLI is this session's command output, as each command printed it; Daemon follows
- * Logs/usb-arsenald.log on its own root shell, open only while that tab shows. Clear empties
- * the tab in front (on Daemon, the log file itself), Copy logs copies it.
+ * Log: CLI is this session's command output, as each command printed it; Tether follows
+ * Logs/tether.log on its own root shell, open only while that tab shows. Clear empties
+ * the tab in front (on Tether, the log file itself), Copy logs copies it.
  */
 @Composable
 fun LogScreen(back: () -> Unit) {
     BackHandler(onBack = back)
     val context = LocalContext.current
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    val daemon = DaemonLog.lines
-    // A clear of the Daemon tab restarts its tail on the emptied file
+    val tether = TetherLog.lines
+    // A clear of the Tether tab restarts its tail on the emptied file
     var clears by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(tab, clears) {
@@ -57,46 +58,45 @@ fun LogScreen(back: () -> Unit) {
         // A Clear empties the tab here, once the tail before it is gone, so none of its lines
         // land after the clear
         val mine = clears
-        if (mine != DaemonLog.cleared) {
-            daemon.clear()
-            DaemonLog.offset = 0
-            DaemonLog.cleared = mine
+        if (mine != TetherLog.cleared) {
+            tether.clear()
+            TetherLog.offset = 0
+            TetherLog.cleared = mine
         }
         // The last 200 lines the first time; after that, the bytes since the tab last showed.
-        // A file now shorter than that was rotated at a daemon start: its last 200 lines again,
-        // under a line that says so
-        val size = Root.read("stat -c %s $DAEMON_LOG").out.firstOrNull()?.toLongOrNull()
+        // A file now shorter than that was emptied elsewhere: its last 200 lines again, under a
+        // line that says so
+        val size = Root.read("stat -c %s $TETHER_LOG").out.firstOrNull()?.toLongOrNull()
         if (size == null) {
-            daemon += "# no daemon log yet: daemon mode writes it"
+            tether += "# no tether log yet: a tether start writes it"
             return@LaunchedEffect
         }
-        val at = DaemonLog.offset
-        if (at != null && at > size) daemon += "# a daemon start began a new log"
+        val at = TetherLog.offset
+        if (at != null && at > size) tether += "# the log started over"
         val from = at?.takeIf { it <= size }?.let { "-c +${it + 1}" } ?: "-n 200"
-        // -f, not -F: Android 8 to 10 ship a toybox without -F, and the log rotates only when
-        // the daemon starts
-        val tail = Root.stream("tail $from -f $DAEMON_LOG")
+        // -f, not -F: Android 8 to 10 ship a toybox without -F, and the file is never replaced
+        val tail = Root.stream("tail $from -f $TETHER_LOG")
         if (tail == null) {
-            daemon += "[-] Cannot follow $DAEMON_LOG: no root"
+            tether += "[-] Cannot follow $TETHER_LOG: no root"
             return@LaunchedEffect
         }
         try {
             tail.lines.collect {
-                daemon += plain(it)
-                daemon.keepLast()
+                tether += plain(it)
+                tether.keepLast()
             }
         } finally {
             // Leaving the tab cancels this: the tail's shell goes with it, and where it got to is kept
             withContext(NonCancellable) {
                 tail.close()
                 // Not after a Clear: the tail that follows it starts from the emptied file
-                if (clears == mine) DaemonLog.offset = Root.read("stat -c %s $DAEMON_LOG").out.firstOrNull()?.toLongOrNull()
+                if (clears == mine) TetherLog.offset = Root.read("stat -c %s $TETHER_LOG").out.firstOrNull()?.toLongOrNull()
             }
         }
     }
     // Opening the log is reading the fault, so the line that pointed here has done its job
     LaunchedEffect(Unit) { Gadget.fault = null }
-    val lines = if (tab == 0) Gadget.cli else daemon
+    val lines = if (tab == 0) Gadget.cli else tether
     Screen(
         footer = {
             KeyRow {
@@ -104,11 +104,11 @@ fun LogScreen(back: () -> Unit) {
                     if (tab == 0) {
                         lines.clear()
                     } else {
-                        // The file itself, so a relaunch does not read it all back. The daemon
-                        // appends (O_APPEND), so it writes on at the new end; the .old a daemon
-                        // start rotated aside goes too. Its own shell: this is not a gadget change
+                        // The file itself, so a relaunch does not read it all back. The tether
+                        // process appends (O_APPEND), so it writes on at the new end. Its own
+                        // shell: this is not a gadget change
                         scope.launch {
-                            if (Root.read(": > $DAEMON_LOG; rm -f $DAEMON_LOG.old").ok) clears++
+                            if (Root.read(": > $TETHER_LOG").ok) clears++
                         }
                     }
                 }
@@ -121,7 +121,7 @@ fun LogScreen(back: () -> Unit) {
     ) {
         Top { BackKey() }
         Title("Log")
-        Segs(listOf("CLI", "Daemon"), tab, { tab = it })
+        Segs(listOf("CLI", "Tether"), tab, { tab = it })
         // A short window scrolls the screen to it, and it keeps a dozen lines. Each tab has its
         // own, so switching opens on that tab's newest line instead of the other's place
         key(tab) { Terminal(lines, Modifier.fill(min = 240.dp)) }

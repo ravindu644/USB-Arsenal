@@ -401,8 +401,8 @@ Storage, Tether and HID work one way.
   by LUN, so the host keeps every drive it can: a LUN no longer picked is ejected in place, a
   changed image on a live LUN swaps in place when the type stays the same, a LUN already serving
   its pick is left alone. A new LUN, a new type, or a drive the host holds locked replugs, and
-  with it every drive and function. Tether and HID swap their function in one replug, the other
-  functions still bound. Whether a change waits (`pending`) is the backend's too, from its two
+  with it every drive and function. Tether and HID swap their function in one replug of the whole
+  gadget, so every drive and function reconnects with it. Whether a change waits (`pending`) is the backend's too, from its two
   files, whoever started the function; a function started from the command line asks the same.
   The chain, the counters and a drive's LED keep showing what runs; the LUN strip shows the
   setup and what runs.
@@ -614,10 +614,10 @@ Tether's counters from `CONFIGURE`, HID's cards from `Interval`, Keys + mouse's 
 ### Settings
 In sections, a rule between each: `APP` (Motion, Haptics), `IDENTITY` (one row, `Profile` and the
 profile in force by its name as the VT323 value, `Built-in` with none, opening Identity),
-`BACKEND` (Daemon mode, System path, Reinstall), `CREDITS` (Fonts) and `ABOUT` (App, Source),
-last. Daemon mode and System path are held until read, and while no backend is installed. Under
-them one line is kept, so the sections below never move: a failed write's fault, or, once either
-is away from what it was first read as, the warning `both apply from the next boot`. With more than
+`BACKEND` (System path, Reinstall), `CREDITS` (Fonts) and `ABOUT` (App, Source), last. System
+path is held until read, and while no backend is installed. Under it one line is kept, so the
+sections below never move: a failed write's fault, or, once it is away from what it was first
+read as, the warning `applies from the next boot`. With more than
 one controller a `USB` section after Identity holds `Controller`, the pick, opening a choice
 sheet with each controller's state; while the gadget is bound it is held, noted `stop all to
 change it`, as the backend keeps the controller it holds.
@@ -924,12 +924,12 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | HID period text | `status --json`'s `speed` (`full-speed` is a USB 1.1 host) and `hid[].interval` |
 | Quacky | nothing yet: a WIP page |
 | Identity | `identity show --json` (the profile in force, and `missing` for a link whose file is gone), `identity show --json FILE...` (the folder's profiles, read by the backend's own loader), `identity generate FILE --force` then the six keys written in (`product`, `manufacturer`, `serial`, `id_vendor`, `id_product`, `max_power`), an edit from the file as it is, through a rename, `identity set FILE`, `identity unset` for Built-in |
-| Log tabs | command output (CLI) and `Logs/usb-arsenald.log` (Daemon). Clear on Daemon empties the file (`: >`, safe while the daemon appends) and removes its rotated `.old` |
+| Log tabs | command output (CLI) and `Logs/tether.log` (Tether: DHCP, the uplink, the gateway). Clear on Tether empties the file (`: >`, safe while the tether process appends) |
 | Function names in the bind screen | `mass_storage.ua`, `ncm.ua`, `hid.ua_kbd`, `hid.ua_mouse` |
 | Root screen | `id -u; su -v` (prints `3.3.0:KernelSU` or `<version>:MAGISK`), shown as a shell session; its `#` comments are the app's narration |
 | Check screen | `check --json`, run with the bundled binary before anything is installed |
 | Controller step, Settings' Controller | `/sys/class/udc/*` and each one's `state`; the pick is `setup set udc=NAME`, which every command then uses |
-| Backend screen | the ported installer: the binary to `/data/local/USB-Arsenal/bin`, `module/` to `/data/adb/modules/usb-arsenal`, each step printing what it really printed, then `[+] Installed`, and `[!] Reboot to load the SELinux rule` only when the module had no rule before. The daemon is Settings' daemon mode, never the install's. `./install-backend.sh` is how the session shows it; there is no such script. The version is the app's own, never asked of root |
+| Backend screen | the ported installer: the binary to `/data/local/USB-Arsenal/bin`, `module/` to `/data/adb/modules/usb-arsenal`, each step printing what it really printed, then `[+] Installed`, and `[!] Reboot to load the SELinux rule` only when the module had no rule before. `./install-backend.sh` is how the session shows it; there is no such script. The version is the app's own, never asked of root |
 | Home attention key | the installer's backend check: not installed, module missing, corrupted, update available (no root is the shade) |
 | Home status, live rows | `status --json` |
 
@@ -944,11 +944,9 @@ App-side features, done by the app itself: the Not applied sheet's asking (what 
 the backend's `pending`), the `/sdcard/USB-Arsenal` file list, Create (a sparse
 image, as `truncate -s` does, or a full one with progress), HID input written to `/dev/hidgN`,
 the Motion and Haptics switches in Settings, and the profiles folder,
-`/sdcard/USB-Arsenal/Profiles`, which Identity lists and writes. Settings' Daemon mode writes `1` or `0` to
-`/data/local/USB-Arsenal/.daemon_mode`, which the boot module's `service.sh` reads, and System
-path makes or removes `/data/adb/modules/usb-arsenal/system/bin/usb-arsenal`, a link to the
-workspace binary (Droidspaces' `DaemonModeRepository` and `SymlinkInstaller`); both act at the
-next boot.
+`/sdcard/USB-Arsenal/Profiles`, which Identity lists and writes. Settings' System path makes or
+removes `/data/adb/modules/usb-arsenal/system/bin/usb-arsenal`, a link to the workspace binary
+(Droidspaces' `SymlinkInstaller`), which acts at the next boot.
 
 Not shown because the backend cannot: UVC (not built), host controller or port names, lease
 countdowns, link uptime, a configfs write trace, a pending-changes queue (the Not applied sheet says

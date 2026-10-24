@@ -205,16 +205,12 @@ fun IdentityScreen(back: () -> Unit, openLog: () -> Unit) {
             reload++
             when {
                 created -> pick(path)
-                path != active -> {}
                 // The running profile changed under the gadget: Back offers to apply it, and
-                // Discard puts the old text back
-                bound -> {
+                // Discard puts the old text back. Off the bus the link already reads the edit
+                path == active && bound -> {
                     IdentitySetup.edited = true
                     if (IdentitySetup.undo == null && before != null) IdentitySetup.undo = path to before
                 }
-                // Off the bus, set it again: a daemon that keeps a copy (a path it cannot see)
-                // takes the new one, and nothing replugs
-                else -> applyChosen()
             }
         }
     }

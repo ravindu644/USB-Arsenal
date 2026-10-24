@@ -22,11 +22,19 @@ die() { echo "FAIL: $1"; "$B" stop >/dev/null 2>&1 || true; exit 1; }
 trap 'rm -rf "$TMP"' EXIT
 
 [ "$(id -u)" = 0 ] || die "run as root"
+# A clean slate: a run that failed halfway can leave the gadget bound, the
+# dummy host's port stuck, and setup, running or identity values that would
+# change this run. modprobe keeps a loaded module, so reload it
+[ -e /sys/class/udc/$UDC ] && { "$B" --udc $UDC stop >/dev/null 2>&1 || true; }
+modprobe -r dummy_hcd 2>/dev/null || true
 modprobe dummy_hcd
 modprobe libcomposite
 [ -e /sys/class/udc/$UDC ] || die "dummy_hcd gave no $UDC"
 # A dummy controller is never picked by itself, so it is always named
 A="--udc $UDC"
+"$B" $A setup reset >/dev/null || die "setup reset"
+"$B" $A identity unset >/dev/null || die "identity unset"
+rm -f /var/lib/USB-Arsenal/Gadget/running.conf
 # dummy_udc sets its state file to configured but never resets it on a
 # disconnect, so it cannot say whether the host still sees us: ask the host.
 # Its side of dummy_hcd is the root hub whose product names it

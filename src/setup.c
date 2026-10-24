@@ -174,12 +174,13 @@ int ua_setup_set(struct ua_setup *s, const char *assignment) {
 }
 
 /* Copy fn's keys (UA_FN_ALL: every key) from one setup to another; for
- * storage only the LUNs whose bit is in mask */
+ * storage only the LUNs whose bit is in mask. The controller belongs to no
+ * function, so only UA_FN_ALL takes it: `setup reset hid` must not drop it */
 static void copy_fn(struct ua_setup *to, const struct ua_setup *from,
                     enum ua_fn fn, unsigned mask) {
   for (size_t i = 0; i < NKEYS; i++) {
     enum ua_fn kf = key_fn(i);
-    if (fn != UA_FN_ALL && kf != fn && kf != UA_FN_ALL)
+    if (fn != UA_FN_ALL && kf != fn)
       continue;
     if (kf == UA_FN_STORAGE && !(mask & (1u << (keys[i].name[11] - '0'))))
       continue;
@@ -193,6 +194,8 @@ int ua_running_take(enum ua_fn fn, unsigned mask) {
   ua_setup_load(&s);
   ua_running_load(&r);
   copy_fn(&r, &s, fn, mask);
+  /* Every start runs on the setup's controller */
+  safe_strncpy(r.udc, s.udc, sizeof(r.udc));
   return save(RUNNING_LEAF, &r, 1);
 }
 
