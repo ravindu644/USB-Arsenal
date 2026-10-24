@@ -168,7 +168,6 @@ private val KEYS_ABOVE_BOX = gridHeight(2) + gridHeight(4) + gridHeight(2) + Lcd
 @Composable
 fun KbdMouseScreen(back: () -> Unit) {
     BackHandler(onBack = back)
-    PollStatus()
     val context = LocalContext.current
     // Kept through a status read that fails: one bad poll must not kill the writers
     val status = Gadget.status
@@ -343,8 +342,8 @@ fun KbdMouseScreen(back: () -> Unit) {
                         ) {
                             Group("Configure")
                             val speed = HidSetup.speed
-                            Slider("Speed", speed, 1..16, if (speed % 4 == 0) "${speed / 4}.0x" else "${speed / 4f}x", { HidSetup.setSpeed(context, it) })
-                            Kv("Natural scroll") { Dip(HidSetup.natural, { HidSetup.setNatural(context, it) }, "Natural scroll") }
+                            Slider("Speed", speed, 1..16, if (speed % 4 == 0) "${speed / 4}.0x" else "${speed / 4f}x", { HidSetup.speed(it) })
+                            Kv("Natural scroll") { Dip(HidSetup.natural, { HidSetup.natural(it) }, "Natural scroll") }
                         }
                     }
                 }

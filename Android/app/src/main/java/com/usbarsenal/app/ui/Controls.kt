@@ -706,7 +706,7 @@ sealed interface Port {
 
     data class Stopping(val command: String) : Port
 
-    data object Android : Port
+    data class Android(val detail: String = "") : Port
 }
 
 // What the bar's row says for a while after a command fails; the fault itself is the fault line
@@ -755,6 +755,7 @@ fun BottomBar(port: Port, onStopAll: () -> Unit, modifier: Modifier, binds: Int,
                     is Port.Replugging -> "Replugging" to shown.command
                     is Port.Stopping -> "Stopping" to shown.command
                     Failed -> "Failed" to ""
+                    is Port.Android -> "Port with Android" to shown.detail
                     else -> "Port with Android" to ""
                 }
                 Row(

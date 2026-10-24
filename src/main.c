@@ -35,6 +35,8 @@ static const struct command commands[] = {
     {"stop", cmd_stop, help_stop, "Tear everything down, restore the owner"},
     {"identity", ua_cmd_identity, ua_help_identity,
      "Profiles: IDs, strings, serial, defaults"},
+    {"setup", ua_cmd_setup, ua_help_setup,
+     "What each function starts with, shared with the app"},
     {"daemon", ua_cmd_daemon, ua_help_daemon,
      "Run the root daemon other copies relay to"},
     {"help", cmd_help, NULL, "Show help for a command"},
@@ -122,8 +124,9 @@ static void help_status(void) {
          "Show the backend, the controller and its state, and every live\n"
          "function: storage images, HID nodes, the tether interface.\n\n"
          "  --json    One JSON object instead: version, udc, udc_state,\n"
-         "            bound, and the storage, hid and tether parts. Every\n"
-         "            key is always present.\n\n"
+         "            bound, the storage, hid and tether parts, then\n"
+         "            boot_id, setup, running and pending (see `setup`).\n"
+         "            Every key is always present.\n\n"
          "Examples:\n"
          "  " UA_NAME " status\n"
          "  " UA_NAME " status --json\n");
@@ -177,6 +180,8 @@ static int cmd_status(int argc, char **argv) {
       ua_status_tether(&g, 1);
     else
       printf("null");
+    first = 0;
+    ua_setup_json(&g, live, &first);
     printf("}\n");
     return UA_EXIT_OK;
   }
@@ -189,6 +194,15 @@ static int cmd_status(int argc, char **argv) {
   ua_status_storage(&g, 0);
   ua_status_hid(&g, 0);
   ua_status_tether(&g, 0);
+  struct ua_setup s, r;
+  ua_setup_load(&s);
+  ua_running_load(&r);
+  static const char *const names[] = {"storage", "tether", "hid"};
+  for (int fn = 0; fn < 3; fn++)
+    if (ua_fn_linked(&g, (enum ua_fn)fn) &&
+        ua_setup_pending((enum ua_fn)fn, &s, &r))
+      printf("Pending:    %s differs from its setup; `" UA_NAME " %s apply`\n",
+             names[fn], names[fn]);
   return UA_EXIT_OK;
 }
 
@@ -390,6 +404,14 @@ int main(int argc, char **argv) {
   if (!cmd) {
     ua_usage_error(NULL, "No such command: %s", argv[optind]);
     return UA_EXIT_USAGE;
+  }
+  /* The setup's controller stands in for --udc, so a phone with two needs
+   * the flag once (`setup set udc=NAME`), not on every command */
+  static struct ua_setup setup;
+  if (!ua_udc_opt) {
+    ua_setup_load(&setup);
+    if (setup.udc[0])
+      ua_udc_opt = setup.udc;
   }
   /* Commands parse their own argv with getopt_long; optind 0 makes both
    * glibc and musl forget the "+" mode used above */

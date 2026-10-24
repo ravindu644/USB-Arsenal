@@ -16,39 +16,14 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
 import com.usbarsenal.app.BuildConfig
 import com.usbarsenal.app.backend.Backend
 import com.usbarsenal.app.backend.BackendState
-import com.usbarsenal.app.backend.backendState
 import com.usbarsenal.app.lcd.Lcd
 import com.usbarsenal.app.lcd.LcdType
 import com.usbarsenal.app.lcd.Pin
 import com.usbarsenal.app.lcd.Sprites
-import kotlinx.coroutines.delay
-
-// Status is re-read this often while a gadget screen is in front (and after every command)
-const val POLL_MS = 2_000L
-
-// Re-reads status while the screen is started; the read lane never waits on a command
-@Composable
-fun PollStatus() {
-    val owner = LocalLifecycleOwner.current
-    // Apart from the polling, so the first status never waits on a slow check
-    LaunchedEffect(Unit) { Gadget.loadOnce() }
-    LaunchedEffect(owner) {
-        owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) {
-                Gadget.refresh()
-                delay(POLL_MS)
-            }
-        }
-    }
-}
 
 // The attention key's words for a backend that needs something: what is wrong, and the fix
 private fun attention(b: Backend): Pair<String, String>? = when (b.state) {
@@ -63,6 +38,9 @@ private fun attention(b: Backend): Pair<String, String>? = when (b.state) {
     BackendState.NO_ROOT -> null
 }
 
+// The bar's detail once status has not answered for a while; the rows keep the last answer
+const val NO_ANSWER = "no answer from usb-arsenal"
+
 /*
  * Home is the gadget: each function a row with its live facts and its switch, which starts it
  * with what its screen set up, or stops it; the bottom bar says who holds the port. A backend
@@ -71,16 +49,7 @@ private fun attention(b: Backend): Pair<String, String>? = when (b.state) {
  */
 @Composable
 fun HomeScreen(open: (Fn) -> Unit, openLog: () -> Unit, openSettings: () -> Unit, fix: (Backend) -> Unit) {
-    PollStatus()
-    val context = LocalContext.current
-    LaunchedEffect(Unit) { Gadget.backend = backendState(context) }
     val backend = Gadget.backend
-    LaunchedEffect(Unit) {
-        Picks.load(context)
-        TetherSetup.load(context)
-        HidSetup.load(context)
-    }
-    val picks = Picks.all
     val status = Gadget.status
     val caps = Gadget.caps
     val busy = Gadget.busy
@@ -92,18 +61,20 @@ fun HomeScreen(open: (Fn) -> Unit, openLog: () -> Unit, openSettings: () -> Unit
     val first = remember { FocusRequester() }
     // A row Back is returning to asks after this, so it wins; one that is gone leaves this
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    // Three failed reads in a row: what is shown is the last answer, and the bar says so
+    val silent = Gadget.misses >= 3
     val port = when {
         busy?.stopping == true -> Port.Stopping(busy.says)
         busy != null -> Port.Replugging(busy.says)
-        status?.bound == true -> Port.Bound(status.udc)
-        else -> Port.Android
+        status?.bound == true -> Port.Bound(if (silent) NO_ANSWER else status.udc)
+        else -> Port.Android(if (silent) NO_ANSWER else "")
     }
 
     // Stop all fails on the whole gadget: the bar shakes and the fault sits above it
     val barShake = rememberShake()
     val wholeFault = Gadget.fault?.takeIf { it.where == null }
     LaunchedEffect(wholeFault) { if (wholeFault != null) barShake.fire() }
-    val stopAll = { Gadget.run(null, "stop") { if (it) Gadget.forgetStart() } }
+    val stopAll = { Gadget.run(null, "stop") }
     Screen(bottomBar = { BottomBar(port, { stopAll() }, Modifier.shake(barShake), Gadget.binds, Gadget.fails) }) {
         Top {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {

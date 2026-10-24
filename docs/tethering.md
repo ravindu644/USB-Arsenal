@@ -36,7 +36,7 @@ removes its firewall rules. Adding storage or HID while tethering keeps the link
 kernels that re-create the interface at every re-plug, it is configured again by itself.
 
 `--no-net` only adds the network function, with no address, DHCP or NAT, for setting it
-up yourself.
+up yourself. It forgets a saved gateway, and a gateway ignores `tether_net=0`.
 
 ## Gateway mode: let OpenWrt be the router
 

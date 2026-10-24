@@ -82,9 +82,8 @@ fun profileProblems(name: String, product: String, maker: String, vid: String, p
  */
 @Composable
 fun IdentityScreen(back: () -> Unit, openLog: () -> Unit) {
-    PollStatus()
-    // Until status and the profile in force are read, nothing is picked: an unknown gadget may be
-    // live, and a pick set at once would replug it unasked
+    // Until status and the profile in force are known, nothing is picked: an unknown gadget may
+    // be live, and a pick set at once would replug it unasked
     val status = Gadget.status
     val known = status != null && Gadget.profile.isNotEmpty()
     val bound = status?.bound == true
@@ -97,10 +96,11 @@ fun IdentityScreen(back: () -> Unit, openLog: () -> Unit) {
         dir = profilesDir()
         profiles = listProfiles(dir)
     }
-    // The pick starts at what is in force, each time the screen opens, once that is known
-    LaunchedEffect(Gadget.profile.isNotEmpty()) {
+    // The pick starts at what is in force, each time the screen opens and whenever that changes
+    // under it (a set from the command line, a set that finished after Back)
+    LaunchedEffect(active) {
         if (Gadget.profile.isEmpty()) return@LaunchedEffect
-        IdentitySetup.chosen = activeProfile(Gadget.profile)
+        IdentitySetup.chosen = active
         IdentitySetup.edited = false
         IdentitySetup.undo = null
     }
@@ -116,12 +116,9 @@ fun IdentityScreen(back: () -> Unit, openLog: () -> Unit) {
         val c = IdentitySetup.chosen
         val args = if (c == null) arrayOf("identity", "unset") else arrayOf("identity", "set", c)
         val accepted = Gadget.run(null, *args) { ok ->
-            if (ok) {
-                IdentitySetup.edited = false
-                IdentitySetup.undo = null
-            } else {
-                IdentitySetup.chosen = activeProfile(Gadget.profile)
-            }
+            IdentitySetup.edited = false
+            IdentitySetup.undo = null
+            // The profile now in force, whatever happened: the effect above moves the pick to it
             Gadget.reloadProfile()
         }
         if (!accepted) IdentitySetup.chosen = active
@@ -167,7 +164,7 @@ fun IdentityScreen(back: () -> Unit, openLog: () -> Unit) {
                 IdentitySetup.chosen = active
                 IdentitySetup.edited = false
                 // An edit of the running profile is already in its file: put the old text back
-                IdentitySetup.undo?.let { (path, text) -> scope.launch { writeText(path, text) } }
+                IdentitySetup.undo?.let { (path, text) -> IdentitySetup.restore(path, text) }
                 IdentitySetup.undo = null
             },
             onApply = ::applyChosen,

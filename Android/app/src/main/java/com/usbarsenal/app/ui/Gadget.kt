@@ -1,39 +1,43 @@
 package com.usbarsenal.app.ui
 
 import android.content.Context
-import androidx.compose.runtime.remember
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.core.content.edit
 import com.usbarsenal.app.backend.Backend
 import com.usbarsenal.app.backend.BackendState
 import com.usbarsenal.app.backend.CHANGE_TIMEOUT_MS
-import com.usbarsenal.app.backend.Controller
-import com.usbarsenal.app.backend.udcFlag
-import androidx.core.content.edit
+import com.usbarsenal.app.backend.Cache
 import com.usbarsenal.app.backend.Capabilities
+import com.usbarsenal.app.backend.Controller
+import com.usbarsenal.app.backend.Droidspaces
 import com.usbarsenal.app.backend.GadgetStatus
-import com.usbarsenal.app.backend.Lun
 import com.usbarsenal.app.backend.Probe
 import com.usbarsenal.app.backend.Root
 import com.usbarsenal.app.backend.UA
+import com.usbarsenal.app.backend.backendState
 import com.usbarsenal.app.backend.plain
 import com.usbarsenal.app.backend.readCheck
+import com.usbarsenal.app.backend.readDroidspaces
 import com.usbarsenal.app.backend.readProfile
 import com.usbarsenal.app.backend.readStatus
 import com.usbarsenal.app.backend.shellQuote
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 // A failed command, where it was acted on (null: the whole gadget), with stderr's last line
@@ -54,13 +58,14 @@ fun says(args: List<String>): String {
         what == "identity" -> "switching identity"
         verb == "eject" -> "ejecting a drive"
         verb == "start" -> "starting $name"
+        verb == "apply" -> "applying $name"
         verb == "stop" -> "stopping $name"
         else -> args.joinToString(" ")
     }
 }
 
-// The functions Home lists, in its order
-enum class Fn(val label: String) { STORAGE("Storage"), TETHER("Tether"), HID("HID") }
+// The functions Home lists, in its order; [prefix] is their keys' in the setup
+enum class Fn(val label: String, val prefix: String) { STORAGE("Storage", "storage_"), TETHER("Tether", "tether_"), HID("HID", "hid_") }
 
 // What a log on screen keeps; the files keep the rest
 const val LOG_KEEP = 2_000
@@ -70,18 +75,29 @@ fun MutableList<String>.keepLast() {
 }
 
 /*
- * The gadget as the screens see it, kept for the process like Setup's results: the last
- * `status --json`, what the kernel can do, the command running, this session's command output
- * (Log's CLI tab) and the last failure. Commands run on Root's change lane, one after another;
- * status reads never wait on them.
+ * The gadget as the screens see it, cache-first: every value starts as the last read (Cache),
+ * one status loop and each command's own post-read replace it, and a failed read leaves it. The
+ * setup (what each function starts with) is the backend's; the screens edit it through [set],
+ * which shows the edit at once and sends it on the change lane a beat later. Commands run on
+ * that lane one after another; status reads never wait on them.
  */
 object Gadget {
-    var status by mutableStateOf<GadgetStatus?>(null)
-    var caps by mutableStateOf<Capabilities?>(null)
+    var status by mutableStateOf(Cache.status)
+    var caps by mutableStateOf(Cache.caps)
 
     // The active identity profile's keys, as `identity show` prints them
-    var profile by mutableStateOf<Map<String, String>>(emptyMap())
+    var profile by mutableStateOf(Cache.profile)
     var busy by mutableStateOf<Busy?>(null)
+
+    // The installer's verdict on the backend, as last read
+    var backend by mutableStateOf(Cache.backend)
+
+    // Whether Droidspaces is there, and its running containers, for Tether's gateway
+    var droidspaces by mutableStateOf(Cache.droidspaces)
+
+    // Status reads that failed in a row; the bar says so after a few
+    var misses by mutableIntStateOf(0)
+        private set
 
     // How many times the port went from Android to the gadget: each one plugs Pin in with a thud
     var binds by mutableIntStateOf(0)
@@ -95,55 +111,91 @@ object Gadget {
     // onto a gadget already bound plays nothing
     private var wasBound: Boolean? = null
 
-    // Commands finished so far: a status read that saw one finish took its state mid-command
+    // Commands finished so far, and the status reads begun and applied: a read is applied only
+    // when nothing newer has been and no command finished since it began
     private var finished = 0
+    private var reads = 0
+    private var applied = 0
 
-    // The installer's verdict on the backend, as Home last read it; null until it has
-    var backend by mutableStateOf<Backend?>(null)
-
-    // The setup each function was last started with from here: a screen's setup that now
-    // differs from it is what leaving the screen offers to apply, and Discard goes back to it.
-    // Setups, not command lines, so a profile change edits nothing. Kept for the process: a
-    // function the app did not start (the CLI, an earlier process) has none, and its changes
-    // wait for Home's switch. [applying] marks an apply at work
-    var startedPicks by mutableStateOf<List<Pick>?>(null)
-    var startedPlan by mutableStateOf<TetherPlan?>(null)
-    var startedInterval by mutableStateOf<Int?>(null)
+    // An apply at work, so Back does not ask again meanwhile
     var applying by mutableStateOf<Fn?>(null)
-
-    // What [fn] runs now is [setups]' part for it
-    fun recordStart(fn: Fn, setups: Setups) = when (fn) {
-        Fn.STORAGE -> startedPicks = setups.picks
-        Fn.TETHER -> startedPlan = setups.plan
-        Fn.HID -> startedInterval = setups.interval
-    }
-
-    // We no longer know what runs: after a stop, or an apply that failed part of the way
-    fun forgetStart(fn: Fn? = null) {
-        if (fn == null || fn == Fn.STORAGE) startedPicks = null
-        if (fn == null || fn == Fn.TETHER) startedPlan = null
-        if (fn == null || fn == Fn.HID) startedInterval = null
-    }
     var fault by mutableStateOf<Fault?>(null)
     val cli = mutableStateListOf<String>()
 
     // Commands outlive the screen that started them, as the install does
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    // Setup edits not sent yet, over the setup the last status read (the first frame shows them)
+    private val edits = mutableStateMapOf<String, String>().also { it.putAll(Cache.edits) }
+    private var flushJob: Job? = null
+
+    val setup: Map<String, String> get() = status?.setup.orEmpty() + edits
+
+    fun setupValue(key: String) = edits[key] ?: status?.setup?.get(key).orEmpty()
+
+    // Whether an edit of [fn]'s keys has not reached the backend yet
+    fun unsent(fn: Fn) = edits.keys.any { it.startsWith(fn.prefix) }
+
+    // Edits the setup: shown at once, sent as one `setup set` a beat later (or before the next
+    // command). A kill in that beat keeps them in the cache for the next launch
+    fun set(vararg kv: Pair<String, String>) {
+        kv.forEach { (k, v) -> if (setupValue(k) != v) edits[k] = v }
+        Cache.edits = edits
+        flushJob?.cancel()
+        flushJob = scope.launch {
+            delay(400)
+            flush()
+        }
+    }
+
+    suspend fun flush() {
+        val batch = edits.toMap().ifEmpty { return }
+        val r = Root.change("$UA setup set " + batch.entries.joinToString(" ") { shellQuote("${it.key}=${it.value}") })
+        if (r.ok) {
+            // They stay unsent until a read taken after the set says what is pending, or Back in
+            // that beat would not ask; a poll begun before the set is dropped, as after a command
+            finished++
+            refresh(command = true)
+            // The backend has them: the status map takes them, so dropping the edits moves nothing
+            status = status?.copy(setup = status!!.setup + batch)
+            batch.forEach { (k, v) -> if (edits[k] == v) edits.remove(k) }
+            Cache.edits = edits
+        } else {
+            cli += "# usb-arsenal setup set ..."
+            (r.out + r.err).forEach { cli += plain(it) }
+            fault = Fault(null, r.err.lastOrNull()?.let(::plain) ?: "[-] setup set failed (exit ${r.code})")
+            fails++
+        }
+    }
 
     // After an identity command, so every screen shows the profile now in force
     fun reloadProfile() {
         // A read that fails keeps what was known, rather than showing Built-in for it
-        scope.launch { readProfile().takeIf { it.isNotEmpty() }?.let { profile = it } }
+        scope.launch { readProfile().takeIf { it.isNotEmpty() }?.let { profile = it; Cache.profile = it } }
     }
 
-    // A status that cannot be read is not shown: claiming a gadget is still bound would be worse
-    suspend fun refresh() {
-        val idle = busy == null
+    /*
+     * One status read. A poll begun while a command runs would read the kernel mid-change, so it
+     * is skipped; a result is dropped when a newer one was applied already or a command finished
+     * since it began. A failed read keeps the last status and counts.
+     */
+    suspend fun refresh(command: Boolean = false) {
+        if (!command && busy != null) return
+        val n = ++reads
         val seen = finished
-        status = readStatus().getOrNull()
-        // A running keyboard shows whether its interval took, which outranks check's probe
-        HidSetup.keyboardFixed = status?.hid?.firstOrNull { it.function == "keyboard" }?.let { it.interval < 0 }
-        if (idle && busy == null && seen == finished) settle()
+        val idle = busy == null
+        val r = readStatus()
+        if (n < applied || (!command && seen != finished)) return
+        applied = n
+        r.onSuccess { s ->
+            misses = 0
+            status = s
+            Cache.status = s
+            Controller.mirror(s.setup)
+            // A running keyboard shows whether its interval took, which outranks check's probe
+            HidSetup.keyboardFixed = s.hid.firstOrNull { it.function == "keyboard" }?.let { it.interval < 0 }
+            if (idle && busy == null) settle()
+        }.onFailure { misses++ }
     }
 
     // Only settled states count: a replug unbinds and binds inside its command, which is never
@@ -157,30 +209,41 @@ object Gadget {
         wasBound = now
     }
 
-    // Once a process: what the kernel can do (Check's answer, when setup ran), and the profile
-    suspend fun loadOnce() {
-        if (caps == null) readCheck().onSuccess { caps = it }
-        if (profile.isEmpty()) profile = readProfile()
+    // Once a launch: the backend's state, what the kernel can do, the profile, Droidspaces. Each
+    // replaces its cached value only when it was read
+    suspend fun launchReads(context: Context) {
+        backendState(context).let { backend = it; Cache.backend = it }
+        if (backend?.state == BackendState.NO_ROOT || backend?.state == BackendState.NOT_INSTALLED) return
+        readCheckOnce()
+        readProfile().takeIf { it.isNotEmpty() }?.let { profile = it; Cache.profile = it }
+        readDroidspaces().let { droidspaces = it; Cache.droidspaces = it }
+    }
+
+    // check probes configfs, so it goes through the change lane and runs once per ask
+    suspend fun readCheckOnce() {
+        readCheck().onSuccess { caps = it; Cache.caps = it }
     }
 
     /*
      * Runs `usb-arsenal ARGS` for [fn] (null: the whole gadget). Its output goes to the CLI log
      * as printed; a failure leaves stderr's last line as the fault under [fn]'s row.
+     * [onDone] hears whether it worked. False when refused because another runs: it never
+     * starts, and [onDone] is never called. [quiet] commands change no gadget, so the bar says
+     * nothing while they run.
      */
-    // [onDone] hears whether it worked. False when refused because another runs: it never
-    // starts, and [onDone] is never called
-    fun run(fn: Fn?, vararg args: String, onDone: (Boolean) -> Unit = {}): Boolean {
+    fun run(fn: Fn?, vararg args: String, quiet: Boolean = false, onDone: (Boolean) -> Unit = {}): Boolean {
         if (busy != null) return false
         val typed = args.joinToString(" ")
         // `stop` and `<function> stop`; never read from the typed line, whose path could end in it
-        busy = Busy(fn, typed, stopping = args.firstOrNull() == "stop" || args.getOrNull(1) == "stop", says = says(args.toList()))
+        if (!quiet) busy = Busy(fn, typed, stopping = args.firstOrNull() == "stop" || args.getOrNull(1) == "stop", says = says(args.toList()))
         fault = null
         scope.launch {
-            // The controller picked, if there is more than one, goes on every command
-            val udc = Controller.picked
-            val r = Root.change("$UA${udcFlag(udc)} " + args.joinToString(" ", transform = ::shellQuote))
+            // The setup lands before the command that may start from it
+            flushJob?.cancel()
+            flush()
+            val r = Root.change("$UA " + args.joinToString(" ", transform = ::shellQuote))
             // Root's prompt: every command runs as root
-            cli += "# usb-arsenal" + udc?.let { " --udc $it" }.orEmpty() + " $typed"
+            cli += "# usb-arsenal $typed"
             (r.out + r.err).forEach { cli += plain(it) }
             cli.keepLast()
             if (!r.ok) {
@@ -191,7 +254,7 @@ object Gadget {
                 fault = Fault(fn, why)
                 fails++
             }
-            refresh()
+            refresh(command = true)
             val stopping = busy?.stopping == true
             busy = null
             finished++
@@ -202,99 +265,24 @@ object Gadget {
     }
 }
 
-// The start a function's setup gives now
-fun setupArgs(fn: Fn): List<String> = when (fn) {
-    Fn.STORAGE -> startArgs(Picks.all)
-    Fn.TETHER -> tetherArgs(TetherSetup.plan, tetherFunction(TetherSetup.plan, Gadget.profile, Gadget.caps))
-    Fn.HID -> listOf("hid", "start") + if (!HidSetup.fixed && HidSetup.interval != DEFAULT_INTERVAL) listOf("--interval", "${HidSetup.interval}") else emptyList()
-}
+// Whether what runs is not what the setup says: the backend compares the two files, and an edit
+// not sent yet counts while the function runs
+fun pending(fn: Fn) = Gadget.status?.pending?.get(fn.name.lowercase()) == true || (Gadget.status.isOn(fn) && Gadget.unsent(fn))
 
-// Every screen's setup as it stands, taken when a start is sent: an edit made while it runs
-// then shows as a change
-data class Setups(val picks: List<Pick>, val plan: TetherPlan, val interval: Int)
-
-fun setupsNow() = Setups(Picks.all.sortedBy { it.lun }, TetherSetup.plan, HidSetup.interval)
-
-// Whether what runs is not what the screen now sets up: an edit made back again is no change
-fun pending(fn: Fn) = Gadget.status.isOn(fn) && when (fn) {
-    Fn.STORAGE -> Gadget.startedPicks?.let { it != Picks.all.sortedBy { p -> p.lun } }
-    Fn.TETHER -> Gadget.startedPlan?.let { it != TetherSetup.plan }
-    Fn.HID -> Gadget.startedInterval?.let { !HidSetup.fixed && it != HidSetup.interval }
-} == true
-
-// Start a function with what its screen set up, or stop it
+// Start a function with its setup, or stop it
 fun flip(fn: Fn, on: Boolean, onDone: (Boolean) -> Unit = {}) {
-    val args = if (on) setupArgs(fn) else listOf(fn.name.lowercase(), "stop")
-    val setups = setupsNow()
-    Gadget.run(fn, *args.toTypedArray()) { ok ->
-        if (ok && on) Gadget.recordStart(fn, setups)
-        if (ok && !on) Gadget.forgetStart(fn)
-        onDone(ok)
-    }
+    Gadget.run(fn, fn.name.lowercase(), if (on) "start" else "stop", onDone = onDone)
 }
 
-// Back to the setup the function was started with: what runs, so nothing waits any more
-fun discard(context: Context, fn: Fn) {
-    when (fn) {
-        Fn.STORAGE -> Gadget.startedPicks?.let { Picks.replace(context, it) }
-        Fn.TETHER -> Gadget.startedPlan?.let { TetherSetup.set(context, it) }
-        Fn.HID -> Gadget.startedInterval?.let { HidSetup.set(context, it) }
-    }
+// The setup back to what runs, so nothing waits any more
+fun discard(fn: Fn) {
+    Gadget.run(fn, "setup", "revert", fn.name.lowercase(), quiet = true)
 }
 
-/*
- * What applying Storage's setup takes, LUN by LUN against the picks it last started with, so
- * the host keeps every drive it can. Compared as the app gave them, not as status prints them:
- * the same file can show under another mount, and auto's choice is not a mode. [live] only says
- * which LUNs exist and which hold a medium.
- * - A LUN no longer picked and still loaded is ejected in place. It stays an empty drive until
- *   storage stops: a LUN cannot be removed without a replug.
- * - A pick that changed, or whose LUN the host ejected itself, is loaded again. On a LUN that
- *   exists, each gets a start of its own, since the backend swaps in place only for one image
- *   (a new type, or a drive the host holds locked, still replugs).
- * - Picks for LUNs that do not exist yet go in one start: one replug for all of them.
- * With nothing picked, storage is set up to be off.
- */
-fun storageApply(before: List<Pick>, picks: List<Pick>, live: List<Lun>): List<List<String>> {
-    if (picks.isEmpty()) return listOf(listOf("storage", "stop"))
-    val loaded = live.filter { it.file.isNotEmpty() }.map { it.lun }
-    val ejects = before.filter { b -> b.lun in loaded && picks.none { it.lun == b.lun } }.map { listOf("storage", "eject", "--lun", "${it.lun}") }
-    val (swaps, added) = picks.filter { it !in before || it.lun !in loaded }.partition { p -> live.any { it.lun == p.lun } }
-    return ejects + swaps.map { startArgs(listOf(it)) } + if (added.isEmpty()) emptyList() else listOf(startArgs(added))
-}
-
-// Bring what runs to the setup: Storage LUN by LUN, the others by a stop and a start. The
-// commands run one after another and stop at the first that fails, whose fault shows as usual
+// Bring what runs to the setup: the backend decides against the kernel
 fun apply(fn: Fn) {
-    val steps = when (fn) {
-        Fn.STORAGE -> storageApply(Gadget.startedPicks ?: return, Picks.all, Gadget.status?.storage.orEmpty())
-        else -> listOf(listOf(fn.name.lowercase(), "stop"), setupArgs(fn))
-    }
-    // The setup as it is now is what runs once every step works; one taken later would hide an
-    // edit made meanwhile
-    val setups = setupsNow()
-    val on = startable(fn)
     Gadget.applying = fn
-    fun step(i: Int) {
-        if (i == steps.size) {
-            Gadget.forgetStart(fn)
-            if (on) Gadget.recordStart(fn, setups)
-            Gadget.applying = null
-            return
-        }
-        val accepted = Gadget.run(fn, *steps[i].toTypedArray()) { ok ->
-            if (ok) {
-                step(i + 1)
-            } else {
-                // Part of it ran: what runs is no longer what any setup says, so nothing is
-                // offered against it until Home's switch starts it again
-                Gadget.forgetStart(fn)
-                Gadget.applying = null
-            }
-        }
-        if (!accepted) Gadget.applying = null
-    }
-    step(0)
+    if (!Gadget.run(fn, fn.name.lowercase(), "apply") { Gadget.applying = null }) Gadget.applying = null
 }
 
 // A setup that cannot start holds the apply, as Home's switches are held, except storage with
@@ -317,8 +305,7 @@ private fun applyNote(fn: Fn) = when (fn) {
  */
 @Composable
 fun UnappliedSheet(fn: Fn, back: () -> Unit) {
-    val context = LocalContext.current
-    NotAppliedSheet(pending(fn) && Gadget.applying != fn, applyNote(fn), canApply(fn), { discard(context, fn) }, { apply(fn) }, back)
+    NotAppliedSheet(pending(fn) && Gadget.applying != fn, applyNote(fn), canApply(fn), { discard(fn) }, { apply(fn) }, back)
 }
 
 // The sheet itself, for anything whose change waits on the gadget: Identity's profile too
@@ -351,15 +338,14 @@ fun NotAppliedSheet(pending: Boolean, note: String, canApply: Boolean, onDiscard
 
 // Whether a start has anything to start: storage needs a pick, tether a setup the backend takes
 fun startable(fn: Fn) = when (fn) {
-    Fn.STORAGE -> Picks.all.isNotEmpty()
-    Fn.TETHER -> TetherSetup.plan.ready()
+    Fn.STORAGE -> picks().isNotEmpty()
+    Fn.TETHER -> tetherPlan().ready(Gadget.caps)
     Fn.HID -> true
 }
 
 // Whether the backend stops the switches: until it is known, and while it needs a fix other
 // than an update
 fun Backend?.holds() = this == null || (state != BackendState.READY && state != BackendState.UPDATE_AVAILABLE)
-
 
 // Whether the kernel has the function at all; null caps (not read yet) counts as yes
 fun Capabilities?.has(fn: Fn) = this == null || when (fn) {
@@ -368,8 +354,10 @@ fun Capabilities?.has(fn: Fn) = this == null || when (fn) {
     Fn.HID -> hid != Probe.MISSING
 }
 
+// On means linked in the gadget: storage with every drive empty is still on, and `storage
+// stop` is what turns it off
 fun GadgetStatus?.isOn(fn: Fn) = this != null && when (fn) {
-    Fn.STORAGE -> storage.any { it.file.isNotEmpty() }
+    Fn.STORAGE -> storage.isNotEmpty()
     Fn.TETHER -> tether != null
     Fn.HID -> hid.isNotEmpty()
 }
@@ -391,7 +379,7 @@ fun rowLines(fn: Fn, status: GadgetStatus?, caps: Capabilities?, busy: Busy?): P
     return when (fn) {
         Fn.STORAGE -> if (on) {
             val luns = status!!.storage.filter { it.file.isNotEmpty() }.map { "LUN${it.lun} ${it.file.substringAfterLast('/')} · ${it.mode}" }
-            luns[0] to luns.drop(1).joinToString("  ")
+            if (luns.isEmpty()) "${status.storage.size} empty drive${if (status.storage.size == 1) "" else "s"}" to "no medium" else luns[0] to luns.drop(1).joinToString("  ")
         } else {
             "ISOs and disk images" to "as drives for the host"
         }
@@ -403,7 +391,7 @@ fun rowLines(fn: Fn, status: GadgetStatus?, caps: Capabilities?, busy: Busy?): P
                 val ip = t.address.substringBefore('/')
                 val line1 = hostOf(t.address)?.let { "${t.function} $ip → .${it.substringAfterLast('.')}" } ?: "${t.function} ${t.iface}"
                 val line2 = when {
-                    t.gateway -> "gateway ${t.gatewayContainer}"
+                    t.gateway -> "gateway ${t.gatewayContainer}".trimEnd()
                     !t.running -> "no network side"
                     t.upstream.isNotEmpty() -> "via ${t.upstream}"
                     else -> "no upstream yet"
@@ -420,53 +408,36 @@ fun rowLines(fn: Fn, status: GadgetStatus?, caps: Capabilities?, busy: Busy?): P
     }
 }
 
-// An image picked for a LUN, kept across launches so Home's switch can serve it again
-data class Pick(val lun: Int, val mode: String, val path: String)
-
-/*
- * The picks, shared by Home and Storage and kept in SharedPreferences "storage". One per LUN;
- * a pick stays when storage stops, so Home's switch brings the same drives back.
- */
-object Picks {
-    val all = mutableStateListOf<Pick>()
-    private var loaded = false
-
-    fun load(context: Context) {
-        if (loaded) return
-        loaded = true
-        all += decodePicks(prefs(context).getString("picks", "").orEmpty())
-    }
-
-    fun set(context: Context, pick: Pick) {
-        all.removeAll { it.lun == pick.lun }
-        all += pick
-        save(context)
-    }
-
-    fun replace(context: Context, picks: List<Pick>) {
-        all.clear()
-        all += picks
-        save(context)
-    }
-
-    fun drop(context: Context, lun: Int) {
-        all.removeAll { it.lun == lun }
-        save(context)
-    }
-
-    private fun save(context: Context) = prefs(context).edit { putString("picks", encodePicks(all)) }
-
-    private fun prefs(context: Context) = context.getSharedPreferences("storage", Context.MODE_PRIVATE)
+// An image set up for a LUN: the setup's `storage_lunN=MODE:PATH`
+data class Pick(val lun: Int, val mode: String, val path: String) {
+    val spec get() = "$mode:$path"
 }
 
+const val LUNS = 8
+
+// The picks a setup holds, by LUN
+fun picksOf(setup: Map<String, String>): List<Pick> = (0 until LUNS).mapNotNull { lun ->
+    val spec = setup["storage_lun$lun"].orEmpty()
+    val colon = spec.indexOf(':').takeIf { it > 0 } ?: return@mapNotNull null
+    Pick(lun, spec.substring(0, colon), spec.substring(colon + 1))
+}
+
+fun picks() = picksOf(Gadget.setup)
+
+// The drives that run, as the backend recorded them at the last start
+fun runningPicks() = picksOf(Gadget.status?.running.orEmpty())
+
+fun setPick(pick: Pick) = Gadget.set("storage_lun${pick.lun}" to pick.spec)
+
+fun dropPick(lun: Int) = Gadget.set("storage_lun$lun" to "")
+
 /*
- * What Tether sets up for the next start: every option `tether start` takes. The function is
- * null until picked there; an empty address, DNS or upstream leaves it to the profile, or to
- * the backend's default; [net] false is --no-net.
+ * What Tether sets up for the next start, as the setup's `tether_*` keys read: the function is
+ * null for the profile's; a gateway is a container's name; an empty address, DNS or upstream
+ * leaves it to the profile; [net] false is --no-net.
  */
 data class TetherPlan(
     val function: String? = null,
-    val gateway: Boolean = false,
     val container: String = "",
     val iface: String = "usb0",
     val address: String = "",
@@ -474,61 +445,52 @@ data class TetherPlan(
     val upstream: String = "",
     val net: Boolean = true,
 ) {
+    val gateway get() = container.isNotEmpty()
+
     // Whether the backend takes it as it stands, so a start cannot fail on the setup itself
-    // (--no-net sends none of the network fields, so they cannot stop it)
-    fun ready() = when {
-        gateway -> container.isNotBlank() && validIface(iface)
+    // (--no-net sends none of the network fields, so they cannot stop it; NAT needs the kernel's)
+    fun ready(caps: Capabilities?) = when {
+        gateway -> validIface(iface)
         !net -> true
-        else -> (address.isBlank() || validAddress(address)) && (dns.isBlank() || validDns(dns)) && (upstream.isBlank() || validIface(upstream))
+        else -> caps.natOk() && (address.isBlank() || validAddress(address)) && (dns.isBlank() || validDns(dns)) && (upstream.isBlank() || validIface(upstream))
     }
+
+    // The setup's keys for it
+    fun keys() = listOf(
+        "tether_function" to function.orEmpty(),
+        "tether_gateway" to container,
+        "tether_gateway_iface" to iface.takeIf { it != "usb0" }.orEmpty(),
+        "tether_address" to address.trim(),
+        "tether_dns" to dns.trim(),
+        "tether_upstream" to upstream.trim(),
+        "tether_net" to if (net) "1" else "0",
+    )
 }
+
+fun tetherPlanOf(setup: Map<String, String>) = TetherPlan(
+    function = setup["tether_function"]?.ifEmpty { null },
+    container = setup["tether_gateway"].orEmpty(),
+    iface = setup["tether_gateway_iface"]?.ifEmpty { null } ?: "usb0",
+    address = setup["tether_address"].orEmpty(),
+    dns = setup["tether_dns"].orEmpty(),
+    upstream = setup["tether_upstream"].orEmpty(),
+    net = setup["tether_net"] != "0",
+)
+
+fun tetherPlan() = tetherPlanOf(Gadget.setup)
+
+fun setPlan(next: TetherPlan) = Gadget.set(*next.keys().toTypedArray())
 
 const val DEFAULT_ADDRESS = "192.168.42.129/24"
-
-object TetherSetup {
-    var plan by mutableStateOf(TetherPlan())
-        private set
-    private var loaded = false
-
-    fun load(context: Context) {
-        if (loaded) return
-        loaded = true
-        val p = prefs(context)
-        plan = TetherPlan(
-            p.getString("function", null),
-            p.getBoolean("gateway", false),
-            p.getString("container", null) ?: plan.container,
-            p.getString("iface", null) ?: plan.iface,
-            p.getString("address", null).orEmpty(),
-            p.getString("dns", null).orEmpty(),
-            p.getString("upstream", null).orEmpty(),
-            p.getBoolean("net", true),
-        )
-    }
-
-    fun set(context: Context, next: TetherPlan) {
-        if (next == plan) return
-        plan = next
-        prefs(context).edit {
-            putString("function", next.function)
-            putBoolean("gateway", next.gateway)
-            putString("container", next.container)
-            putString("iface", next.iface)
-            putString("address", next.address)
-            putString("dns", next.dns)
-            putString("upstream", next.upstream)
-            putBoolean("net", next.net)
-        }
-    }
-
-    private fun prefs(context: Context) = context.getSharedPreferences("tether", Context.MODE_PRIVATE)
-}
 
 // Whether this kernel can run NCM: missing, or unsafe as Samsung's f_ncm is, means RNDIS
 fun Capabilities?.ncmOk() = this == null || ncm == Probe.OK
 
 // RNDIS left GKI after 5.10, so a kernel can have NCM alone
 fun Capabilities?.rndisOk() = this == null || rndis != Probe.MISSING
+
+// Whether the kernel can NAT at all; without it only --no-net and a gateway start
+fun Capabilities?.natOk() = this == null || nat != Probe.MISSING
 
 // The function a start brings up: Tether's pick, else the profile's, else NCM, and the other
 // one where the kernel cannot run it (the backend falls back from NCM the same way, tether.c)
@@ -539,29 +501,6 @@ fun tetherFunction(plan: TetherPlan, profile: Map<String, String>, caps: Capabil
         wanted == "rndis" && !caps.rndisOk() && caps.ncmOk() -> "ncm"
         else -> wanted
     }
-}
-
-// `tether start` for the setup, naming the function every time: without --ncm, a profile that
-// says RNDIS would win over Tether's pick. A gateway takes no address, DNS or upstream: the
-// container serves its end of the cable
-fun tetherArgs(plan: TetherPlan, function: String): List<String> {
-    val args = mutableListOf("tether", "start", if (function == "rndis") "--rndis" else "--ncm")
-    fun opt(name: String, value: String) {
-        if (value.isNotBlank()) args += listOf(name, value.trim())
-    }
-    when {
-        plan.gateway -> {
-            args += listOf("--gateway", plan.container.trim())
-            opt("--gateway-iface", plan.iface)
-        }
-        !plan.net -> args += "--no-net"
-        else -> {
-            opt("--address", plan.address)
-            opt("--dns", plan.dns)
-            opt("--upstream", plan.upstream)
-        }
-    }
-    return args
 }
 
 private val OCTET = Regex("0|[1-9][0-9]?|1[0-9]{2}|2[0-4][0-9]|25[0-5]")
@@ -589,6 +528,11 @@ object IdentitySetup {
 
     // The running profile's file as it was before an edit made while bound, for Discard
     var undo: Pair<String, String>? = null
+
+    // Discard's write outlives the screen, which Back leaves at once
+    fun restore(path: String, text: String) {
+        Gadget.scope.launch { com.usbarsenal.app.backend.writeText(path, text) }
+    }
 }
 
 // The profile `identity show` says is in force; null for the built-in defaults
@@ -602,10 +546,22 @@ fun identityPending(bound: Boolean, chosen: String?, active: String?, edited: Bo
 
 const val DEFAULT_INTERVAL = 4
 
-// HID's setup: the keyboard's poll interval exponent, 1 to 16 (4 is the kernel's 1 ms)
+/*
+ * HID's setup: the keyboard's poll interval exponent, 1 to 16 (4 is the kernel's 1 ms), as the
+ * setup's `hid_interval` (0 there is the kernel's default). Speed and Natural scroll are the
+ * trackpad's, app-side, in prefs.
+ */
 object HidSetup {
-    var interval by mutableIntStateOf(DEFAULT_INTERVAL)
-        private set
+    private var prefs: android.content.SharedPreferences? = null
+
+    fun init(context: Context) {
+        val p = context.getSharedPreferences("hid", Context.MODE_PRIVATE)
+        prefs = p
+        speed = p.getInt("speed", 4).coerceIn(1, 16)
+        natural = p.getBoolean("natural", true)
+    }
+
+    val interval: Int get() = Gadget.setupValue("hid_interval").toIntOrNull()?.takeIf { it > 0 }?.coerceIn(1, 16) ?: DEFAULT_INTERVAL
 
     // This kernel keeps the stock 1 ms whatever is asked (no f_hid interval control); the
     // interval is then not a setting at all. A running keyboard shows it; before HID runs,
@@ -620,45 +576,19 @@ object HidSetup {
     // The wheel strip moves content with the finger, as a touchscreen does
     var natural by mutableStateOf(true)
         private set
-    private var loaded = false
 
-    fun load(context: Context) {
-        if (loaded) return
-        loaded = true
-        val p = prefs(context)
-        interval = p.getInt("interval", DEFAULT_INTERVAL).coerceIn(1, 16)
-        speed = p.getInt("speed", 4).coerceIn(1, 16)
-        natural = p.getBoolean("natural", true)
-    }
+    // The kernel's default is written as 0, so the file and what runs compare equal at 1 ms
+    fun set(next: Int) = Gadget.set("hid_interval" to next.coerceIn(1, 16).let { if (it == DEFAULT_INTERVAL) "0" else "$it" })
 
-    fun set(context: Context, next: Int) {
-        interval = next.coerceIn(1, 16)
-        prefs(context).edit { putInt("interval", interval) }
-    }
-
-    fun setSpeed(context: Context, next: Int) {
+    fun speed(next: Int) {
         speed = next.coerceIn(1, 16)
-        prefs(context).edit { putInt("speed", speed) }
+        prefs?.edit { putInt("speed", speed) }
     }
 
-    fun setNatural(context: Context, next: Boolean) {
+    fun natural(next: Boolean) {
         natural = next
-        prefs(context).edit { putBoolean("natural", next) }
+        prefs?.edit { putBoolean("natural", next) }
     }
-
-    private fun prefs(context: Context) = context.getSharedPreferences("hid", Context.MODE_PRIVATE)
-}
-
-// `storage start` for every pick in one command: one replug however many LUNs
-fun startArgs(picks: List<Pick>): List<String> =
-    listOf("storage", "start") + picks.sortedBy { it.lun }.flatMap { listOf("--lun", "${it.lun}", "--mode", it.mode, it.path) }
-
-// One pick a line: lun, mode, path, tab-separated (a path cannot hold a newline here)
-fun encodePicks(picks: List<Pick>) = picks.joinToString("\n") { "${it.lun}\t${it.mode}\t${it.path}" }
-
-fun decodePicks(text: String): List<Pick> = text.lines().mapNotNull { line ->
-    val (lun, mode, path) = line.split('\t', limit = 3).takeIf { it.size == 3 } ?: return@mapNotNull null
-    lun.toIntOrNull()?.let { Pick(it, mode, path) }
 }
 
 /*

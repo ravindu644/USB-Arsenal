@@ -28,7 +28,7 @@ static int handoff_load(struct handoff *h);
 /* What tells one boot from the next. boot_id where the kernel offers it,
  * the boot time from /proc/stat where a restricted container hides it; an
  * empty marker would make every old handoff look current. */
-static void boot_marker(char *out, size_t size) {
+void ua_boot_marker(char *out, size_t size) {
   char buf[4096], *bt;
   if (read_file("/proc/sys/kernel/random/boot_id", out, size) > 0)
     return;
@@ -93,7 +93,7 @@ static int handoff_load(struct handoff *h) {
   /* A reboot already gave the controller back. Android keeps this file in
    * /data across it, and acting on it would skip releasing Android's gadget. */
   char boot[40] = "";
-  boot_marker(boot, sizeof(boot));
+  ua_boot_marker(boot, sizeof(boot));
   if (strcmp(boot, h->boot) != 0) {
     unlink(p);
     return -1;
@@ -143,6 +143,9 @@ static void ua_crit_leave(void) {
     sigprocmask(SIG_SETMASK, &crit_old, NULL);
   }
 }
+
+void ua_gadget_hold(void) { ua_crit_enter(); }
+void ua_gadget_leave(void) { ua_crit_leave(); }
 
 static int pathf(char *out, size_t size, const char *fmt, ...)
     __attribute__((format(printf, 3, 4)));
@@ -458,7 +461,7 @@ int ua_gadget_begin(struct ua_gadget *g) {
   struct handoff h;
   memset(&h, 0, sizeof(h));
   safe_strncpy(h.udc, g->udc, sizeof(h.udc));
-  boot_marker(h.boot, sizeof(h.boot));
+  ua_boot_marker(h.boot, sizeof(h.boot));
 
   /* Android's gadget but no Android userspace: a container or chroot running
    * us directly. Its workspace is not Android's, so a copy run from Android
@@ -800,5 +803,7 @@ void ua_gadget_teardown(struct ua_gadget *g) {
     ua_error("Android's gadget is not bound yet; run '" UA_NAME " stop' again");
   else
     handoff_drop();
+  /* Nothing of ours runs any more, whoever started it */
+  ua_running_clear(UA_FN_ALL);
   ua_crit_leave();
 }

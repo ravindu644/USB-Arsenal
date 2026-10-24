@@ -29,11 +29,11 @@ suspend fun listProfiles(dir: String): List<Profile> = parseProfiles(
     ).out,
 )
 
-// A value as config.c reads it: trimmed, and cut at a '#' that follows whitespace (a comment)
+// A value as config.c reads it: cut at a '#' that starts it or follows whitespace (a comment),
+// then trimmed. `generate` writes `serial=   # empty: ...`, which is an empty serial
 private fun value(raw: String): String {
-    val v = raw.trim()
-    val hash = Regex("\\s#").find(v)?.range?.first ?: return v
-    return v.substring(0, hash).trim()
+    val hash = Regex("(^|\\s)#").find(raw)?.range?.first ?: return raw.trim()
+    return raw.substring(0, hash).trim()
 }
 
 // "0x18D1" or "18d1" as the screen shows it: four lower-case hex digits

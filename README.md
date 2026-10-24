@@ -75,6 +75,7 @@ usb-arsenal storage start --mode rw pendrive.img  # a writable pen drive
 usb-arsenal hid start                             # /dev/hidg0 and /dev/hidg1
 usb-arsenal tether start                          # the PC gets internet over USB
 usb-arsenal tether start --gateway OpenWrt        # let an OpenWrt container serve it
+usb-arsenal setup show                            # what each function starts with (shared with the app)
 usb-arsenal status
 usb-arsenal stop                                  # everything off, ADB and MTP back
 ```
