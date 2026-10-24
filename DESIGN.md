@@ -533,6 +533,9 @@ Home's rows end their name.
 ### Input (`.inp`) and field (`.field`)
 2px ink box, VT323 text, label above in Silkscreen. A placeholder states the default
 (`from this phone`).
+Selection handles are ink. The selection itself is ink at 40%, the one tint in the
+language: Compose draws it under text that keeps its own colour, so solid ink would hide what
+is selected. A tap on bare ground lets go of a focused field.
 
 ### Terminal (`.term`, `.ln`)
 An inverted panel that fills the free height. It fills from the top down like a terminal and

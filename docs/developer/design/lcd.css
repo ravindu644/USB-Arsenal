@@ -113,6 +113,7 @@ body{margin:0}
 /* Inputs */
 .inp{all:unset;box-sizing:border-box;width:100%;min-height:44px;border:2px solid var(--ink);padding:0 10px;font-family:'VT323',monospace;font-size:22px;text-transform:none}
 .inp::placeholder{color:var(--ink);opacity:1}
+.inp::selection{background:var(--ink);color:var(--lcd)}
 
 /* Terminal: a whole inverted panel is live output, filling from the top; its newest line flips back */
 .term{flex:1;min-height:240px;overflow:auto;display:flex;flex-direction:column;justify-content:flex-start;gap:2px;padding:10px;background:var(--ink);color:var(--lcd)}

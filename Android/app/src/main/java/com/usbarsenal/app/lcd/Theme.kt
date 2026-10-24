@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import androidx.core.content.edit
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -17,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
@@ -144,6 +147,7 @@ fun LcdTheme(switches: Switches, content: @Composable () -> Unit) {
     val feedback = LocalHapticFeedback.current
     val haptics = remember(view, feedback, switches) { Haptics(view, feedback, switches) }
     val theme = switches.theme
+    val focusManager = LocalFocusManager.current
     // The window behind Compose shows wherever Compose does not paint (a resize, the keyboard),
     // so it is the ground too, and the bars' icons are dark on a lit theme, light on a negative one
     if (!view.isInEditMode) SideEffect {
@@ -160,6 +164,14 @@ fun LcdTheme(switches: Switches, content: @Composable () -> Unit) {
         LocalReducedMotion provides rememberReducedMotion(switches),
         LocalHaptics provides haptics,
     ) {
-        Box(Modifier.fillMaxSize().background(theme.ground).scanlines(theme.ink)) { content() }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(theme.ground)
+                .scanlines(theme.ink)
+                // A tap nothing else took, on the bare ground, lets go of a field: its outline and
+                // the keyboard go. A scroll consumes its drag, so it never counts as one
+                .pointerInput(Unit) { detectTapGestures { focusManager.clearFocus() } },
+        ) { content() }
     }
 }

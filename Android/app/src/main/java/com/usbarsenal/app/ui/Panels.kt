@@ -20,7 +20,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -252,27 +255,31 @@ fun Input(
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val ink = LocalLcd.current.ink
-    BasicTextField(
-        value,
-        onChange,
-        modifier
-            .focusTick()
-            .then(if (focused) Modifier.focusOutline(ink) else Modifier)
-            .heightIn(min = Lcd.touch)
-            .then(if (enabled) Modifier.border(Lcd.pixel, ink) else Modifier.dashedRect(ink, -Lcd.pixel)),
-        enabled = enabled,
-        textStyle = LcdType.data.copy(color = ink),
-        singleLine = singleLine,
-        keyboardOptions = keyboard,
-        interactionSource = interaction,
-        cursorBrush = SolidColor(ink),
-        decorationBox = { field ->
-            Box(Modifier.padding(horizontal = 10.dp, vertical = if (singleLine) 0.dp else 8.dp), contentAlignment = if (singleLine) Alignment.CenterStart else Alignment.TopStart) {
-                if (value.isEmpty()) Text(placeholder, LcdType.data)
-                field()
-            }
-        },
-    )
+    // The handles and the highlight are Compose's blue unless set. The highlight is a tint, not
+    // solid ink: Compose draws it under the text, which keeps its colour and would vanish in ink
+    CompositionLocalProvider(LocalTextSelectionColors provides TextSelectionColors(ink, ink.copy(alpha = 0.4f))) {
+        BasicTextField(
+            value,
+            onChange,
+            modifier
+                .focusTick()
+                .then(if (focused) Modifier.focusOutline(ink) else Modifier)
+                .heightIn(min = Lcd.touch)
+                .then(if (enabled) Modifier.border(Lcd.pixel, ink) else Modifier.dashedRect(ink, -Lcd.pixel)),
+            enabled = enabled,
+            textStyle = LcdType.data.copy(color = ink),
+            singleLine = singleLine,
+            keyboardOptions = keyboard,
+            interactionSource = interaction,
+            cursorBrush = SolidColor(ink),
+            decorationBox = { field ->
+                Box(Modifier.padding(horizontal = 10.dp, vertical = if (singleLine) 0.dp else 8.dp), contentAlignment = if (singleLine) Alignment.CenterStart else Alignment.TopStart) {
+                    if (value.isEmpty()) Text(placeholder, LcdType.data)
+                    field()
+                }
+            },
+        )
+    }
 }
 
 // .field: a label over its input
