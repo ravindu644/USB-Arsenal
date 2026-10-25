@@ -53,6 +53,26 @@ suspend fun runQuacky(cmd: String): RootStream? = Root.stream(cmd)
  * each newline starts a new one, so `n`, `o`, `t`... land on the same line until quacky prints a
  * newline. Carriage returns are dropped. Pure, so the typing effect is testable off-device.
  */
+/*
+ * The editor's line numbers: one per real line, then a blank row for each extra row the field
+ * soft-wraps that line onto, so the numbers stay beside their lines. [rowOf] is the field's layout
+ * (offset to visual row), [rows] its row count; null before the first layout, one row a line.
+ */
+fun gutter(text: String, rowOf: ((Int) -> Int)?, rows: Int): String = buildString {
+    var start = 0
+    var n = 1
+    while (true) {
+        val nl = text.indexOf('\n', start)
+        val span = if (rowOf == null) 1 else (if (nl < 0) rows else rowOf(nl + 1)) - rowOf(start)
+        if (n > 1) append('\n')
+        append(n)
+        repeat(span - 1) { append('\n') }
+        if (nl < 0) break
+        start = nl + 1
+        n++
+    }
+}
+
 fun growTerminal(lines: List<String>, chunk: String): List<String> {
     val clean = chunk.replace("\r", "")
     if (clean.isEmpty()) return lines

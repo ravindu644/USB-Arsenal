@@ -9,7 +9,10 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
@@ -41,13 +44,18 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.usbarsenal.app.backend.Cache
 import com.usbarsenal.app.backend.ImageFile
 import com.usbarsenal.app.backend.SCRIPTS
+import com.usbarsenal.app.backend.gutter
 import com.usbarsenal.app.backend.growTerminal
 import com.usbarsenal.app.backend.listScripts
 import com.usbarsenal.app.backend.quackyCommand
@@ -350,7 +358,22 @@ private fun CodeEditor(text: String, onChange: (String) -> Unit, modifier: Modif
     val scroll = rememberScrollState()
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val count = text.count { it == '\n' } + 1
+    // Selection kept here, so the cursor's rect is known; a file opened from outside replaces it
+    var value by remember { mutableStateOf(TextFieldValue(text)) }
+    val shown = if (value.text == text) value else TextFieldValue(text)
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val laid = layout?.takeIf { it.layoutInput.text.text == text }
+    val bring = remember { BringIntoViewRequester() }
+    // The keyboard shrinks the box after the field took focus, so the cursor is brought back into
+    // view (through the editor's scroll and the page's) as it opens, and as the text moves
+    // Set from each layout, so a keystroke keeps the last numbers until the new layout lands;
+    // falling back to one row a line in between made the rows below a wrapped line blink
+    var numbers by remember { mutableStateOf(gutter(text, null, 0)) }
+    val ime = WindowInsets.ime.getBottom(LocalDensity.current)
+    LaunchedEffect(focused, ime, shown.selection, laid) {
+        val l = laid ?: return@LaunchedEffect
+        if (focused) bring.bringIntoView(l.getCursorRect(shown.selection.end.coerceIn(0, text.length)))
+    }
     BoxWithConstraints(
         modifier
             .border(Lcd.pixel, ink)
@@ -359,8 +382,11 @@ private fun CodeEditor(text: String, onChange: (String) -> Unit, modifier: Modif
         val inner = (maxHeight - 20.dp).coerceAtLeast(0.dp)
         Row(Modifier.verticalScroll(scroll).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             // Right-aligned line numbers hugging a 2px rule down their right edge (spanning the
-            // lines), as the canvas has it; widthIn gives one-digit numbers a left margin
-            Column(
+            // lines), as the canvas has it; widthIn gives one-digit numbers a left margin. One
+            // number a real line, a wrapped line's rows left blank, read off the field's layout
+            Text(
+                numbers,
+                LcdType.data.copy(textAlign = TextAlign.End),
                 Modifier
                     .widthIn(min = 24.dp)
                     .drawBehind {
@@ -368,19 +394,23 @@ private fun CodeEditor(text: String, onChange: (String) -> Unit, modifier: Modif
                         drawRect(ink, topLeft = Offset(x, 0f), size = Size(Lcd.pixel.toPx(), size.height))
                     }
                     .padding(end = 6.dp),
-                horizontalAlignment = Alignment.End,
-            ) {
-                for (n in 1..count) Text("$n", LcdType.data)
-            }
+            )
             CompositionLocalProvider(LocalTextSelectionColors provides TextSelectionColors(ink, ink.copy(alpha = 0.4f))) {
                 BasicTextField(
-                    text,
-                    onChange,
-                    Modifier.weight(1f).heightIn(min = inner).focusTick(),
+                    shown,
+                    {
+                        value = it
+                        if (it.text != text) onChange(it.text)
+                    },
+                    Modifier.weight(1f).heightIn(min = inner).bringIntoViewRequester(bring).focusTick(),
                     textStyle = LcdType.data.copy(color = ink),
                     keyboardOptions = CODE,
                     interactionSource = interaction,
                     cursorBrush = SolidColor(ink),
+                    onTextLayout = {
+                        layout = it
+                        numbers = gutter(it.layoutInput.text.text, it::getLineForOffset, it.lineCount)
+                    },
                 )
             }
         }

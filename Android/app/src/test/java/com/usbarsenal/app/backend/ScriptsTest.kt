@@ -45,4 +45,14 @@ class ScriptsTest {
         assertEquals(listOf("ab"), growTerminal(listOf(""), "a\rb"))
         assertEquals(listOf("x"), growTerminal(listOf("x"), ""))
     }
+
+    @Test
+    fun gutterSkipsWrappedRows() {
+        // "a\nlong\nb" laid out with "long" wrapped onto two rows: rows 0, 1-2, 3
+        val text = "a\nlong\nb"
+        val rowOf = { o: Int -> if (o < 2) 0 else if (o < 7) 1 else 3 }
+        assertEquals("1\n2\n\n3", gutter(text, rowOf, 4))
+        // A trailing newline is a line of its own; before a layout, one row a line
+        assertEquals("1\n2", gutter("a\n", null, 0))
+    }
 }
