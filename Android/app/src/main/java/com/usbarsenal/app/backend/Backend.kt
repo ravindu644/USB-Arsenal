@@ -17,6 +17,9 @@ val Root = RootExec { ProcessBuilder("su", "--mount-master", "-c", it).start() }
 const val WORKSPACE = "/data/local/USB-Arsenal"
 const val UA = "$WORKSPACE/bin/usb-arsenal"
 
+// Quacky, the HID typing engine, installed beside usb-arsenal as part of the backend
+const val QUACKY = "$WORKSPACE/bin/quacky"
+
 // Keys + mouse's writer for one node: reports of [size] bytes on stdin, each one write, never
 // blocking on the node (hid.c's `hid write`)
 suspend fun hidWrite(node: String, size: Int) = Root.stream("$UA hid write ${shellQuote(node)} $size")

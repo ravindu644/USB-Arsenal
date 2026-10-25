@@ -93,11 +93,35 @@ val buildBackend = tasks.register<Exec>("buildBackend") {
     outputs.dir(repo.dir("output/module"))
 }
 
+// A fresh clone or CI needs the quacky submodule before it can be built; a tarball has no
+// .git and already ships it checked out, so skip it there
+val initSubmodules = tasks.register<Exec>("initSubmodules") {
+    workingDir(repo)
+    commandLine("git", "submodule", "update", "--init", "--recursive")
+    onlyIf { repo.dir(".git").asFile.exists() }
+}
+
+// Quacky, the HID typing engine, built the same way and shipped beside usb-arsenal. Its
+// `make module` leaves the four phone-arch binaries at output/module/bin/quacky-<arch>
+val quacky = repo.dir("external/quacky")
+val buildQuacky = tasks.register<Exec>("buildQuacky") {
+    dependsOn(initSubmodules)
+    workingDir(quacky)
+    commandLine("make", "module")
+    inputs.dir(quacky.dir("src"))
+    inputs.dir(quacky.dir("module"))
+    inputs.file(quacky.file("Makefile"))
+    outputs.dir(quacky.dir("output/module"))
+}
+
 // assets/binaries/usb-arsenal-<arch> and assets/boot-module/, generated so they never show up as a diff.
 // customize.sh stays behind: the app does its job itself when it installs the module
 abstract class BackendAssets : DefaultTask() {
     @get:InputFiles
     abstract val module: ConfigurableFileCollection
+
+    @get:InputFiles
+    abstract val quackyModule: ConfigurableFileCollection
 
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
@@ -108,8 +132,10 @@ abstract class BackendAssets : DefaultTask() {
     @TaskAction
     fun copy() {
         val dir = module.singleFile
+        val quackyDir = quackyModule.singleFile
         fs.sync {
             from(dir.resolve("bin")) { into("binaries") }
+            from(quackyDir.resolve("bin")) { include("quacky-*"); into("binaries") }
             from(dir) {
                 include("module.prop", "uninstall.sh", "sepolicy.rule")
                 into("boot-module")
@@ -121,6 +147,7 @@ abstract class BackendAssets : DefaultTask() {
 
 val backendAssets = tasks.register<BackendAssets>("backendAssets") {
     module.from(buildBackend)
+    quackyModule.from(buildQuacky)
 }
 
 androidComponents {

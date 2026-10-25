@@ -38,33 +38,41 @@ suspend fun backendState(context: Context): Backend {
         """
         echo root
         test -x $UA && echo bin
+        test -x $QUACKY && echo quacky
         test -f $MODULE/module.prop && echo module
         v=$($UA version 2>/dev/null) && echo "${'$'}v" | head -n 1 | sed 's/^/runs /'
-        md5sum $UA 2>/dev/null
+        md5sum $UA $QUACKY 2>/dev/null
         """.trimIndent(),
     )
     // "runs usb-arsenal 1.2.0"
     val installed = r.out.firstOrNull { it.startsWith("runs ") }?.substringAfterLast(' ')?.takeIf { it.isNotEmpty() }
-    val md5 = r.out.firstNotNullOfOrNull { Regex("^([0-9a-f]{32}) ").find(it)?.groupValues?.get(1) }
+    // md5sum prints "<hash>  <path>"; tie each hash to its binary by the path at the line's end
+    fun md5Of(path: String) = r.out.firstNotNullOfOrNull {
+        Regex("^([0-9a-f]{32}) +(.+)$").find(it)?.takeIf { m -> m.groupValues[2] == path }?.groupValues?.get(1)
+    }
     // A shell that never said `root` never ran: su denied it (Magisk exits 13 with nothing said)
     // or is missing, so nothing was checked. No binary bundled for this ABI is nothing to update to
-    val asset = assetMd5(context)
+    val uaAsset = assetMd5(context, "usb-arsenal")
+    val quackyAsset = assetMd5(context, "quacky")
     val state = when {
         "root" !in r.out -> BackendState.NO_ROOT
         "bin" !in r.out -> BackendState.NOT_INSTALLED
         "module" !in r.out -> BackendState.MODULE_MISSING
         installed == null -> BackendState.CORRUPTED
-        asset != null && md5 != asset -> BackendState.UPDATE_AVAILABLE
+        // quacky is part of the backend; missing it is a broken install, fixed by a reinstall
+        "quacky" !in r.out -> BackendState.CORRUPTED
+        uaAsset != null && md5Of(UA) != uaAsset -> BackendState.UPDATE_AVAILABLE
+        quackyAsset != null && md5Of(QUACKY) != quackyAsset -> BackendState.UPDATE_AVAILABLE
         else -> BackendState.READY
     }
     return Backend(state, installed)
 }
 
-private suspend fun assetMd5(context: Context): String? {
+private suspend fun assetMd5(context: Context, name: String): String? {
     val arch = deviceArch() ?: return null
     return withContext(Dispatchers.IO) {
         runCatching {
-            context.assets.open("binaries/usb-arsenal-$arch").use { MessageDigest.getInstance("MD5").digest(it.readBytes()).toHexString() }
+            context.assets.open("binaries/$name-$arch").use { MessageDigest.getInstance("MD5").digest(it.readBytes()).toHexString() }
         }.getOrNull()
     }
 }
@@ -98,6 +106,7 @@ private suspend fun install(context: Context, log: (String) -> Unit): Boolean {
     try {
         stageBinary(context, staging)
         withContext(Dispatchers.IO) {
+            context.assets.open("binaries/quacky-$arch").use { i -> File(staging, "quacky").outputStream().use(i::copyTo) }
             for (f in MODULE_FILES) {
                 context.assets.open("boot-module/$f").use { i -> File(staging, f).outputStream().use(i::copyTo) }
             }
@@ -116,6 +125,15 @@ private suspend fun install(context: Context, log: (String) -> Unit): Boolean {
             """.trimIndent(),
         )
         if (!step(log, binary)) return false
+
+        log("[+] Installing quacky in $WORKSPACE/bin")
+        val quacky = Root.change(
+            """
+            { cp $s/quacky $QUACKY.new && chmod 755 $QUACKY.new && sync && mv -f $QUACKY.new $QUACKY && sync; } ||
+            { rm -f $QUACKY.new; false; }
+            """.trimIndent(),
+        )
+        if (!step(log, quacky)) return false
 
         log("[+] Installing the boot module in $MODULE")
         // A remove or disable mark from the manager, or a zip still pending in modules_update,

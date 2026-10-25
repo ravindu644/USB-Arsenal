@@ -26,6 +26,10 @@ removed because it let its group make root open any file.
   builds into `output/usb-arsenal`. Toolchains are found as `<triplet>-gcc` in
   `$MUSL_CROSS`, `~/toolchains/<triplet>-cross/bin`, `PATH` or `/opt/cross/bin`.
 - `make module`: every architecture in a KernelSU/Magisk zip (`module/`).
+- **Quacky** is a submodule at `external/quacky` (its own repo), the HID typing engine the
+  app's Quacky screen drives. Run `git submodule update --init` after a clone. The app's
+  Gradle `buildQuacky` task builds it (quacky's own `make module`) and ships `quacky-<arch>`
+  beside `usb-arsenal` in the APK assets; the backend installer lays it in the workspace bin.
 - `make format`: clang-format over `src/`. Bare `make` prints help.
 - **Version:** `UA_VERSION` in `usbarsenal.h` is the only source. `make bump NEW=x.y.z`
   rewrites it and `module/module.prop`; commit that alone as `usb-arsenal: bump vX.Y.Z`.
@@ -57,6 +61,7 @@ removed because it let its group make root open any file.
 | `src/config.c` | identity profiles |
 | `src/check.c` | capability probing |
 | `src/net/` | lifted from Droidspaces; keep its `ds_` names so it can be re-synced |
+| `external/quacky` | Quacky, the HID typing engine, a submodule built and shipped with the backend |
 | `kernel-patches/<kernel-version>/` | `git format-patch` exports of kernel fixes, and the `README.md` that lists them (the rule below) |
 | `DESIGN.md` | the Android app's design language: tokens, components, copy rules |
 | `docs/developer/design/` | the reference screens and `lcd.css`, the shared stylesheet |

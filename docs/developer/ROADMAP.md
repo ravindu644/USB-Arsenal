@@ -106,6 +106,14 @@ Tick a box only when the item is merged and verified as described in its phase.
       the stock default) 884 chars/s, 3 (500 us) 2377, 2 (250 us) 6640, 1 (125 us) 11207, all
       at 100% accuracy. 12.7x from 4 to 1, and the MT6835 beats one report per microframe
 
+- [ ] Quacky: a headless Arch install, shipped as `archinstall.qk`. Storage serves the Arch
+      ISO, which boots to a root shell and leases from the tether; the script waits for that
+      lease, not a fixed delay, since typing into a shell that is not up yet is the real
+      risk. The `archinstall` config can be typed (no dropped characters at 75K WPM) or come
+      over the tether or a second LUN
+- [ ] Hardware: the HID keyboard in firmware (boot menu, BIOS setup) on the MSI and the
+      NP300E. Until then the Arch flow needs USB first in the boot order
+
 ## Phase 3. `tether`
 - [x] NCM first, RNDIS fallback (`--rndis`, or automatic when NCM is missing)
 - [x] RNDIS Microsoft OS descriptors (own backend)
@@ -197,6 +205,9 @@ Tick a box only when the item is merged and verified as described in its phase.
       versionCode per commit
 - [ ] Window size classes: list-detail at 600dp and up
 - [ ] Screenshot parity with `docs/developer/design/rendered/`
+- [ ] Quacky screen under HID (a WIP page today): layout variants on a Design canvas in
+      the LCD language first, then the build. An editor to type a script in, a dropdown that
+      loads `.qk` files, Dry run and Run
 - [x] Hardware: HID, Identity and Storage from the app on the a166p; setup, haptics and a
       tether started from Home's switch (the PC leased `192.168.42.130`) on the S10
 
@@ -616,3 +627,20 @@ Tick a box only when the item is merged and verified as described in its phase.
   `hid write`, `version`, `help`) writes its command line and every message there with a timestamp, the tether
   process too (`tether.log` is gone), and the app's Log screen tails it and adds its own faults. `tether start` refuses a gateway cable name already taken in the container
   (VirtualAP's `vaplan0`) instead of reporting a start that serves nothing.
+- 2026-10-25: planned Quacky's first payload, a headless Arch install over one cable (storage,
+  HID and tether at once), and the Quacky screen under HID: an editor, `.qk` files from a
+  dropdown, Dry run and Run. The screens get designed on a canvas before any Kotlin.
+- 2026-10-25: Quacky over the patched f_hid, measured on a Linux console: 3256 of 3256
+  characters correct at 47197 chars/s (566K WPM). A graphical terminal on the host crashes at
+  that rate; the console does not. 75K WPM (6250 chars/s) is the stable rate with no dropped
+  characters, and fast enough that typing a whole install config takes about a second.
+  The rate is past the poll interval's ceiling (11207 at 125 us) because `--ultra` packs six
+  keys per report; `--fast` sends one per report with no delay between them. Both were 100%
+  accurate, `--ultra` on a 5000-character lorem ipsum too.
+- 2026-10-25: Quacky vendored as a submodule at `external/quacky`, pinned to its v1.2.1 tag
+  (which also added `-MMD` header-dep tracking to quacky's Makefile). The app builds it with a
+  Gradle `buildQuacky` task and ships `quacky-<arch>` beside `usb-arsenal` in the assets; the
+  backend installer lays it in `/data/local/USB-Arsenal/bin/quacky`, `backendState()` checks
+  it (missing or changed trips BACKEND BROKEN / update), and `uninstall.sh` removes it. Built
+  clean for the four phone arches, then verified on the a16xm: quacky v1.2.1 installed
+  beside usb-arsenal, runs, and a missing quacky trips BACKEND BROKEN then reinstalls.
