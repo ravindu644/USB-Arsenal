@@ -100,7 +100,9 @@ fun QuackyScreen(back: () -> Unit) {
     // last saved content. Speed and pace live in QuackySetup too
     var name by remember { mutableStateOf(QuackySetup.file) }
     var text by remember { mutableStateOf(QuackySetup.text) }
-    var dirty by remember { mutableStateOf(false) }
+    // Unsaved means the text differs from what was last opened or saved, not that a key was
+    // pressed: typing a character and deleting it again leaves the script clean
+    val dirty = text != QuackySetup.text
     var picking by rememberSaveable { mutableStateOf(false) }
     // 0 closed, 1 New, 2 Save as
     var naming by rememberSaveable { mutableIntStateOf(0) }
@@ -126,7 +128,7 @@ fun QuackyScreen(back: () -> Unit) {
         if (name.isEmpty()) {
             // First ever use: open the last-remembered file if it survives, else the first listed
             (files.firstOrNull { it.name == QuackySetup.file } ?: files.firstOrNull())?.let { f ->
-                readScript(f.path)?.let { name = f.name; text = it; dirty = false; QuackySetup.open(f.name, it) }
+                readScript(f.path)?.let { name = f.name; text = it; QuackySetup.open(f.name, it) }
             }
         } else if (!dirty) {
             // One live read a launch corrects the cached buffer, so a Run never types bytes the
@@ -140,21 +142,23 @@ fun QuackyScreen(back: () -> Unit) {
     fun open(f: ImageFile) {
         scope.launch {
             val t = readScript(f.path) ?: run { fault = "[-] Cannot read ${f.name}"; return@launch }
-            name = f.name; text = t; dirty = false; fault = null; picking = false
+            name = f.name; text = t; fault = null; picking = false
             QuackySetup.open(f.name, t)
         }
     }
 
     suspend fun write(): Boolean {
-        val r = writeText("$dir/$name", text)
+        // What was written, not what the editor holds by the time root answers: a key typed
+        // meanwhile stays unsaved
+        val t = text
+        val r = writeText("$dir/$name", t)
         if (!r.ok) {
             fault = r.why
             return false
         }
-        dirty = false
         fault = null
         files = listScripts(dir).also { Cache.scripts = it }
-        QuackySetup.open(name, text)
+        QuackySetup.open(name, t)
         return true
     }
 
@@ -231,7 +235,7 @@ fun QuackyScreen(back: () -> Unit) {
             Segs(listOf("Edit", "Run"), tab, { tab = it })
             if (tab == 0) {
                 PickRow("File", name.ifEmpty { "new script" } + if (dirty) " *" else "") { picking = true }
-                CodeEditor(text, { text = it; dirty = true }, Modifier.fill(min = 200.dp))
+                CodeEditor(text, { text = it }, Modifier.fill(min = 200.dp))
             } else {
                 PickRow("Options", "${SPEEDS[QuackySetup.mode].lowercase()} · ${QuackySetup.effectivePace} ms") { options = true }
                 Terminal(out, Modifier.fill(min = 200.dp))
@@ -244,7 +248,7 @@ fun QuackyScreen(back: () -> Unit) {
             pending = dirty && name.isNotEmpty(),
             note = "Unsaved edits. Apply saves them; Discard drops them.",
             canApply = true,
-            onDiscard = { dirty = false },
+            onDiscard = { text = QuackySetup.text },
             onApply = { Gadget.scope.launch { write() } },
             back = back,
         )
@@ -281,7 +285,6 @@ fun QuackyScreen(back: () -> Unit) {
             if (naming == 1) text = ""
             name = file
             naming = 0
-            dirty = false
             scope.launch { write() }
         }
 
@@ -363,12 +366,12 @@ private fun CodeEditor(text: String, onChange: (String) -> Unit, modifier: Modif
     val shown = if (value.text == text) value else TextFieldValue(text)
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val laid = layout?.takeIf { it.layoutInput.text.text == text }
-    val bring = remember { BringIntoViewRequester() }
-    // The keyboard shrinks the box after the field took focus, so the cursor is brought back into
-    // view (through the editor's scroll and the page's) as it opens, and as the text moves
     // Set from each layout, so a keystroke keeps the last numbers until the new layout lands;
     // falling back to one row a line in between made the rows below a wrapped line blink
     var numbers by remember { mutableStateOf(gutter(text, null, 0)) }
+    val bring = remember { BringIntoViewRequester() }
+    // The keyboard shrinks the box after the field took focus, so the cursor is brought back into
+    // view (through the editor's scroll and the page's) as it opens, and as the text moves
     val ime = WindowInsets.ime.getBottom(LocalDensity.current)
     LaunchedEffect(focused, ime, shown.selection, laid) {
         val l = laid ?: return@LaunchedEffect
