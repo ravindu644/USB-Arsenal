@@ -46,12 +46,16 @@ resets the queue under a sleeper, so its `list_del` finds a head that no longer 
 | Fix | Mainline | Stable |
 |---|---|---|
 | `89ff3dfac604` f_hidg lifetime vs cdev, `70a3288a7586` refcount leak (CVE-2022-50568) | 6.2 | 4.19.270, 5.10, 5.15; never 4.14 or 4.9 |
+| `61890dc28f7d` report descriptor allocation: the lifetime fix's `devm_kmemdup` is freed on unbind, so the next bind reads a freed descriptor | 6.7 | 4.19.y and up |
 | `4e0a88254ad5` list and spinlock inits move from bind to alloc | 7.0 | 5.10.y to 6.12.y |
 | `81ebd43cc0d6` no `cdev_init` while the cdev is in use, `2c863dbbeac7` its error code | after 7.0 | 6.12.y only |
 | `937a8a3a8d46` wake readers on disable/unbind | 6.16 | none |
 
 No local tree has the 2026 fixes, 5.15 and 6.6 included. `kernel-patches/` carries the
-backports.
+backports: the three lifetime commits for 4.9, 4.14 and 4.19 (from the 4.19.y ones, without
+`set_report_buf`, which those trees lack), then the inits move and `cdev_alloc` for every
+version up to 6.6 (stable's inits move as is on 5.10 to 6.6). The 4.9 set also applies on the
+t295 variant, and the 5.15 set on sm8550.
 
 ## The M62 (4.14.356): same bug, hidden
 
