@@ -77,6 +77,15 @@ object Cache {
         get() = text("images")?.let { parseImages(it.lines()) }
         set(v) = put("images", v?.joinToString("\n") { "${it.bytes} ${it.path}" })
 
+    // Quacky's scripts folder and its .qk files, so the screen opens without a fetch flash
+    var scriptsDir: String?
+        get() = text("scriptsDir")
+        set(v) = put("scriptsDir", v)
+
+    var scripts: List<ImageFile>?
+        get() = text("scripts")?.let { parseImages(it.lines()) }
+        set(v) = put("scripts", v?.joinToString("\n") { "${it.bytes} ${it.path}" })
+
     var uplinks: List<String>?
         get() = text("uplinks")?.lines()?.filter { it.isNotEmpty() }
         set(v) = put("uplinks", v?.joinToString("\n"))

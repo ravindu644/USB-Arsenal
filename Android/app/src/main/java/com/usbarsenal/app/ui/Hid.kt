@@ -35,7 +35,7 @@ fun HidScreen(back: () -> Unit, openKeys: () -> Unit, openQuacky: () -> Unit) {
             Top { BackKey() }
             Title("HID")
             Card("Keyboard and mouse", nodes.joinToString(" · ").ifEmpty { "a trackpad and keys" }, Sprites.Hid, openKeys, Modifier.focusRequester(focusOn()).opener("hid/keys"))
-            Card("Quacky", "WIP", Sprites.Duck, openQuacky, Modifier.opener("hid/quacky"))
+            Card("Quacky", "a script that types", Sprites.Duck, openQuacky, Modifier.opener("hid/quacky"))
             Row(Modifier.fillMaxWidth().heightIn(min = Lcd.touch), horizontalArrangement = Arrangement.spacedBy(Lcd.tight), verticalAlignment = Alignment.CenterVertically) {
                 // On a kernel without the f_hid control the host gets the stock period whatever is
                 // set: 1 ms at high speed, 10 ms on a USB 1.1 host. One line either way, so the row

@@ -650,6 +650,71 @@ object HidSetup {
 }
 
 /*
+ * Quacky's app-side setup, in prefs so it outlives a launch: the run speed (0 Normal, 1 Fast, 2
+ * Ultra) and the pace in ms, and the last .qk file edited with its content, so the editor opens
+ * straight onto it with no flash while the folder is read. Unsaved edits ride rememberSaveable.
+ */
+object QuackySetup {
+    private var prefs: android.content.SharedPreferences? = null
+
+    // Each speed's default pace in ms when the box is left empty: Normal 5, Fast 0, Ultra 0
+    private val DEFAULT_PACE = intArrayOf(5, 0, 0)
+
+    fun init(context: Context) {
+        val p = context.getSharedPreferences("quacky", Context.MODE_PRIVATE)
+        prefs = p
+        mode = p.getInt("mode", 0).coerceIn(0, 2)
+        // runCatching tolerates an older build's Int under this key; the next change rewrites it
+        pace = runCatching { p.getString("pace", "") }.getOrNull() ?: ""
+        file = p.getString("file", "") ?: ""
+        text = p.getString("text", "") ?: ""
+    }
+
+    // 0 Normal, 1 Fast, 2 Ultra
+    var mode by mutableIntStateOf(0)
+        private set
+
+    // The pace the user typed, or empty to take the speed's default; the box shows this with the
+    // default as its placeholder, and a run uses effectivePace
+    var pace by mutableStateOf("")
+        private set
+
+    val defaultPace get() = DEFAULT_PACE[mode]
+    val effectivePace get() = pace.trim().toIntOrNull()?.coerceIn(0, 999) ?: defaultPace
+
+    // The last file edited and its content, cached so the next launch opens onto it
+    var file by mutableStateOf("")
+        private set
+
+    var text by mutableStateOf("")
+        private set
+
+    // Switching speed clears the override, so the new speed's default shows again
+    fun mode(next: Int) {
+        mode = next.coerceIn(0, 2)
+        pace = ""
+        prefs?.edit {
+            putInt("mode", mode)
+            putString("pace", "")
+        }
+    }
+
+    fun pace(next: String) {
+        pace = next.filter(Char::isDigit).take(3)
+        prefs?.edit { putString("pace", pace) }
+    }
+
+    fun open(name: String, content: String) {
+        file = name
+        text = content
+        prefs?.edit {
+            putString("file", name)
+            putString("text", content)
+        }
+    }
+}
+
+/*
  * The address the phone offers the host for its own CIDR, as tether.c picks it: the next one,
  * or the one before when the next is the broadcast. Null for no address (gateway, --no-net).
  */

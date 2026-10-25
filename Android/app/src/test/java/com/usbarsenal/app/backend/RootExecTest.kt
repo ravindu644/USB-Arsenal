@@ -21,6 +21,20 @@ class RootExecTest {
     private fun running(marker: String) = ProcessBuilder("pgrep", "-f", marker).start().waitFor() == 0
 
     @Test
+    fun utf8SafeEndHoldsASplitMultibyteChar() {
+        // ASCII is all complete
+        assertEquals(3, utf8SafeEnd("abc".toByteArray()))
+        // A complete 2-byte é is kept whole
+        assertEquals(2, utf8SafeEnd(byteArrayOf(0xC3.toByte(), 0xA9.toByte())))
+        // "a" then a lone 2-byte lead (0xC3): keep "a", hold the lead for the next chunk
+        assertEquals(1, utf8SafeEnd(byteArrayOf('a'.code.toByte(), 0xC3.toByte())))
+        // An incomplete 3-byte € (0xE2 0x82, needs 3): hold all of it
+        assertEquals(0, utf8SafeEnd(byteArrayOf(0xE2.toByte(), 0x82.toByte())))
+        // A complete 3-byte € is kept whole
+        assertEquals(3, utf8SafeEnd(byteArrayOf(0xE2.toByte(), 0x82.toByte(), 0xAC.toByte())))
+    }
+
+    @Test
     fun hungChangeBlocksNeitherReadsNorTheLaneForLong() = runBlocking<Unit> {
         val start = System.nanoTime()
         val hung = async(Dispatchers.Default) { root.change("sleep 30", timeoutMs = 2_000) }

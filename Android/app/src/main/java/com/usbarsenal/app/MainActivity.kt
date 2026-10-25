@@ -9,6 +9,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import com.usbarsenal.app.backend.Cache
 import com.usbarsenal.app.ui.HidSetup
+import com.usbarsenal.app.ui.QuackySetup
 import androidx.activity.enableEdgeToEdge
 import com.usbarsenal.app.lcd.LcdTheme
 import com.usbarsenal.app.lcd.Switches
@@ -30,6 +31,7 @@ class MainActivity : ComponentActivity() {
         // The last reads and the trackpad's settings, so the first frame draws from them
         Cache.init(applicationContext)
         HidSetup.init(applicationContext)
+        QuackySetup.init(applicationContext)
         // The launch window's Pin (Android 8 to 11's splash) has done its job once Compose draws: LcdTheme replaces it
         setContent { LcdTheme(switches) { App() } }
     }

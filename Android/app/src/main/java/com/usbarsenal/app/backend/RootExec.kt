@@ -120,7 +120,20 @@ class RootExec(private val launch: (String) -> Process) {
             return null
         }
         val lines = flow { while (true) emit(raw.pollLine(p) ?: break) }.flowOn(Dispatchers.IO)
-        return RootStream(p.outputStream, lines) {
+        // Bytes as they arrive, holding any trailing incomplete UTF-8 sequence until the rest comes
+        val chunks = flow {
+            val buf = ByteArray(8192)
+            var pending = ByteArray(0)
+            while (true) {
+                val n = raw.readAvailable(p, buf) ?: break
+                val all = if (pending.isEmpty()) buf.copyOf(n) else pending + buf.copyOf(n)
+                val end = utf8SafeEnd(all)
+                if (end > 0) emit(String(all, 0, end, Charsets.UTF_8))
+                pending = if (end < all.size) all.copyOfRange(end, all.size) else ByteArray(0)
+            }
+            if (pending.isNotEmpty()) emit(String(pending, Charsets.UTF_8))
+        }.flowOn(Dispatchers.IO)
+        return RootStream(p.outputStream, lines, chunks) {
             withContext(Dispatchers.IO) {
                 kill(p, shellPid)
                 runCatching { raw.close() }
@@ -172,12 +185,46 @@ private suspend fun InputStream.pollLine(p: Process): String? {
     }
 }
 
+// Whatever bytes have already arrived, into the reused [buf], not waiting for a newline, so a line
+// builds up on screen as quacky types it; null once the process ends
+private suspend fun InputStream.readAvailable(p: Process, buf: ByteArray): Int? {
+    while (available() == 0 && p.isAlive) delay(10)
+    // Alive with data, or exited: read() returns it, then drains the pipe's last bytes and hits
+    // EOF (-1) without blocking, since an exited quacky has closed the write end. So the final
+    // chunk it wrote as it quit is never dropped
+    return read(buf).takeIf { it > 0 }
+}
+
+// The length of [b] up to its last complete UTF-8 character, so a multi-byte char split across two
+// reads is carried to the next chunk instead of decoding as a replacement character
+internal fun utf8SafeEnd(b: ByteArray): Int {
+    var i = b.size - 1
+    var back = 0
+    while (i >= 0 && (b[i].toInt() and 0xC0) == 0x80 && back < 3) {
+        i--
+        back++
+    }
+    if (i < 0) return b.size
+    val lead = b[i].toInt() and 0xFF
+    val need = when {
+        lead and 0x80 == 0 -> 1
+        lead and 0xE0 == 0xC0 -> 2
+        lead and 0xF0 == 0xE0 -> 3
+        lead and 0xF8 == 0xF0 -> 4
+        else -> 1
+    }
+    return if (b.size - i >= need) b.size else i
+}
+
 private fun ByteArrayOutputStream.lines() = toString(Charsets.UTF_8.name()).lines().dropLastWhile(String::isEmpty)
 
 // close() kills the command; it starts a root shell to do it, so it is a suspend call
 class RootStream internal constructor(
     val input: OutputStream,
     val lines: Flow<String>,
+    // The same output, not split on newlines: for a terminal that grows a line as it is typed.
+    // Collect either lines or chunks, never both: they read the one pipe, so each byte goes to one
+    val chunks: Flow<String>,
     private val stop: suspend () -> Unit,
 ) {
     suspend fun close() = stop()

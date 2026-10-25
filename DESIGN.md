@@ -607,7 +607,7 @@ A big way into a screen, in the drive panel's look: an inverted 40px face with t
 `>`, over a body with a 4x sprite and one VT323 line. The whole card is one key. Focused or
 held it inverts (the face goes light, the body dark, the 2px edge stays ink), and a tap keeps
 it inverted for 2 frames before the screen changes, so a quick tap is still seen to land. HID's
-cards: `Keyboard and mouse` (the nodes while HID runs, `a trackpad and keys` before) and `Quacky` (`WIP`).
+cards: `Keyboard and mouse` (the nodes while HID runs, `a trackpad and keys` before) and `Quacky` (`a script that types`).
 
 ### HID, Keys + mouse, Quacky
 - **HID:** the two cards, then `Interval`: the period on the left (one line, sliding if it does
@@ -625,7 +625,14 @@ cards: `Keyboard and mouse` (the nodes while HID runs, `a trackpad and keys` bef
   - With HID off the page is drawn under a D50 dither that takes no touch or focus, and an
     inverted box (plain on a negative theme) with Pin, `Enable HID on Home to use this page`, steps in over it; a kernel with
     no HID says `No HID in this kernel` instead.
-- **Quacky:** not built yet. The duck beside Pin and `Under construction`; never shaded.
+- **Quacky:** `Edit` and `Run` tabs. Edit is a line-numbered editor over the `.qk` scripts in
+  `/sdcard/USB-Arsenal/Scripts`: a `File` row opens the scripts sheet (open one, or `New` names a
+  fresh one), the name carries a `*` while the buffer is unsaved, and `Save` / `Save as` write it.
+  Run is a live terminal fed quacky's own output as it types: an `Options` row opens a sheet with
+  the speed (`Normal` / `Fast` / `Ultra`) and the pace in ms (Fast and Ultra drop it to 0), then
+  `Dry run` and `Run`, which becomes `Stop` while it types. Editing and Dry run work offline; a
+  real `Run` needs HID on, so its key waits for the keyboard node. New names first and writes on
+  Save; Run and Dry run save first, then run the file.
 
 ### Device panel (`.panel`, `.face`, `.led`, `.body`)
 The drive's frame: a 2px box with an inverted 40px face (a LED and a short
@@ -959,7 +966,7 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | HID interval | `hid start --interval N`, period 2^(N-1)×125µs, set at start; without the f_hid patch (`check`'s `hid_interval` is 0) it is `1 ms, fixed by this kernel` and the steppers are dead |
 | Keys + mouse, the gamepad | app-side reports (8-byte keyboard, 4-byte mouse), each one write into `hid write NODE SIZE`, one per node, which never blocks on the node and keeps only the newest report while the host reads nothing; key reports are paced two poll periods apart. Speed and Natural scroll are app-side too, applied to the reports before they are written |
 | HID period text | `status --json`'s `speed` (`full-speed` is a USB 1.1 host) and `hid[].interval` |
-| Quacky | nothing yet: a WIP page |
+| Quacky | `quacky` run through `Root.stream`: `quacky [--hid <keyboard node>] -d <ms> [--fast\|--ultra] <script>`, no `--hid` being a dry run (the transcript to stdout), streamed live into the terminal; the `.qk` files in `/sdcard/USB-Arsenal/Scripts` listed, read and written through root (the app has no storage access), the editor's buffer saved before any run; the keyboard node from `status --json`'s `hid[]` |
 | Identity | `identity show --json` (the profile in force, and `missing` for a link whose file is gone), `identity show --json FILE...` (the folder's profiles, read by the backend's own loader), `identity generate FILE --force` then the six keys written in (`product`, `manufacturer`, `serial`, `id_vendor`, `id_product`, `max_power`), an edit from the file as it is, through a rename, `identity set FILE`, `identity unset` for Built-in |
 | Log | `Logs/usb-arsenal.log`, which the backend writes for every run but the reads (`status`, `check`, `identity show`, `hid write`, `version`, `help`): the command line as a `$` line, then what it printed, tagged lines too, and the tether process's lines; read as a tail once a second while the screen is open, shown as `time: who [glyph]: message` (a command line without the command the process is named after) and without the tagged chatter (`[*] [DEBUG]`, `[+] [NET]`), which Copy logs still copies; the app's own faults (a timeout, a refused image) are written into the same file as `app` |
 | Function names in the bind screen | `mass_storage.ua`, `ncm.ua`, `hid.ua_kbd`, `hid.ua_mouse` |
@@ -1034,3 +1041,6 @@ Looked at and kept. Do not "fix" these without a reason the original one misses.
   Both system themes get the same screen.
 - **The marquee moves text.** Only for text that does not fit, in steps, so long filenames stay
   readable without wrapping the row.
+- **The Quacky terminal streams live and unpaced.** The `Run` tab shows quacky's real stdout as
+  it arrives, at the speed quacky really types, not the stepped shell playback the setup screens
+  use. Showing the true speed is the point, so this one terminal is not paced.
