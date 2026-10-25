@@ -1,0 +1,3 @@
+[submodule "external/quacky"]
+	path = external/quacky
+	url = https://github.com/ravindu644/Quacky

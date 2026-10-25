@@ -38,6 +38,7 @@ jobs:
     - uses: actions/checkout@v5
       with:
         fetch-depth: 0
+        submodules: recursive
 
     # One version, UA_VERSION in usbarsenal.h. A tag must match it, so a
     # forgotten `make bump` fails here instead of shipping.
