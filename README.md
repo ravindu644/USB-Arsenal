@@ -22,6 +22,9 @@ so ADB and file transfer work again.
   [Droidspaces](https://github.com/ravindu644/Droidspaces-OSS) OpenWrt container be the
   router.
 - **A keyboard and mouse.** Type and move the pointer on the computer from the app.
+- **Script the typing.** Write a [Quacky](https://github.com/ravindu644/Quacky) script and
+  the phone types it onto the computer at full speed, a whole install in one run
+  ([language](https://github.com/ravindu644/Quacky/blob/main/docs/language.md)).
 - **All at once.** Drives, internet and keyboard share one cable, and you can turn each on
   or off without touching the others.
 - **Pick how it shows up.** Choose the device name and IDs the computer sees.
@@ -37,7 +40,8 @@ A pen drive, a keyboard and a network cable, all in one USB cable. Plug the phon
 machine that has a screen and nothing else:
 
 1. **Storage** serves the installer ISO, and the machine boots from it.
-2. **Keys + mouse** types into the installer from the phone.
+2. **Keys + mouse** types into the installer from the phone, by hand or from a
+   [Quacky](https://github.com/ravindu644/Quacky) script that runs the whole install.
 3. **Tether** puts the installer online through the phone, for its packages and updates.
 
 All three run at once, and turning one off leaves the others running.
