@@ -31,6 +31,17 @@ so ADB and file transfer work again.
 The same binary runs on a Linux board with a USB device port, and inside a privileged
 [Droidspaces](https://github.com/ravindu644/Droidspaces-OSS) container.
 
+## Install a computer from your phone
+
+A pen drive, a keyboard and a network cable, all in one USB cable. Plug the phone into a
+machine that has a screen and nothing else:
+
+1. **Storage** serves the installer ISO, and the machine boots from it.
+2. **Keys + mouse** types into the installer from the phone.
+3. **Tether** puts the installer online through the phone, for its packages and updates.
+
+All three run at once, and turning one off leaves the others running.
+
 ## Requirements
 
 - A rooted phone running Android 8 or newer.
