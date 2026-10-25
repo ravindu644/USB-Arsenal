@@ -105,6 +105,10 @@ Tick a box only when the item is merged and verified as described in its phase.
       on the a166p 5.15 with the patch, typing 816 characters over `--hid`: interval 4 (1 ms,
       the stock default) 884 chars/s, 3 (500 us) 2377, 2 (250 us) 6640, 1 (125 us) 11207, all
       at 100% accuracy. 12.7x from 4 to 1, and the MT6835 beats one report per microframe
+- [x] No process holds our `/dev/hidgN` across an unbind: f_hid frees or resets its wait
+      queue under a sleeper and the kernel BUGs ([research/07](research/07-f_hid-open-node.md)).
+      Every unbind kills the holders; verified on the M62 (4.14) with the probe that panicked it
+- [ ] The f_hid lifetime and rebind patches built and the probe run on a patched kernel
 
 - [ ] Quacky: a headless Arch install, shipped as `archinstall.qk`. Storage serves the Arch
       ISO, which boots to a root shell and leases from the tether; the script waits for that
@@ -644,3 +648,9 @@ Tick a box only when the item is merged and verified as described in its phase.
   it (missing or changed trips BACKEND BROKEN / update), and `uninstall.sh` removes it. Built
   clean for the four phone arches, then verified on the a16xm: quacky v1.2.1 installed
   beside usb-arsenal, runs, and a missing quacky trips BACKEND BROKEN then reinstalls.
+- 2026-10-25: a process asleep on `/dev/hidgN` across an unbind panicked a Galaxy A13 (4.19.198)
+  and a Pixel 5: f_hid frees its state on unlink while the node is open, and resets its wait
+  queues on bind. Reproduced on the M62 (4.14.356) with a `cat` reader pinned to one CPU, then
+  fixed: every unbind of our gadget kills the holders (`ua_hid_evict`), one `/proc` pass of
+  about 53 ms on 16k fds, logged only as `[DEBUG]`. The same probes, plus a storage rebind with
+  HID kept, survive. Write-up in [research/07](research/07-f_hid-open-node.md).

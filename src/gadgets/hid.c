@@ -142,16 +142,25 @@ static int setup_fn(struct ua_gadget *g, const struct hid_fn *f, int *created,
   return 0;
 }
 
-/* The function's "dev" attribute is major:minor; the node name is up to
- * ueventd/udev/devtmpfs, so find it by device number, not by guessing. */
-static int find_node(const struct ua_gadget *g, const char *func, char *out,
-                     size_t size, int tries) {
+/* The function's "dev" attribute, major:minor. It is there unbound too. */
+static int func_dev(const struct ua_gadget *g, const char *func, dev_t *out) {
   char dir[PATH_MAX], p[PATH_MAX + 8], dev[32];
   unsigned int maj, min;
   ua_gadget_func_dir(g, func, dir, sizeof(dir));
   snprintf(p, sizeof(p), "%s/dev", dir);
   if (read_file(p, dev, sizeof(dev)) <= 0 ||
       sscanf(dev, "%u:%u", &maj, &min) != 2)
+    return -1;
+  *out = makedev(maj, min);
+  return 0;
+}
+
+/* The node name is up to ueventd/udev/devtmpfs, so find it by device number,
+ * not by guessing */
+static int find_node(const struct ua_gadget *g, const char *func, char *out,
+                     size_t size, int tries) {
+  dev_t dev;
+  if (func_dev(g, func, &dev) < 0)
     return -1;
   /* The node shows up a moment after bind, when the device manager has run;
    * a bind waits up to [tries] tenths of a second for it, a read looks once */
@@ -163,8 +172,7 @@ static int find_node(const struct ua_gadget *g, const char *func, char *out,
       if (strncmp(e->d_name, "hidg", 4) != 0)
         continue;
       snprintf(out, size, "/dev/%s", e->d_name);
-      if (stat(out, &st) == 0 && S_ISCHR(st.st_mode) &&
-          major(st.st_rdev) == maj && minor(st.st_rdev) == min) {
+      if (stat(out, &st) == 0 && S_ISCHR(st.st_mode) && st.st_rdev == dev) {
         closedir(d);
         return 0;
       }
@@ -236,6 +244,127 @@ static int apply_perm(const struct ua_gadget *g, int report) {
 }
 
 void ua_hid_reapply(const struct ua_gadget *g) { apply_perm(g, 0); }
+
+/* Whether process [pid] (its /proc name) has one of devs[] open, or with
+ * [close_them] (our own fds, inherited without O_CLOEXEC) closes them. Only
+ * an fd whose link names /dev/ or a hidg node is stat'ed: fstatat on a FUSE
+ * file asks its daemon, which can hang, and we are in the critical section.
+ * fstatat then follows the magic link to the inode, so a node the unbind
+ * already deleted still matches. */
+static int holds(int proc, const char *pid, const dev_t *devs, int n,
+                 int close_them, int *fds) {
+  char p[32];
+  snprintf(p, sizeof(p), "%s/fd", pid);
+  int dfd = openat(proc, p, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  if (dfd < 0)
+    return 0;
+  DIR *d = fdopendir(dfd);
+  if (!d) {
+    close(dfd);
+    return 0;
+  }
+  struct dirent *e;
+  int found = 0;
+  while (!found && (e = readdir(d))) {
+    char link[64];
+    struct stat st;
+    if (e->d_name[0] == '.')
+      continue;
+    (*fds)++;
+    ssize_t r = readlinkat(dfd, e->d_name, link, sizeof(link) - 1);
+    if (r <= 0)
+      continue;
+    link[r] = '\0';
+    if ((strncmp(link, "/dev/", 5) && !strstr(link, "hidg")) ||
+        fstatat(dfd, e->d_name, &st, 0) < 0 || !S_ISCHR(st.st_mode))
+      continue;
+    for (int i = 0; i < n; i++)
+      if (st.st_rdev == devs[i]) {
+        if (close_them)
+          close(atoi(e->d_name));
+        else
+          found = 1;
+      }
+  }
+  closedir(d);
+  return found;
+}
+
+static long now_ms(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return ts.tv_sec * 1000L + ts.tv_nsec / 1000000;
+}
+
+/* Nobody may hold our /dev/hidgN across an unbind. f_hid without the 2022
+ * lifetime fix (every 4.9 and 4.14, 4.19 before 4.19.270) frees its state on
+ * unlink while the node is open, and f_hid without the 2026 fixes resets its
+ * wait queues on every bind. A process asleep on the node then walks a freed
+ * or reset list when it wakes, and the kernel BUGs (seen on 4.14 and 4.19).
+ * So right after each unbind, which deletes the node, the holders are killed
+ * (SIGKILL: a caught signal restarts the read or write right back onto the
+ * queue) and waited for. One pass over /proc as Droidspaces walks it, 60 to
+ * 80 ms on a phone with 16k fds; the wait looks at the killed pids only.
+ * ponytail: sees only our pid namespace, and only the thread group leader's
+ * fds (a holder whose main thread exited is missed); a copy in a container
+ * cannot close a holder outside it. -1 when a holder may still be there. */
+int ua_hid_evict(const struct ua_gadget *g) {
+  dev_t devs[2];
+  int n = 0;
+  for (size_t i = 0; i < 2; i++)
+    if (func_dev(g, fns[i].func, &devs[n]) == 0)
+      n++;
+  if (!n)
+    return 0;
+  DIR *d = opendir("/proc");
+  if (!d) {
+    ua_warn("Cannot read /proc to find who holds /dev/hidgN: %s",
+            strerror(errno));
+    return -1;
+  }
+  int proc = dirfd(d), fds = 0, nk = 0, lost = 0;
+  pid_t killed[64];
+  char self[16], name[32], comm[32];
+  long t0 = now_ms();
+  struct dirent *e;
+  snprintf(self, sizeof(self), "%d", (int)getpid());
+  holds(proc, "self", devs, n, 1, &fds);
+  while ((e = readdir(d))) {
+    if (e->d_name[0] < '1' || e->d_name[0] > '9' || !strcmp(e->d_name, self) ||
+        !holds(proc, e->d_name, devs, n, 0, &fds))
+      continue;
+    pid_t pid = (pid_t)atoi(e->d_name);
+    snprintf(name, sizeof(name), "/proc/%d/comm", (int)pid);
+    if (read_file(name, comm, sizeof(comm)) <= 0)
+      strcpy(comm, "?");
+    kill(pid, SIGKILL);
+    ua_debug("pid %d (%s) holds a HID node, killed it", (int)pid, comm);
+    if (nk < (int)(sizeof(killed) / sizeof(killed[0])))
+      killed[nk++] = pid;
+    else
+      lost = 1; /* killed but not waited for */
+  }
+  ua_debug("HID holders: %d fds looked at in %ld ms", fds, now_ms() - t0);
+  int left = nk;
+  for (int t = 0; left && t < 100; t++) {
+    usleep(10000);
+    left = 0;
+    for (int i = 0; i < nk; i++) {
+      snprintf(name, sizeof(name), "%d", (int)killed[i]);
+      if (killed[i] && holds(proc, name, devs, n, 0, &fds))
+        left++;
+      else
+        killed[i] = 0;
+    }
+  }
+  closedir(d);
+  for (int i = 0; i < nk; i++)
+    if (killed[i])
+      ua_warn("pid %d still holds a HID node after SIGKILL", (int)killed[i]);
+  if (lost)
+    ua_warn("Over %d processes held a HID node", nk);
+  return left || lost ? -1 : 0;
+}
 
 static gid_t parse_group(const char *s, int *ok) {
   char *end;

@@ -129,11 +129,23 @@ ok "setup: saved by start, applied LUN by LUN, pending in status"
 "$B" $A status | grep -q "LUN 0" || die "status does not show storage"
 ok "status"
 
+# A process asleep on a HID node across an unbind panics an unpatched kernel
+# (research/07), so whoever holds one is killed first. Gone or a zombie both
+# mean its fds are closed.
+MOUSE=$("$B" $A status --json | sed -n 's/.*"function":"mouse","node":"\([^"]*\)".*/\1/p')
+[ -c "$MOUSE" ] || die "status --json names no mouse node"
+cat "$MOUSE" >/dev/null &
+R=$!
+sleep 0.5
+[ "$(awk '{print $3}' /proc/$R/stat 2>/dev/null)" = S ] || die "the reader is not asleep on $MOUSE"
 "$B" $A hid stop || die "hid stop"
+st=$(awk '{print $3}' /proc/$R/stat 2>/dev/null || true) # gone if bash reaped it
+[ -z "$st" ] || [ "$st" = Z ] || die "hid stop left pid $R holding $MOUSE"
+wait $R 2>/dev/null || true # its status is the kill or the ESHUTDOWN
 [ ! -e $G/functions/hid.ua_kbd ] || die "hid stop left the function behind"
 [ ! -e /var/lib/USB-Arsenal/Gadget/hid.perm ] || die "hid stop kept the --perm of the HID it removed"
 configured || die "gadget did not come back after hid stop"
-ok "hid stop rebinds the rest"
+ok "hid stop closes a node's holder and rebinds the rest"
 
 "$B" $A stop || die "stop"
 [ ! -e $G ] || die "stop left $G behind"

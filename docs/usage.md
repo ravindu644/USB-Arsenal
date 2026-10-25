@@ -204,6 +204,11 @@ It exits `0` at the end of stdin once the last report went out (it waits a secon
 and `1` with a message when the host did not take it, when the node cannot be opened, or when
 a write fails with anything but `EAGAIN` (`ESHUTDOWN` once the host has gone). It takes no lock.
 
+Every re-plug and every `stop` kills whatever holds one of our nodes open, `hid write` included,
+since an open node across an unbind panics many kernels (the f_hid patches in
+[kernel-patches/README.md](../kernel-patches/README.md)). A program that keeps a node open
+opens it again once the gadget is back.
+
 ## tether
 
 ```sh

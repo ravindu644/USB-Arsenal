@@ -446,6 +446,16 @@ int ua_gadget_begin(struct ua_gadget *g) {
      * report descriptor are locked while the function is in use. */
     if (ua_gadget_live(g))
       write_attr(g->path, "UDC", UNBIND);
+    /* Whoever holds a HID node must be gone before the unlink or the bind
+     * that follows (ua_hid_evict). The unbind deleted the cdev, so nobody can
+     * open one now and a single look catches them all. One that will not
+     * die: stay unbound, since both a bind and an unlink are what panic */
+    if (ua_hid_evict(g) < 0) {
+      ua_error("A process holding /dev/hidgN would not exit, so the gadget "
+               "stays unbound; '" UA_NAME " stop' hands USB back");
+      ua_crit_leave();
+      return -1;
+    }
     /* Idempotent, and covers a crash between saving the handoff and
      * building the gadget the first time round */
     if (build_skeleton(g) < 0) {
@@ -769,11 +779,18 @@ void ua_gadget_teardown(struct ua_gadget *g) {
       write_attr(g->path, "UDC", UNBIND);
       was_here = 1;
     }
-    if (unlink_all(g->config) > 0)
+    /* As in ua_gadget_begin. A holder that will not die keeps our functions
+     * linked, since unlinking frees f_hid under it; the hand-back goes on and
+     * a later stop removes them. */
+    if (ua_hid_evict(g) < 0)
       was_here = 1;
+    else {
+      if (unlink_all(g->config) > 0)
+        was_here = 1;
+      remove_ours(g);
+    }
     if (pathf(p, sizeof(p), "%s/os_desc", g->path) == 0)
       unlink_all(p);
-    remove_ours(g);
     if (!keep_gadget()) {
       if (pathf(p, sizeof(p), "%s/strings/0x409", g->config) == 0)
         rmdir(p);
