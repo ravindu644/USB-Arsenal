@@ -170,19 +170,19 @@ usb-arsenal hid write NODE SIZE            # stdin's reports onto NODE, never bl
 a `start` that asks for another interval fails, since the interval only changes with a restart:
 `hid apply` does that in one replug and leaves the other functions bound.
 
-`start` adds a boot-protocol keyboard and a 5-button mouse with a wheel, then prints
+`start` adds a boot-protocol keyboard and a 5-button mouse with a wheel and a horizontal wheel, then prints
 which `/dev/hidgN` is which. The numbers depend on what else the kernel has; Android's
 own HID function may already hold `hidg0`.
 
 | Device | Report |
 |---|---|
 | keyboard | 8 bytes: modifiers, 0, then up to six HID key codes |
-| mouse | 4 bytes: buttons, X, Y, wheel (signed) |
+| mouse | 5 bytes: buttons, X, Y, wheel, pan (signed) |
 
 ```sh
 printf '\0\0\x04\0\0\0\0\0' > /dev/hidg0   # press 'a'
 printf '\0\0\0\0\0\0\0\0' > /dev/hidg0     # release
-printf '\0\x0a\0\0' > /dev/hidg1           # mouse 10 px right
+printf '\0\x0a\0\0\0' > /dev/hidg1         # mouse 10 px right
 ```
 
 The nodes are `0660 root` by default, or the profile's `hid_perm` and `hid_group`. `--perm`

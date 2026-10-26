@@ -27,13 +27,17 @@ static const unsigned char kbd_desc[] = {
     0x07, 0x19, 0x00, 0x29, 0x65, 0x81, 0x00, 0xc0,
 };
 
-/* Mouse: 5 buttons, relative X, Y and wheel. 4-byte input report. */
+/* Mouse: 5 buttons, relative X, Y, wheel and a horizontal wheel (the
+ * Consumer page's AC Pan, usage 0x0238, which every OS reads as sideways
+ * scroll). 5-byte input report; the logical range and size carry over from
+ * the wheel, only the count is set again. */
 static const unsigned char mouse_desc[] = {
     0x05, 0x01, 0x09, 0x02, 0xa1, 0x01, 0x09, 0x01, 0xa1, 0x00, 0x05,
     0x09, 0x19, 0x01, 0x29, 0x05, 0x15, 0x00, 0x25, 0x01, 0x95, 0x05,
     0x75, 0x01, 0x81, 0x02, 0x95, 0x01, 0x75, 0x03, 0x81, 0x01, 0x05,
     0x01, 0x09, 0x30, 0x09, 0x31, 0x09, 0x38, 0x15, 0x81, 0x25, 0x7f,
-    0x75, 0x08, 0x95, 0x03, 0x81, 0x06, 0xc0, 0xc0,
+    0x75, 0x08, 0x95, 0x03, 0x81, 0x06, 0x05, 0x0c, 0x0a, 0x38, 0x02,
+    0x95, 0x01, 0x81, 0x06, 0xc0, 0xc0,
 };
 
 struct hid_fn {
@@ -44,7 +48,7 @@ struct hid_fn {
 
 static const struct hid_fn fns[] = {
     {KBD, "keyboard", "1", "8", kbd_desc, sizeof(kbd_desc)},
-    {MOUSE, "mouse", "2", "4", mouse_desc, sizeof(mouse_desc)},
+    {MOUSE, "mouse", "2", "5", mouse_desc, sizeof(mouse_desc)},
 };
 
 void ua_help_hid(void) {
@@ -81,7 +85,7 @@ void ua_help_hid(void) {
       "  -h, --help         Show this help\n\n"
       "Reports:\n"
       "  keyboard  8 bytes: modifiers, 0, then up to 6 HID keycodes\n"
-      "  mouse     4 bytes: buttons, X, Y, wheel (signed)\n\n"
+      "  mouse     5 bytes: buttons, X, Y, wheel, pan (signed)\n\n"
       "Examples:\n"
       "  " UA_NAME " hid start\n"
       "  " UA_NAME " hid start --group input\n"
@@ -89,9 +93,9 @@ void ua_help_hid(void) {
       "  printf '\\0\\0\\x04\\0\\0\\0\\0\\0' > /dev/hidg0\n"
       "  printf '\\0\\0\\0\\0\\0\\0\\0\\0' > /dev/hidg0\n"
       "  # move the mouse 10 px right:\n"
-      "  printf '\\0\\x0a\\0\\0' > /dev/hidg1\n"
+      "  printf '\\0\\x0a\\0\\0\\0' > /dev/hidg1\n"
       "  # or keep one writer open for a stream of reports:\n"
-      "  " UA_NAME " hid write /dev/hidg1 4 < reports\n"
+      "  " UA_NAME " hid write /dev/hidg1 5 < reports\n"
       "  " UA_NAME " hid stop\n");
 }
 

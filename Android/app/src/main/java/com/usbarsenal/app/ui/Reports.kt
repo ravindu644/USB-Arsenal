@@ -2,8 +2,8 @@ package com.usbarsenal.app.ui
 
 /*
  * The HID reports, as hid.c's report descriptors lay them out: a keyboard report is 8 bytes
- * (modifiers, a reserved 0, six keycodes from usage page 7), a mouse report 4 (buttons, then X,
- * Y and the wheel, each a signed byte).
+ * (modifiers, a reserved 0, six keycodes from usage page 7), a mouse report 5 (buttons, then X,
+ * Y, the wheel and the horizontal wheel, each a signed byte).
  */
 
 const val MOUSE_LEFT = 0x01
@@ -17,8 +17,8 @@ const val MOD_SUPER = 0x08
 
 private fun signed(v: Int) = v.coerceIn(-127, 127).toByte()
 
-fun mouseReport(buttons: Int, dx: Int = 0, dy: Int = 0, wheel: Int = 0) =
-    byteArrayOf(buttons.toByte(), signed(dx), signed(dy), signed(wheel))
+fun mouseReport(buttons: Int, dx: Int = 0, dy: Int = 0, wheel: Int = 0, pan: Int = 0) =
+    byteArrayOf(buttons.toByte(), signed(dx), signed(dy), signed(wheel), signed(pan))
 
 fun keyReport(mods: Int = 0, code: Int = 0) = byteArrayOf(mods.toByte(), 0, code.toByte(), 0, 0, 0, 0, 0)
 

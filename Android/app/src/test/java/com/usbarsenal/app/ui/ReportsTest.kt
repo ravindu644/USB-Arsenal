@@ -9,9 +9,9 @@ import org.junit.Test
 class ReportsTest {
     @Test
     fun mouse() {
-        assertArrayEquals(byteArrayOf(1, 10, -2, 0), mouseReport(MOUSE_LEFT, 10, -2))
+        assertArrayEquals(byteArrayOf(1, 10, -2, 0, 0), mouseReport(MOUSE_LEFT, 10, -2))
         // A signed byte each: a long drag is cut to what one report can carry
-        assertArrayEquals(byteArrayOf(0, 127, -127, 1), mouseReport(0, 500, -500, 1))
+        assertArrayEquals(byteArrayOf(0, 127, -127, 1, -1), mouseReport(0, 500, -500, 1, -1))
     }
 
     @Test
