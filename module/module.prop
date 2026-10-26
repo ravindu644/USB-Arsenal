@@ -1,6 +1,6 @@
 id=usb-arsenal
 name=USB Arsenal
-version=v1.5.0
-versionCode=1500
+version=v1.5.1
+versionCode=1510
 author=ravindu644
 description=Composite USB gadget builder: bootable storage, USB tethering and HID from one cable.
