@@ -42,6 +42,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val SOURCE = "github.com/ravindu644/USB-Arsenal"
+private const val LIBINPUT = "https://gitlab.freedesktop.org/libinput/libinput"
+
+// A page in the browser, where there is one: a profile without (work, kiosk) must not crash Settings
+private fun Context.open(url: String) {
+    runCatching { startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+}
 
 // A section after the first: a rule, then its heading
 @Composable
@@ -136,12 +142,12 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
 
                 Section("Credits")
                 LinkRow("Fonts", "SIL OFL 1.1", openFonts, Modifier.opener("settings/fonts"))
+                // The trackpad's gestures follow libinput's touchpad rules
+                LinkRow("Touchpad", "libinput, MIT", { context.open(LIBINPUT) }, Modifier.opener("settings/libinput"))
 
                 Section("About")
                 Kv("App", fact = true) { Text(BuildConfig.VERSION_NAME, LcdType.data) }
-                LinkRow("Source", SOURCE, onClick = {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, "https://$SOURCE".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                })
+                LinkRow("Source", SOURCE, { context.open("https://$SOURCE") })
             }
         }
         ChoiceSheet(

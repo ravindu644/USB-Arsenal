@@ -109,6 +109,8 @@ Developer notes (architecture, kernel research, the design language, roadmap) li
 - The Linux USB gadget subsystem: `f_mass_storage`, `f_hid`, `f_ncm`, `f_rndis` and
   configfs do the real work.
 - DriveDroid, which showed a phone can boot a PC.
+- [libinput](https://gitlab.freedesktop.org/libinput/libinput), whose tap, scroll and gesture
+  rules the app's touchpad follows.
 - [Jersey 10](https://fonts.google.com/specimen/Jersey+10), [Silkscreen](https://fonts.google.com/specimen/Silkscreen)
   and [VT323](https://fonts.google.com/specimen/VT323), the app's faces, under the
   [SIL Open Font License 1.1](https://scripts.sil.org/OFL).

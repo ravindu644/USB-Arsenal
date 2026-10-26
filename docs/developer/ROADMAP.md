@@ -93,7 +93,7 @@ Tick a box only when the item is merged and verified as described in its phase.
       device that lacks it; the check reads selinuxfs `access`, see research/03)
 
 ## Phase 2. `hid`
-- [x] Boot keyboard (8-byte report) and mouse (5 buttons, X, Y, wheel; 4 bytes)
+- [x] Boot keyboard (8-byte report) and mouse (5 buttons, X, Y, wheel, pan; 5 bytes)
 - [x] Node found by the function's `dev` major:minor, not by name
 - [x] `--perm` (default 0660) and `--group` (default root), saved and re-applied after
       every rebind (the kernel recreates the nodes as 0600 root)
@@ -109,6 +109,7 @@ Tick a box only when the item is merged and verified as described in its phase.
       queue under a sleeper and the kernel BUGs ([research/07](research/07-f_hid-open-node.md)).
       Every unbind kills the holders; verified on the M62 (4.14) with the probe that panicked it
 - [ ] The f_hid lifetime and rebind patches built and the probe run on a patched kernel
+- [x] A horizontal wheel (AC Pan) as the mouse report's fifth byte, for the app's two-finger scroll
 
 - [ ] Quacky: a headless Arch install, shipped as `archinstall.qk`. Storage serves the Arch
       ISO, which boots to a root shell and leases from the tether; the script waits for that
@@ -654,3 +655,8 @@ Tick a box only when the item is merged and verified as described in its phase.
   fixed: every unbind of our gadget kills the holders (`ua_hid_evict`), one `/proc` pass of
   about 53 ms on 16k fds, logged only as `[DEBUG]`. The same probes, plus a storage rebind with
   HID kept, survive. Write-up in [research/07](research/07-f_hid-open-node.md).
+- 2026-10-27: the app's trackpad became a laptop touchpad, libinput's rules in a pure Kotlin
+  state machine (`Touchpad.kt`, a JVM test beside it): one, two and three finger taps, the tap's
+  button held 300 ms so a finger back drags with it and lifts to let go, two-finger scroll on
+  both axes, pinch as Ctrl and the wheel, a speed ramp on the pointer. The backend's
+  mouse report grew a fifth byte, the Consumer page's AC Pan, for the sideways scroll.

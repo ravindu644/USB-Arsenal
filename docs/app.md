@@ -57,7 +57,8 @@ interface with a default route), or `auto`. With [Droidspaces](https://github.co
 installed, gateway mode hands the link to one of its running containers instead
 ([tethering.md](tethering.md)).
 
-**HID** sets the report interval and opens **Keys + mouse**: a trackpad with a wheel strip and
+**HID** sets the report interval and opens **Keys + mouse**: a trackpad with a laptop's gestures
+(tap, two and three finger taps, tap-and-drag, two-finger scroll, pinch), a wheel strip and
 L M R buttons, and a keys tab with F1 to F12, the editing, modifier and arrow keys, and a box
 whose text the host receives as typed. Speed and Natural scroll sit under the trackpad. The
 full-screen button turns the phone into one wide trackpad in landscape. A gamepad's left

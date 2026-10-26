@@ -18,9 +18,11 @@ import androidx.compose.foundation.layout.size
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import android.os.SystemClock
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -93,7 +95,9 @@ import com.usbarsenal.app.lcd.lcdClickable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -132,7 +136,15 @@ private class HidWriter(private val node: String, private val size: Int, private
                     }
                 } catch (_: IOException) {
                 } finally {
-                    withContext(NonCancellable) { w.close() }
+                    // Gone with a button or key down (the screen left mid drag): the host is let go
+                    // of first, as every start lets go too. A pipe already broken just fails
+                    withContext(NonCancellable + Dispatchers.IO) {
+                        runCatching {
+                            w.input.write(ByteArray(size))
+                            w.input.flush()
+                        }
+                        w.close()
+                    }
                 }
             }
             delay(1000)
@@ -194,14 +206,14 @@ fun KbdMouseScreen(back: () -> Unit) {
     val mouseNode = hid.firstOrNull { it.function == "mouse" }?.node?.ifEmpty { null }
     val on = kbdNode != null && mouseNode != null
     val kbd = remember(kbdNode) { kbdNode?.let { HidWriter(it, 8, ::keyPace) } }
-    val mouse = remember(mouseNode) { mouseNode?.let { HidWriter(it, 4) } }
+    val mouse = remember(mouseNode) { mouseNode?.let { HidWriter(it, 5) } }
     LaunchedEffect(kbd) { kbd?.run() }
     LaunchedEffect(mouse) { mouse?.run() }
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var buttons by remember { mutableIntStateOf(0) }
     var mods by remember { mutableIntStateOf(0) }
-    fun pointer(dx: Int = 0, dy: Int = 0, wheel: Int = 0) = mouse?.send(mouseReport(buttons, dx, dy, wheel))
+    fun pointer(dx: Int = 0, dy: Int = 0, wheel: Int = 0, pan: Int = 0) = mouse?.send(mouseReport(buttons, dx, dy, wheel, pan))
     fun button(bit: Int, down: Boolean) {
         buttons = if (down) buttons or bit else buttons and bit.inv()
         pointer()
@@ -211,6 +223,53 @@ fun KbdMouseScreen(back: () -> Unit) {
         kbd?.send(keyReport(mods or extra, code))
         kbd?.send(keyReport())
         mods = 0
+    }
+    // The pad's gestures, kept across the full-screen flip, their outputs the writers as they are now
+    val haptics = LocalHaptics.current
+    val slop = LocalViewConfiguration.current.touchSlop
+    val density = LocalDensity.current
+    // The button a pad drag holds: L M R show it, and a press of that key ends the drag. A tap's
+    // key flashes for 2 frames instead, as a tapped card does: the host's 300 ms hold is not shown
+    var dragBit by remember { mutableIntStateOf(0) }
+    var flashBit by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
+    val padOut = remember(mouse, kbd, haptics) {
+        object : Pad.Out {
+            override fun move(dx: Int, dy: Int) {
+                pointer(dx, dy)
+            }
+            override fun press(bit: Int, down: Boolean) = button(bit, down)
+            override fun scroll(wheel: Int, pan: Int) {
+                pointer(wheel = wheel, pan = pan)
+            }
+            override fun zoom(notches: Int) {
+                pointer(wheel = notches)
+            }
+            // A pinch is Ctrl on the keyboard around wheel notches on the mouse; the latched
+            // modifiers are left alone, and a writer restart lets go of Ctrl with everything else
+            override fun zoomHold(on: Boolean) {
+                kbd?.send(keyReport(if (on) MOD_CTRL else 0))
+            }
+            override fun drag(bit: Int) {
+                dragBit = bit
+                if (bit != 0) haptics.tick() else haptics.gestureEnd()
+            }
+            override fun click(bit: Int) {
+                haptics.keyPress()
+                scope.launch {
+                    flashBit = bit
+                    delay(FRAME_MS * 2L)
+                    if (flashBit == bit) flashBit = 0
+                }
+            }
+            override fun tick() = haptics.frequentTick()
+        }
+    }
+    val pad = remember(padOut) { with(density) { Pad(Pad.Config(slop, 16.dp.toPx(), 24.dp.toPx(), 8.dp.toPx(), density.density), padOut) } }
+    // L M R and the gamepad: a press of the button the pad drags with ends that drag
+    fun click(bit: Int, down: Boolean) {
+        if (down && bit == dragBit) pad.cancel()
+        button(bit, down)
     }
 
     // The left stick moves the pointer a frame at a time while held past its dead zone
@@ -243,8 +302,9 @@ fun KbdMouseScreen(back: () -> Unit) {
     // Turning the phone sideways on the Mouse tab is asking for the wide pad. Only on the turn, so
     // leaving full screen while still sideways stays left (the page then scrolls)
     LaunchedEffect(short) { if (short && on && tab == 0) wantFull = true }
-    // L M R are drawn anew on the way in or out, and a button held then would never let go
+    // The pad and L M R are drawn anew on the way in or out, and a button held then would never let go
     LaunchedEffect(full) {
+        pad.reset()
         if (buttons != 0) {
             buttons = 0
             pointer()
@@ -284,20 +344,8 @@ fun KbdMouseScreen(back: () -> Unit) {
             }
         }
     }
-    val pad = @Composable { modifier: Modifier, onFull: (() -> Unit)? ->
-        Trackpad(
-            modifier,
-            HidSetup.speed,
-            HidSetup.natural,
-            onMove = { dx, dy -> pointer(dx, dy) },
-            onTap = {
-                button(MOUSE_LEFT, true)
-                button(MOUSE_LEFT, false)
-            },
-            onWheel = { pointer(wheel = it) },
-            onButton = { bit, down -> if (on) button(bit, down) },
-            onFull = onFull,
-        )
+    val trackpad = @Composable { modifier: Modifier, onFull: (() -> Unit)? ->
+        Trackpad(modifier, pad, HidSetup.speed, HidSetup.natural, onButton = { bit, down -> click(bit, down) }, onScroll = { wheel, pan -> pointer(wheel = wheel, pan = pan) }, onFull = onFull)
     }
     // Keys typed into the box, kept here so a trip to the Mouse tab never empties it
     var text by rememberSaveable { mutableStateOf("") }
@@ -312,7 +360,7 @@ fun KbdMouseScreen(back: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(Lcd.tight),
             ) {
                 // A drag from the side edges is the pad's, not the system's Back gesture
-                pad(Modifier.weight(1f).systemGestureExclusion(), null)
+                trackpad(Modifier.weight(1f).systemGestureExclusion(), null)
                 Row(horizontalArrangement = Arrangement.spacedBy(Lcd.tight), verticalAlignment = Alignment.CenterVertically) {
                     Key(
                         "Leave full screen",
@@ -320,7 +368,7 @@ fun KbdMouseScreen(back: () -> Unit) {
                         icon = Sprites.Collapse,
                         padding = 0.dp,
                     ) { wantFull = false }
-                    Box(Modifier.weight(1f)) { MouseButtons { bit, down -> button(bit, down) } }
+                    Box(Modifier.weight(1f)) { MouseButtons(dragBit or flashBit) { bit, down -> click(bit, down) } }
                 }
             }
         } else Screen(scroll = tab == 0 && short) {
@@ -339,8 +387,8 @@ fun KbdMouseScreen(back: () -> Unit) {
                         KEYS_ABOVE_BOX.coerceAtMost(maxHeight - below).coerceAtLeast(120.dp)
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(Lcd.section)) {
-                        pad(Modifier.height(padHeight), if (on) ({ wantFull = true }) else null)
-                        MouseButtons { bit, down -> button(bit, down) }
+                        trackpad(Modifier.height(padHeight), if (on) ({ wantFull = true }) else null)
+                        MouseButtons(dragBit or flashBit) { bit, down -> click(bit, down) }
                         Column(verticalArrangement = Arrangement.spacedBy(Lcd.section)) {
                             Group("Configure")
                             val speed = HidSetup.speed
@@ -358,36 +406,34 @@ fun KbdMouseScreen(back: () -> Unit) {
 }
 
 /*
- * .pad: a .d25 panel where a drag moves the host pointer and a tap clicks, with the pointer
- * drawn where the finger is, and a 44dp wheel strip on its right. A tick every 8dp of travel,
- * as DESIGN.md's haptics table says, so a drag is felt without buzzing.
+ * .pad: a .d25 panel that is a laptop touchpad ([pad] has the gestures and their outputs), with
+ * the pointer drawn where the first finger is, and a 44dp wheel strip on its right. Every touch
+ * goes to the pad, and the pad's timers (a tap's release, a drag lock letting go) fire here when
+ * no touch comes first.
  */
 @Composable
 private fun Trackpad(
     modifier: Modifier,
+    pad: Pad,
     speed: Int,
     natural: Boolean,
-    onMove: (Int, Int) -> Unit,
-    onTap: () -> Unit,
-    onWheel: (Int) -> Unit,
     // A gamepad's A and X while the pad has focus: a left and a right button, held as long as they are
     onButton: (Int, Boolean) -> Unit,
+    // The strip's wheel notches
+    onScroll: (Int, Int) -> Unit,
     // Set: the key into full screen, in the pad's top-left corner
     onFull: (() -> Unit)?,
 ) {
     // The gestures outlive a recomposition; they must reach the writer, and use the setup, as it is now
     val quarters by rememberUpdatedState(speed)
     val follow by rememberUpdatedState(natural)
-    val move by rememberUpdatedState(onMove)
-    val tap by rememberUpdatedState(onTap)
-    val wheel by rememberUpdatedState(onWheel)
+    val scrollHost by rememberUpdatedState(onScroll)
     val ink = LocalLcd.current.ink
     val haptics = LocalHaptics.current
     val density = LocalDensity.current
-    val tickPx = with(density) { 8.dp.toPx() }
     val stepPx = with(density) { 16.dp.toPx() }
     var at by remember { mutableStateOf<Offset?>(null) }
-    val button by rememberUpdatedState(onButton)
+    val buttonHost by rememberUpdatedState(onButton)
     var padFocused by remember { mutableStateOf(false) }
     var wheelFocused by remember { mutableStateOf(false) }
     Row(modifier.fillMaxWidth().border(Lcd.pixel, ink)) {
@@ -406,34 +452,40 @@ private fun Trackpad(
                         else -> return@onKeyEvent false
                     }
                     if (it.type == KeyEventType.KeyDown && it.nativeKeyEvent.repeatCount == 0) haptics.keyPress()
-                    button(bit, it.type == KeyEventType.KeyDown)
+                    buttonHost(bit, it.type == KeyEventType.KeyDown)
                     true
                 }
                 .focusTick()
                 .focusable()
                 .then(if (padFocused) Modifier.focusOutline(ink) else Modifier)
                 .dither(Dither.D25, LocalLcd.current)
-                .pointerInput(Unit) { detectTapGestures(onTap = { at = it; tap() }) }
-                .pointerInput(Unit) {
-                    // Half a pixel of host travel per pixel of drag at 1.0x (4 quarters), the
-                    // remainder carried over
-                    var rx = 0f
-                    var ry = 0f
-                    var travel = 0f
-                    detectDragGestures(onDragStart = { at = it }) { change, d ->
-                        change.consume()
-                        at = change.position
-                        rx += d.x * quarters / 8
-                        ry += d.y * quarters / 8
-                        val dx = rx.toInt()
-                        val dy = ry.toInt()
-                        rx -= dx
-                        ry -= dy
-                        if (dx != 0 || dy != 0) move(dx, dy)
-                        travel += d.getDistance()
-                        if (travel >= tickPx) {
-                            travel = 0f
-                            haptics.frequentTick()
+                .pointerInput(pad) {
+                    awaitPointerEventScope {
+                        var deadline: Long? = null
+                        // A finger that landed on the full-screen key is the key's, not the pad's
+                        val taken = mutableSetOf<Long>()
+                        while (true) {
+                            val e = if (deadline == null) awaitPointerEvent()
+                            else withTimeoutOrNull((deadline - SystemClock.uptimeMillis()).coerceAtLeast(1)) { awaitPointerEvent() }
+                            pad.speed = quarters
+                            pad.natural = follow
+                            if (e == null) {
+                                deadline = pad.timeout(SystemClock.uptimeMillis())
+                                continue
+                            }
+                            // A touch the system takes back (a window opening, the shade) ends as a
+                            // consumed up: nothing it did is a tap, and what the pad held is let go
+                            var cancelled = false
+                            for (c in e.changes) {
+                                if (c.changedToDownIgnoreConsumed() && c.isConsumed) taken += c.id.value
+                                if (c.changedToUpIgnoreConsumed() && c.isConsumed && c.id.value !in taken) cancelled = true
+                                if (!c.pressed) taken -= c.id.value
+                                c.consume()
+                            }
+                            if (cancelled) pad.cancel()
+                            val fingers = e.changes.filter { it.pressed && it.id.value !in taken }.map { Finger(it.id.value, it.position.x, it.position.y) }
+                            fingers.minByOrNull { it.id }?.let { at = Offset(it.x, it.y) }
+                            deadline = pad.event(e.changes.first().uptimeMillis, fingers)
                         }
                     }
                 },
@@ -463,7 +515,7 @@ private fun Trackpad(
                 .onKeyEvent {
                     val up = it.key == KeyCode.DirectionUp
                     if (it.type != KeyEventType.KeyDown || !(up || it.key == KeyCode.DirectionDown)) return@onKeyEvent false
-                    wheel(if (up) 1 else -1)
+                    scrollHost(if (up) 1 else -1, 0)
                     haptics.frequentTick()
                     true
                 }
@@ -483,7 +535,7 @@ private fun Trackpad(
                             // moves the content with the finger instead, as a touchscreen does
                             val up = acc < 0
                             acc += if (up) stepPx else -stepPx
-                            wheel(if (up != follow) 1 else -1)
+                            scrollHost(if (up != follow) 1 else -1, 0)
                             haptics.frequentTick()
                         }
                     }
@@ -503,10 +555,11 @@ private fun Trackpad(
 /*
  * L M R: a button is down for as long as it is held, so a hold drags on the host. Down and up
  * follow the press events themselves, not what is drawn, so a press shorter than a frame still
- * clicks; a click with no press (TalkBack) is a down and an up at once.
+ * clicks; a click with no press (TalkBack) is a down and an up at once. A key in [held] is
+ * inverted too: the pad's tap flashes its key, and a drag keeps it, and its press ends the drag.
  */
 @Composable
-private fun MouseButtons(onButton: (Int, Boolean) -> Unit) {
+private fun MouseButtons(held: Int, onButton: (Int, Boolean) -> Unit) {
     val ink = LocalLcd.current.ink
     val haptics = LocalHaptics.current
     val button by rememberUpdatedState(onButton)
@@ -532,7 +585,7 @@ private fun MouseButtons(onButton: (Int, Boolean) -> Unit) {
                     }
                 }
             }
-            Inverted(pressed) {
+            Inverted(pressed || held and bit != 0) {
                 Box(
                     Modifier
                         .weight(1f)

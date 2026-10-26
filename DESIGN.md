@@ -579,12 +579,22 @@ app that finds no root at launch. On Root the box sits on the terminal, so there
 ground, ink Pin and words.
 
 ### Trackpad
-A `.d25` panel with a pixel pointer where the finger is, a 44px wheel strip on its right, and an
-L/M/R bar under it. A drag moves the host pointer, a tap clicks, and a button is down for as
-long as it is held. No report bytes are shown. Under L/M/R, `CONFIGURE`: `Speed` (a slider,
-0.25x to 4x in quarters; 1.0x is half a host pixel per pixel of drag) and `Natural scroll` (a
-DIP, on by default: the wheel strip moves content with the finger). On Keys + mouse the pad
-takes the height those leave, never more than the Keys tab's height above the `TYPE` box.
+A `.d25` panel with a pixel pointer where the first finger is, a 44px wheel strip on its right,
+and an L/M/R bar under it. The pad is a laptop touchpad, with libinput's rules: one finger
+moves the host pointer, further the faster it goes; a tap under 180 ms clicks, one finger left,
+two right, three middle, and the button stays down 300 ms so a finger back on the pad drags
+with it, lifted again it lets go at once; two fingers moving together scroll, up and down and
+sideways, held to an axis while within
+30 degrees of it, a notch every 16px; two fingers spreading or closing zoom (Ctrl and the wheel
+to the host), a notch every 24px; three fingers moving do nothing. An L/M/R key is down for as
+long as it is held; a tap on the pad inverts its key for 2 frames, as a tapped card is, and
+the key stays inverted while the pad drags with its button, when pressing it ends that drag.
+No report bytes are shown.
+Under L/M/R, `CONFIGURE`: `Speed` (a slider, 0.25x to 4x in quarters; 1.0x is half a host
+pixel per pixel at walking pace, half that at rest, three times it flat out) and `Natural
+scroll` (a DIP, on by default: two fingers and the wheel strip move content with the finger).
+On Keys + mouse the pad takes the height those leave, never more than the Keys tab's height
+above the `TYPE` box.
 
 While HID runs, a 44px key with the expand glyph sits in the pad's top-left corner. It makes
 the pad full screen: landscape, the system bars hidden, MOUSE | KEYS, the title, Speed and
@@ -615,8 +625,9 @@ cards: `Keyboard and mouse` (the nodes while HID runs, `a trackpad and keys` bef
   gave the gadget: 2^(N-1)×125µs at high speed, N ms on a USB 1.1 host. It is HID's setup; changed while HID runs, it waits for the `Not
   applied` sheet.
 - **Keys + mouse:** `Mouse` and `Keys` tabs.
-  - Mouse is the trackpad and `L M R`. The pad is the first focus stop and takes the dashed
-    cursor; the wheel strip is a stop too, where Up and Down turn the wheel a step.
+  - Mouse is the trackpad (its gestures under Trackpad) and `L M R`. The pad is the first focus
+    stop and takes the dashed cursor; the wheel strip is a stop too, where Up and Down turn the
+    wheel a step.
   - Keys is `F1` to `F12`, the `ESC TAB BKSP DEL / SHIFT CTRL ALT SUPER / INS HOME END PRTSC /
     ENTER PGUP PGDN` table, the arrows as an inverted T, and `TYPE`: a label over a tall box
     whose text goes to the host as typed (deleted text as Backspace), with no placeholder. Keys
@@ -654,7 +665,7 @@ Tether's counters from `CONFIGURE`, HID's cards from `Interval`, Keys + mouse's 
 In sections, a rule between each: `IDENTITY` (one row, `Profile` and the profile in force by its
 name as the VT323 value, `Built-in` with none, opening Identity), `BACKEND` (System path, then
 `Requirements` and `Reinstall`, full-width keys), `APP` (Motion, Haptics, then `Theme` with the
-pick's name, opening a choice sheet of the themes, each noted `lit` or `negative`), `CREDITS` (Fonts) and
+pick's name, opening a choice sheet of the themes, each noted `lit` or `negative`), `CREDITS` (Fonts, Touchpad) and
 `ABOUT` (App, Source), last. Requirements opens Check, run afresh, so a kernel update can be
 checked again; there its one key is `Done`, back to Settings, as nothing follows it. System
 path is held until read, and while no backend is installed. Under it one line is kept, so the
@@ -814,6 +825,10 @@ the rich ones go through the tiers below.
 | DIP switch on / off | `ToggleOn` / `ToggleOff` |
 | Segment change, LUN switch, slider step, D-pad or keyboard focus move | `SegmentTick` |
 | Trackpad drag | `SegmentFrequentTick`, at most one per 8px of travel |
+| Trackpad tap, a gesture's click | `VirtualKey` |
+| Trackpad scroll or zoom notch | `SegmentFrequentTick` |
+| Tap-and-drag taking hold | `SegmentTick` |
+| A drag let go | `GestureEnd` |
 | Shell typing (Root, Check, Backend) | `SegmentFrequentTick`, one per frame that adds characters; none in the beat between lines |
 | Gadget bound (the port left Android) | Rich: a thud on that frame, from whatever screen started it; on Home it is the frame Pin plugs in. A replug ending is a `SegmentTick` |
 | Stop all, eject | `GestureEnd` |
@@ -964,7 +979,7 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | Not applied sheet, Apply, Discard | `status --json`'s `pending`; `storage apply`, `tether apply`, `hid apply`; `setup revert <function>` |
 | Each function's setup | `setup set KEY=VALUE` on every edit (one write a beat later), read back as `status --json`'s `setup`; the picks are `storage_lunN=MODE:PATH`, Tether's rows the `tether_*` keys, the interval `hid_interval` |
 | HID interval | `hid start --interval N`, period 2^(N-1)×125µs, set at start; without the f_hid patch (`check`'s `hid_interval` is 0) it is `1 ms, fixed by this kernel` and the steppers are dead |
-| Keys + mouse, the gamepad | app-side reports (8-byte keyboard, 4-byte mouse), each one write into `hid write NODE SIZE`, one per node, which never blocks on the node and keeps only the newest report while the host reads nothing; key reports are paced two poll periods apart. Speed and Natural scroll are app-side too, applied to the reports before they are written |
+| Keys + mouse, the gamepad | app-side reports (8-byte keyboard, 5-byte mouse), each one write into `hid write NODE SIZE`, one per node, which never blocks on the node and keeps only the newest report while the host reads nothing; key reports are paced two poll periods apart. Speed, Natural scroll and every gesture are app-side too (`Touchpad.kt`, libinput's rules), applied to the reports before they are written; a pinch is Ctrl held on the keyboard node around wheel notches on the mouse node |
 | HID period text | `status --json`'s `speed` (`full-speed` is a USB 1.1 host) and `hid[].interval` |
 | Quacky | `quacky` run through `Root.stream`: `quacky [--hid <keyboard node>] -d <ms> [--fast\|--ultra] <script>`, no `--hid` being a dry run (the transcript to stdout), streamed live into the terminal; the `.qk` files in `/sdcard/USB-Arsenal/Scripts` listed, read and written through root (the app has no storage access), the editor's buffer saved before any run; the keyboard node from `status --json`'s `hid[]` |
 | Identity | `identity show --json` (the profile in force, and `missing` for a link whose file is gone), `identity show --json FILE...` (the folder's profiles, read by the backend's own loader), `identity generate FILE --force` then the six keys written in (`product`, `manufacturer`, `serial`, `id_vendor`, `id_product`, `max_power`), an edit from the file as it is, through a rename, `identity set FILE`, `identity unset` for Built-in |
