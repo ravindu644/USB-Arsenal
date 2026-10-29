@@ -1,0 +1,44 @@
+From 136b1bd8f8e01fdd1dbd5c34c7ffe810117df4c3 Mon Sep 17 00:00:00 2001
+From: ravindu644 <droidcasts@protonmail.com>
+Date: Thu, 29 Oct 2026 20:10:58 +0530
+Subject: [PATCH] usb: gadget: u_ether: don't dereference a NULL skb in the CDC
+ filter
+
+f_ncm's tx timer flushes a pending NTB by calling ndo_start_xmit with a
+NULL skb, which eth_start_xmit allows: dev->wrap() builds the frame from
+what f_ncm aggregated. Mainline skips the outgoing CDC filter for that
+call (if (skb && !is_promisc(cdc_filter))), but this tree lost the skb
+check when it added the RMNET_MODE_LLP_IP test, so the first NTB the
+timer flushes reads skb->data from NULL in a softirq:
+
+  Unable to handle kernel NULL pointer dereference at virtual address 000000d8
+  Kernel BUG at eth_start_xmit+0xa8/0x5c8
+  eth_start_xmit+0xa8/0x5c8
+  ncm_tx_tasklet+0x3c/0x50
+  tasklet_action+0xf0/0x140
+  Kernel panic - not syncing: Fatal exception in interrupt
+
+It panics as soon as an NCM link carries traffic, unless the host set a
+promiscuous packet filter. Put the skb check back.
+
+Signed-off-by: ravindu644 <droidcasts@protonmail.com>
+---
+ drivers/usb/gadget/function/u_ether.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/usb/gadget/function/u_ether.c b/drivers/usb/gadget/function/u_ether.c
+index a0ad21f6..36946e11 100644
+--- a/drivers/usb/gadget/function/u_ether.c
++++ b/drivers/usb/gadget/function/u_ether.c
+@@ -794,7 +794,7 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
+ 	}
+ 
+ 	/* apply outgoing CDC or RNDIS filters */
+-	if (!test_bit(RMNET_MODE_LLP_IP, &dev->flags) &&
++	if (skb && !test_bit(RMNET_MODE_LLP_IP, &dev->flags) &&
+ 			!is_promisc(cdc_filter)) {
+ 		u8		*dest = skb->data;
+ 
+-- 
+2.56.0
+

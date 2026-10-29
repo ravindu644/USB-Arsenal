@@ -667,3 +667,10 @@ Tick a box only when the item is merged and verified as described in its phase.
   sm8550 5.15 variant; the device unregisters with the instance that made it, and the error path
   no longer `device_destroy()`s by devt 0), and `check` names the patch when Android's device is
   there. Verified on the A01 only as far as the dmesg trace; the patched kernel is not built yet.
+- 2026-10-29: NCM tethering panicked the Galaxy A01 (4.9.227) in a softirq: `eth_start_xmit`
+  from `ncm_tx_tasklet`, NULL at 0xd8, which is `skb->data`. f_ncm's timer flush calls
+  `ndo_start_xmit` with a NULL skb on purpose and mainline's CDC filter block is guarded by
+  `skb &&`; the Qualcomm 4.9 `u_ether` (a015f, a015g, t295; the 3.18 t385 too) dropped the
+  guard when it added the `RMNET_MODE_LLP_IP` test. `kernel-patches/4.9/0013` and the t295
+  variant put it back. Found by reading the source at the trace; not yet run on the patched
+  kernel.

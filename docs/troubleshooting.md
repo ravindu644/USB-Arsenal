@@ -74,6 +74,12 @@ On a Qualcomm-derived kernel every mass_storage instance registers
 `0012` in `kernel-patches/4.9/` (or its 4.19 and 5.15 copies) shares the device between the
 instances. See [kernel-patches/README.md](../kernel-patches/README.md).
 
+**The phone reboots as soon as NCM tethering carries traffic.**
+A Qualcomm 4.9 kernel: its `u_ether` reads a packet that f_ncm's timer flush never passes,
+and the kernel panics in a softirq (`eth_start_xmit` from `ncm_tx_tasklet` in the last
+kmsg). Patch `0013` in `kernel-patches/4.9/` puts the missing check back. Until the kernel is
+patched, tether with `--rndis`. See [kernel-patches/README.md](../kernel-patches/README.md).
+
 **"This is stock Samsung configfs, which cannot create a second gadget".**
 A stock Samsung 4.x kernel: its configfs cannot build a gadget next to Android's (the
 `mkdir` fails as ENOMEM, and nothing is changed). USB Arsenal does not run on it;
