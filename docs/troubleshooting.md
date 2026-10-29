@@ -67,6 +67,13 @@ The kernel has Samsung's f_ncm bug: a second NCM instance panics it. USB Arsenal
 over RNDIS there. Patch `0003` in `kernel-patches/4.14/` fixes the kernel, and NCM comes
 back by itself. See [kernel-patches/README.md](../kernel-patches/README.md).
 
+**`check` says there is no mass_storage, but the kernel has `CONFIG_USB_CONFIGFS_MASS_STORAGE`.**
+On a Qualcomm-derived kernel every mass_storage instance registers
+`/sys/class/android_usb/f_mass_storage`, and Android's own instance (`mass_storage.0` in
+`g1`) already did, so ours cannot be created. `check` says so when that is the cause. Patch
+`0012` in `kernel-patches/4.9/` (or its 4.19 and 5.15 copies) shares the device between the
+instances. See [kernel-patches/README.md](../kernel-patches/README.md).
+
 **"This is stock Samsung configfs, which cannot create a second gadget".**
 A stock Samsung 4.x kernel: its configfs cannot build a gadget next to Android's (the
 `mkdir` fails as ENOMEM, and nothing is changed). USB Arsenal does not run on it;
