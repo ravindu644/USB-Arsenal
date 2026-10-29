@@ -212,8 +212,15 @@ int ua_cmd_check(int argc, char **argv) {
     /* A line that needs a function is reported only with that function; the
      * JSON keeps its key, as 0 */
     int ms = ua_probe_function(&g, "mass_storage", NULL);
+    /* Android's instance registered the one android_usb/f_mass_storage device
+     * the kernel allows, so a second instance fails in device_create() */
     line("mass_storage", ms, 0, "mass_storage",
-         "CONFIG_USB_CONFIGFS_MASS_STORAGE; needed by 'storage' (and CD-ROM)");
+         !ms && access("/sys/class/android_usb/f_mass_storage", F_OK) == 0
+             ? "Android's gadget holds the only f_mass_storage device this "
+               "kernel allows; the f_mass_storage patch in kernel-patches/ "
+               "shares it"
+             : "CONFIG_USB_CONFIGFS_MASS_STORAGE; needed by 'storage' (and "
+               "CD-ROM)");
     if (ms > 0 || json_mode)
       line("cdrom",
            ms > 0 && ua_probe_function(&g, "mass_storage", "lun.0/cdrom"), 0,
@@ -232,7 +239,7 @@ int ua_cmd_check(int argc, char **argv) {
       line("ncm", -1, 0,
            "ncm (unsafe on this Samsung kernel; tether uses rndis)",
            "Another NCM instance would make f_ncm destroy android0 and the "
-           "kernel BUG. The kernel fix (docs/kernel-requirements.md) adds "
+           "kernel BUG. The kernel fix (kernel-patches/) adds "
            "android0/ncm_instances, and NCM is used again once it is "
            "there.");
     else

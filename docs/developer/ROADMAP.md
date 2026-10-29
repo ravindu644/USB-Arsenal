@@ -660,3 +660,10 @@ Tick a box only when the item is merged and verified as described in its phase.
   button held 300 ms so a finger back drags with it and lifts to let go, two-finger scroll on
   both axes, pinch as Ctrl and the wheel, a speed ramp on the pointer. The backend's
   mouse report grew a fifth byte, the Consumer page's AC Pan, for the sideways scroll.
+- 2026-10-29: `check` on a Galaxy A01 (4.9.227) said no mass_storage. The kernel's
+  `CONFIG_USB_CONFIGFS_UEVENT` code registers `/sys/class/android_usb/f_mass_storage` for every
+  mass_storage instance, so the second one, ours, fails in `device_create()` with EEXIST and the
+  mkdir with ENODEV. `kernel-patches/` now shares the device between instances (4.9, 4.19, the
+  sm8550 5.15 variant; the device unregisters with the instance that made it, and the error path
+  no longer `device_destroy()`s by devt 0), and `check` names the patch when Android's device is
+  there. Verified on the A01 only as far as the dmesg trace; the patched kernel is not built yet.

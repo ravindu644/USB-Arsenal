@@ -1,0 +1,118 @@
+From 1234fe548a09640e52dff93278475a7336cbf203 Mon Sep 17 00:00:00 2001
+From: ravindu644 <droidcasts@protonmail.com>
+Date: Thu, 29 Oct 2026 19:22:38 +0530
+Subject: [PATCH] usb: gadget: f_mass_storage: share the android_usb device 
+ between instances
+
+With CONFIG_USB_CONFIGFS_UEVENT every mass_storage instance registers
+/sys/class/android_usb/f_mass_storage for the framework's inquiry_string
+(and Samsung's vendor and product strings). Android's own gadget makes
+the first instance at boot, so creating a second one in another gadget
+fails in device_create() with EEXIST:
+
+  kobject_add_internal failed for f_mass_storage with -EEXIST
+  create_function_device+0x64/0x78
+  fsg_alloc_inst+0x1e0/0x2d0
+  function_make+0x70/0x130
+  configfs_mkdir+0x1a8/0x448
+
+and the mkdir returns ENODEV, so a configfs gadget of our own cannot
+have mass storage at all.
+
+Create the device once, for the first instance, and leave later
+instances without one; the attributes stay with the instance that made
+the device, which is Android's. Unregister it when that instance is
+freed instead of leaking it, and use device_unregister() rather than
+device_destroy() on the error path: function devices have devt
+MKDEV(0, n) from 0, the devt every android%d gadget device has, so a
+destroy by devt finds and removes android0.
+
+Signed-off-by: ravindu644 <droidcasts@protonmail.com>
+---
+ drivers/usb/gadget/function/f_mass_storage.c | 45 +++++++++++++++++---
+ 1 file changed, 40 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/usb/gadget/function/f_mass_storage.c b/drivers/usb/gadget/function/f_mass_storage.c
+index a5d48e145..9d7778282 100644
+--- a/drivers/usb/gadget/function/f_mass_storage.c
++++ b/drivers/usb/gadget/function/f_mass_storage.c
+@@ -4128,6 +4128,15 @@ static const struct config_item_type fsg_func_type = {
+ 
+ #if defined(CONFIG_USB_CONFIGFS_UEVENT)
+ extern struct device *create_function_device(char *name);
++/*
++ * One /sys/class/android_usb/f_mass_storage for all instances. Android's
++ * framework reads it and makes one instance, and a second instance (a configfs
++ * gadget of our own) cannot register the same name again, so without this the
++ * second mkdir fails with ENODEV. The attributes stay with the instance that
++ * made the device, Android's, until that instance is freed.
++ */
++static DEFINE_MUTEX(fsg_dev_lock);
++static struct device *fsg_android_dev;
+ static ssize_t mass_storage_inquiry_show(struct device *dev,
+ 				struct device_attribute *attr, char *buf)
+ {
+@@ -4270,22 +4279,47 @@ static int create_mass_storage_device(struct usb_function_instance *fi)
+ 	struct device_attribute *attr;
+ 	int err = 0;
+ 
++	mutex_lock(&fsg_dev_lock);
++	if (fsg_android_dev)
++		goto out;
++
+ 	dev = create_function_device("f_mass_storage");
+ 
+-	if (IS_ERR(dev))
+-		return PTR_ERR(dev);
++	if (IS_ERR(dev)) {
++		err = PTR_ERR(dev);
++		goto out;
++	}
+ 
+ 	attrs = mass_storage_function_attributes;
+ 	if (attrs) {
+ 		while ((attr = *attrs++) && !err)
+ 			err = device_create_file(dev, attr);
+ 		if (err) {
+-			device_destroy(dev->class, dev->devt);
+-			return -EINVAL;
++			/*
++			 * Not device_destroy(): function devices come from devt
++			 * MKDEV(0, index++) starting at 0, the devt every android%d
++			 * gadget device has, so a lookup by devt can find android0.
++			 */
++			device_unregister(dev);
++			err = -EINVAL;
++			goto out;
+ 		}
+ 	}
+ 	dev_set_drvdata(dev, fi);
+-	return 0;
++	fsg_android_dev = dev;
++out:
++	mutex_unlock(&fsg_dev_lock);
++	return err;
++}
++
++static void destroy_mass_storage_device(struct usb_function_instance *fi)
++{
++	mutex_lock(&fsg_dev_lock);
++	if (fsg_android_dev && dev_get_drvdata(fsg_android_dev) == fi) {
++		device_unregister(fsg_android_dev);
++		fsg_android_dev = NULL;
++	}
++	mutex_unlock(&fsg_dev_lock);
+ }
+ #endif
+ static void fsg_free_inst(struct usb_function_instance *fi)
+@@ -4293,6 +4327,7 @@ static void fsg_free_inst(struct usb_function_instance *fi)
+ 	struct fsg_opts *opts;
+ 
+ 	opts = fsg_opts_from_func_inst(fi);
++	destroy_mass_storage_device(fi);
+ 	fsg_common_release(opts->common);
+ 	kfree(opts);
+ }
+-- 
+2.56.0
+
