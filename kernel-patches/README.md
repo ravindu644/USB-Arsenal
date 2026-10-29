@@ -18,6 +18,23 @@ kernel versions.
 
 Modules work too: the kernel loads `usb_f_<name>` when the function directory is created.
 
+As one fragment to merge into a defconfig (`scripts/kconfig/merge_config.sh` or appended to
+the defconfig):
+
+```sh
+# USB gadget functions for USB Arsenal
+# https://github.com/ravindu644/USB-Arsenal
+CONFIG_USB_CONFIGFS=y
+CONFIG_USB_CONFIGFS_MASS_STORAGE=y
+CONFIG_USB_CONFIGFS_F_HID=y
+CONFIG_USB_CONFIGFS_NCM=y
+CONFIG_USB_CONFIGFS_RNDIS=y
+
+# NAT for tether
+CONFIG_IP_NF_NAT=y
+CONFIG_IP_NF_TARGET_MASQUERADE=y
+```
+
 ## Patches
 
 Each `<version>/` folder holds `git format-patch` exports for that kernel version. Apply a
