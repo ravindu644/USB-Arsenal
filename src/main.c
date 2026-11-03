@@ -57,7 +57,9 @@ static void usage(void) {
                 "\n");
   printf("by " C_CYAN "ravindu644" C_RESET "\n");
   printf("\n" C_BLUE "https://github.com/ravindu644/USB-Arsenal" C_RESET "\n");
-  printf(C_DIM "Built on: %s %s" C_RESET "\n\n", __DATE__, __TIME__);
+  /* __DATE__ space-pads single-digit days ("Nov  3 2026"), skip the pad */
+  printf(C_DIM "Built on: %.4s%s %s" C_RESET "\n\n", __DATE__,
+         __DATE__ + 4 + (__DATE__[4] == ' '), __TIME__);
   printf("Usage: " UA_NAME " [--udc NAME] [-v] <command> [<action>] "
          "[options]\n\n");
   printf("Turn this device into a composite USB gadget: bootable storage,\n"
