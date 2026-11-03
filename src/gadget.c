@@ -232,22 +232,22 @@ int ua_pick_udc(char *out, size_t size) {
   return -1;
 }
 
-/* The first config of g1. Android names it b.1, but nothing guarantees it. */
+/* An empty write unbinds a gadget. "none" only does on Android's configfs,
+ * which added it; mainline (a Pi, a PC under dummy_hcd) reads it as a
+ * controller name and answers EBUSY, since the gadget is still bound. */
+#define UNBIND "\n"
+
 /* Android's configfs gives every gadget an androidN device, all with devt 0,
  * and android_device_destroy() looks its device up by devt: dropping any
  * gadget destroys the oldest, android0, which belongs to g1. Android then
  * stops hearing USB state (no USB notification, tethering greyed out) until a
  * reboot. kernel-patches/ has the kernel fix for 4.9 to 6.6; meanwhile a gadget
  * we made stays, unbound and empty, instead of being removed. */
-/* An empty write unbinds a gadget. "none" only does on Android's configfs,
- * which added it; mainline (a Pi, a PC under dummy_hcd) reads it as a
- * controller name and answers EBUSY, since the gadget is still bound. */
-#define UNBIND "\n"
-
 static int keep_gadget(void) {
   return access("/sys/class/android_usb", F_OK) == 0;
 }
 
+/* The first config of g1. Android names it b.1, but nothing guarantees it. */
 static int first_config(const char *gadget, char *out, size_t size) {
   char p[PATH_MAX];
   if (pathf(p, sizeof(p), "%s/configs", gadget) < 0)

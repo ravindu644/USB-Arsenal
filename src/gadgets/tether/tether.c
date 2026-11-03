@@ -472,7 +472,6 @@ static int do_apply(struct tether *t, int rndis, int no_net) {
   return ret;
 }
 
-/* JSON: one object, or null with no tether function in the gadget */
 /* What the link has carried, counted by the kernel at our end; -1 unread */
 static long long link_bytes(const char *iface, const char *which) {
   char p[PATH_MAX], v[32];
@@ -480,6 +479,7 @@ static long long link_bytes(const char *iface, const char *which) {
   return iface[0] && read_file(p, v, sizeof(v)) > 0 ? atoll(v) : -1;
 }
 
+/* JSON: one object, or null with no tether function in the gadget */
 void ua_status_tether(const struct ua_gadget *g, int json) {
   const char *func = live_func(g);
   char p[PATH_MAX], info[512] = "", iface[IFNAMSIZ] = "", addr[64], v6[64],

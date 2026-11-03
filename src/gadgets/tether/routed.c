@@ -21,9 +21,6 @@
 #define RULE_PRIO_TO 6090
 #define RULE_PRIO_FROM 6100
 
-/* Point "from our subnet" at the uplink's routing table. Android only: there
- * every network has its own table and nothing routes our subnet by default.
- * On plain Linux the main table already does. */
 /* The IPv6 half of sync_uplink(). On an IPv6-only carrier the IPv4 uplink
  * is the CLAT device v4-rmnetX, whose IPv6 routes live in the table of the
  * rmnetX underneath. An uplink with no IPv6 table clears the rule, and the
@@ -49,6 +46,9 @@ static void sync_uplink6(struct tether *t, const char *iface) {
   ds_nl_close(ctx);
 }
 
+/* Point "from our subnet" at the uplink's routing table. Android only: there
+ * every network has its own table and nothing routes our subnet by default.
+ * On plain Linux the main table already does. */
 void sync_uplink(struct tether *t, int quiet) {
   char iface[IFNAMSIZ];
   int table = 0;

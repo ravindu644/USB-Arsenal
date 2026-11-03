@@ -121,8 +121,8 @@ static int lun_eject_wait(const char *ldir) {
 }
 
 /* Write order matters: cdrom and ro return EBUSY while a file is open, so
- * the medium goes out first and the new one goes in last. */
-/* Returns -EBUSY, quietly, when the host holds a medium lock: the caller
+ * the medium goes out first and the new one goes in last.
+ * Returns -EBUSY, quietly, when the host holds a medium lock: the caller
  * decides whether a rebind (which clears it) is the way out. With wait set
  * the eject is retried while the kernel processes that disconnect. A medium
  * the kernel refuses puts the old one back. */

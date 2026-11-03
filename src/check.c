@@ -14,11 +14,6 @@
 
 #define PROBE_GADGET "ua_probe"
 
-/* Not a "ua" instance: a probe left behind by a crash must never look like
- * one of ours and get linked into a gadget.
- * 1 if the kernel can create a <type> function (and, if attr is given, that
- * function has that attribute). Probes inside the gadget we would use, or a
- * throwaway one when ours does not exist yet. */
 /* Samsung's f_ncm (CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE, every 4.x tree we
  * have) hangs a terminal_version attribute on the shared android0 device
  * for each NCM instance. A second instance fails to add it, and the error
@@ -37,6 +32,9 @@ int ua_ncm_unsafe(void) {
          access("/sys/class/android_usb/android0/ncm_instances", F_OK) != 0;
 }
 
+/* 1 if the kernel can create a <type> function (and, if attr is given, that
+ * function has that attribute). Probes inside the gadget we would use, or a
+ * throwaway one when ours does not exist yet. */
 int ua_probe_function(const struct ua_gadget *g, const char *type,
                       const char *attr) {
   char root[PATH_MAX], fdir[PATH_MAX], a[PATH_MAX];
@@ -54,6 +52,8 @@ int ua_probe_function(const struct ua_gadget *g, const char *type,
       return 0;
     temp = 1;
   }
+  /* Not a "ua" instance: a probe left behind by a crash must never look like
+   * one of ours and get linked into a gadget. */
   if (snprintf(fdir, sizeof(fdir), "%s/functions/%s.arsenal_probe", root,
                type) >= (int)sizeof(fdir))
     goto out;
