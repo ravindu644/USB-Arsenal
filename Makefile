@@ -49,7 +49,11 @@ SRCS = $(SRC_DIR)/main.c \
        $(SRC_DIR)/net/nl/linkdump.c \
        $(SRC_DIR)/net/nl/route_query.c \
        $(SRC_DIR)/net/nl/rule.c \
-       $(SRC_DIR)/net/iptables.c \
+       $(SRC_DIR)/net/ipt/core.c \
+       $(SRC_DIR)/net/ipt/match.c \
+       $(SRC_DIR)/net/ipt/insert.c \
+       $(SRC_DIR)/net/ipt/remove.c \
+       $(SRC_DIR)/net/ipt/rules.c \
        $(SRC_DIR)/net/dhcp/server.c \
        $(SRC_DIR)/net/dhcp/proto.c \
        $(SRC_DIR)/net/dhcp/ra.c \

@@ -51,7 +51,7 @@ int ds_nl_del_rule4(ds_nl_ctx_t *ctx, uint32_t src_be, uint8_t src_len,
                     uint32_t dst_be, uint8_t dst_len, int table, int priority);
 int ds_nl_list_ifaces(ds_nl_ctx_t *ctx, char names[][IFNAMSIZ], int max);
 
-/* iptables.c: raw ip_tables socket first, the iptables binary as fallback */
+/* ipt/: raw ip_tables socket first, the iptables binary as fallback */
 
 int ds_ipt_ensure_masquerade(int family, const char *src_cidr);
 int ds_ipt_host_rules_present(int family, const char *iface,
