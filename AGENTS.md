@@ -55,12 +55,12 @@ removed because it let its group make root open any file.
 
 | Path | What lives there |
 |---|---|
-| `src/include/usbarsenal.h` | the only header a `.c` includes (plus `src/include/net/net.h` for networking) |
+| `src/include/` | `usbarsenal.h`, the header every `.c` includes, and `net/net.h`, the public net API. A folder with several `.c` files keeps what they share in an `internal.h` beside them, included as `"internal.h"`, never in `include/` |
 | `src/gadget.c` | the core every command goes through: open, begin, add, commit, teardown |
-| `src/gadgets/` | the commands: storage, hid, tether |
+| `src/gadgets/` | the commands: `storage/` (`image.c` readies an image), `hid.c`, `tether/` (`routed.c`, `gateway.c`, `monitor.c`, after VirtualAP's modes) |
 | `src/config.c` | identity profiles |
 | `src/check.c` | capability probing |
-| `src/net/` | lifted from Droidspaces; keep its `ds_` names so it can be re-synced |
+| `src/net/` | lifted from Droidspaces: `nl/`, `ipt/` and `dhcp/` keep its file and `ds_` names, so a re-sync diffs file against file; keep them even where a file is small. `uplink.c` and `netns.c` are ours, built on pieces of its old `network.c` |
 | `external/quacky` | Quacky, the HID typing engine, a submodule built and shipped with the backend |
 | `kernel-patches/<kernel-version>/` | `git format-patch` exports of kernel fixes, and the `README.md` that lists them (the rule below) |
 | `DESIGN.md` | the Android app's design language: tokens, components, copy rules |

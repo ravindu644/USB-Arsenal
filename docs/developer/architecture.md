@@ -10,14 +10,14 @@ controller, and always hands the controller back. Research behind the decisions 
 
 | File | Role |
 |---|---|
-| `src/include/usbarsenal.h` | the one header every `.c` includes |
+| `src/include/usbarsenal.h` | the one header every `.c` includes; `include/net/net.h` is the public net API |
 | `src/main.c` | global options, command table, help |
 | `src/gadget.c` | the gadget core: open, begin, add, commit, teardown, hand-back |
 | `src/check.c` | capability probing, `check`, the NCM safety rule |
 | `src/config.c` | profiles: loader, `generate`, `set`, the active profile |
 | `src/utils.c` | logging, file and process helpers, workspace paths, fd passing |
 | `src/gadgets/storage/`, `hid.c`, `tether/` | the three commands; `storage/image.c` gets an image ready for the kernel, and `tether/` splits into `routed.c`, `gateway.c` and `monitor.c` |
-| `src/net/` | netlink, DHCP, RA, iptables, uplink and netns helpers lifted from Droidspaces (`ds_` names kept so they can be re-synced) |
+| `src/net/` | lifted from Droidspaces under its own names: `nl/` (netlink), `ipt/` (iptables), `dhcp/` (DHCP and RA); `uplink.c` and `netns.c` build on its old `network.c` |
 | `module/` | the KernelSU/Magisk module (`make module`) |
 | `kernel-patches/<version>/` | `git format-patch` exports of kernel fixes |
 

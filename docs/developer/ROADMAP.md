@@ -674,3 +674,10 @@ Tick a box only when the item is merged and verified as described in its phase.
   guard when it added the `RMNET_MODE_LLP_IP` test. `kernel-patches/4.9/0013` and the t295
   variant put it back. Found by reading the source at the trace; not yet run on the patched
   kernel.
+- 2026-11-03: `src/` split into modules, no code changed. The vendored network code now
+  mirrors Droidspaces' files (`net/nl/`, `net/ipt/`, `net/dhcp/`), so a re-sync diffs file
+  against file; `tether.c` became `gadgets/tether/` after VirtualAP's modes (`routed.c`,
+  `gateway.c`, `monitor.c`), and `storage.c` lost `image.c`. Every function body hashes the
+  same, the imports are unchanged on aarch64, and the old and new binaries gave the same
+  output over 42 commands on x86_64 and the same storage, NAT, gateway (into a throwaway
+  namespace) and HID run on the a166p, with no kernel warnings.
