@@ -10,8 +10,6 @@
 
 #include "net/net.h"
 #include "usbarsenal.h"
-#include <linux/rtnetlink.h>
-#include <sys/signalfd.h>
 
 #include "internal.h"
 
