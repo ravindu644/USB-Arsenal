@@ -16,7 +16,7 @@
 #define DS_DNS_DEFAULT_1 "1.1.1.1"
 #define DS_DNS_DEFAULT_2 "8.8.8.8"
 
-/* netlink.c */
+/* nl/ */
 
 typedef struct ds_nl_ctx ds_nl_ctx_t;
 

@@ -40,7 +40,12 @@ SRCS = $(SRC_DIR)/main.c \
        $(SRC_DIR)/gadgets/storage/image.c \
        $(SRC_DIR)/gadgets/hid.c \
        $(SRC_DIR)/gadgets/tether.c \
-       $(SRC_DIR)/net/netlink.c \
+       $(SRC_DIR)/net/nl/core.c \
+       $(SRC_DIR)/net/nl/link.c \
+       $(SRC_DIR)/net/nl/addr.c \
+       $(SRC_DIR)/net/nl/linkdump.c \
+       $(SRC_DIR)/net/nl/route_query.c \
+       $(SRC_DIR)/net/nl/rule.c \
        $(SRC_DIR)/net/iptables.c \
        $(SRC_DIR)/net/dhcp/server.c \
        $(SRC_DIR)/net/dhcp/proto.c \

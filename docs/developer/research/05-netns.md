@@ -51,7 +51,7 @@ Research of 2026-10-18, on the kernel trees listed in
    `self`, `setns()` into the host netns, open a netlink socket, send RTM_NEWLINK
    (`ifi_index` = usb0, `IFLA_NET_NS_FD` = `self`), then `setns(self)` back. This is the
    pattern of `ds_netns_link_up` in Droidspaces `network.c:206-248`, and `ds_nl_rename`
-   in our `netlink.c` is the request template. The handle comes from `/proc/1/ns/net` in
+   in Droidspaces' `src/net/nl/link.c` is the request template. The handle comes from `/proc/1/ns/net` in
    a chroot, or from an opt-in bind mount (e.g. `/run/host-netns`) in a container. It
    must be redone after every rebind on M62-style kernels.
 3. Do all of the networking from init_net (setns for the whole daemon). Not
