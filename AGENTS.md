@@ -55,7 +55,7 @@ removed because it let its group make root open any file.
 
 | Path | What lives there |
 |---|---|
-| `src/include/usbarsenal.h` | the only header a `.c` includes (plus `src/net/net.h` for networking) |
+| `src/include/usbarsenal.h` | the only header a `.c` includes (plus `src/include/net/net.h` for networking) |
 | `src/gadget.c` | the core every command goes through: open, begin, add, commit, teardown |
 | `src/gadgets/` | the commands: storage, hid, tether |
 | `src/config.c` | identity profiles |

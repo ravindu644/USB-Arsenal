@@ -10,7 +10,7 @@
  * interface. See docs/developer/research/04-tethering.md.
  */
 
-#include "../net/net.h"
+#include "net/net.h"
 #include "usbarsenal.h"
 #include <linux/rtnetlink.h>
 #include <sys/signalfd.h>

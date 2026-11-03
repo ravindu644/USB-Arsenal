@@ -22,7 +22,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#include "net.h"
+#include "net/net.h"
 #include "usbarsenal.h"
 #include <arpa/inet.h>
 #include <linux/netfilter.h>
