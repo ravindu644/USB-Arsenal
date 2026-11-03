@@ -76,7 +76,7 @@ void ds_dhcp_server_start(const char *dns, const char *iface,
                           const struct in6_addr *ra_prefix);
 void ds_dhcp_server_stop(void);
 
-/* ra.c */
+/* dhcp/ra.c */
 
 int ds_ra_is_solicit(const uint8_t *frame, size_t len);
 void ds_ra_build(uint8_t *out, const uint8_t mac[6],

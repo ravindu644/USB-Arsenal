@@ -1,5 +1,5 @@
 /*
- * USB Arsenal - lifted from Droidspaces (src/net/ra.c) by the same author
+ * USB Arsenal - lifted from Droidspaces (src/net/dhcp/ra.c) by the same author
  *
  * IPv6 Router Advertisements for NAT containers (RFC 4861).
  *

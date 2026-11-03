@@ -43,7 +43,7 @@ SRCS = $(SRC_DIR)/main.c \
        $(SRC_DIR)/net/netlink.c \
        $(SRC_DIR)/net/iptables.c \
        $(SRC_DIR)/net/dhcp.c \
-       $(SRC_DIR)/net/ra.c \
+       $(SRC_DIR)/net/dhcp/ra.c \
        $(SRC_DIR)/net/uplink.c \
        $(SRC_DIR)/net/netns.c
 
