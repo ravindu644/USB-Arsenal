@@ -1,6 +1,6 @@
 # 04. Tethering
 
-Code: `src/gadgets/tether.c`, with `src/net/` lifted from Droidspaces.
+Code: `src/gadgets/tether/` (`routed.c` serves the host, `gateway.c` hands the link to a container, `monitor.c` is the loop), with `src/net/` lifted from Droidspaces.
 
 ## Which function
 

@@ -270,7 +270,7 @@ void ua_status_hid(const struct ua_gadget *g, int json);
 void ua_hid_reapply(const struct ua_gadget *g);
 int ua_hid_evict(const struct ua_gadget *g);
 
-/* gadgets/tether.c */
+/* gadgets/tether/tether.c */
 
 int ua_cmd_tether(int argc, char **argv);
 void ua_help_tether(void);

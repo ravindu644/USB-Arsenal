@@ -39,7 +39,10 @@ SRCS = $(SRC_DIR)/main.c \
        $(SRC_DIR)/gadgets/storage/storage.c \
        $(SRC_DIR)/gadgets/storage/image.c \
        $(SRC_DIR)/gadgets/hid.c \
-       $(SRC_DIR)/gadgets/tether.c \
+       $(SRC_DIR)/gadgets/tether/tether.c \
+       $(SRC_DIR)/gadgets/tether/gateway.c \
+       $(SRC_DIR)/gadgets/tether/routed.c \
+       $(SRC_DIR)/gadgets/tether/monitor.c \
        $(SRC_DIR)/net/nl/core.c \
        $(SRC_DIR)/net/nl/link.c \
        $(SRC_DIR)/net/nl/addr.c \

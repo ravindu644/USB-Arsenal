@@ -16,7 +16,7 @@ controller, and always hands the controller back. Research behind the decisions 
 | `src/check.c` | capability probing, `check`, the NCM safety rule |
 | `src/config.c` | profiles: loader, `generate`, `set`, the active profile |
 | `src/utils.c` | logging, file and process helpers, workspace paths, fd passing |
-| `src/gadgets/storage/`, `hid.c`, `tether.c` | the three commands; `storage/image.c` gets an image ready for the kernel |
+| `src/gadgets/storage/`, `hid.c`, `tether/` | the three commands; `storage/image.c` gets an image ready for the kernel, and `tether/` splits into `routed.c`, `gateway.c` and `monitor.c` |
 | `src/net/` | netlink, DHCP, RA, iptables, uplink and netns helpers lifted from Droidspaces (`ds_` names kept so they can be re-synced) |
 | `module/` | the KernelSU/Magisk module (`make module`) |
 | `kernel-patches/<version>/` | `git format-patch` exports of kernel fixes |
@@ -174,7 +174,7 @@ empty values compared as the profile's). The Android app is one client of this: 
 setup, starts bare, applies, and shows `pending`; it keeps no setup of its own
 ([research/06-app-state.md](research/06-app-state.md)).
 
-## The tether process (`src/gadgets/tether.c`)
+## The tether process (`src/gadgets/tether/`)
 
 `tether start` forks the network side and waits on a pipe for it to report up or down.
 Its main loop is Droidspaces' route monitor with our own subnets and interface: it

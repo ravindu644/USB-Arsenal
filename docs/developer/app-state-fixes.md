@@ -49,7 +49,7 @@ are fixes of their own. Agent claims that turned out wrong are not listed here; 
 ## Tether
 
 - [x] The `leaving()` effect rewrites the saved plan (gateway off) on every dispose when the container is not running, bypassing the sheet, undoing Discard and Apply, firing when Log opens (`ui/Tether.kt:59-62`). Delete it; a stopped container is a fact the chain shows.
-- [x] `caps.nat` is never read: the DHCP and NAT switch and Apply are live on a kernel without NAT and the start is refused (`ui/Tether.kt:128`, `src/gadgets/tether.c:938-942`). Hold `net` off with `no nat in this kernel`.
+- [x] `caps.nat` is never read: the DHCP and NAT switch and Apply are live on a kernel without NAT and the start is refused (`ui/Tether.kt:128`, `src/gadgets/tether/tether.c`). Hold `net` off with `no nat in this kernel`.
 - [x] The Gateway row appears then vanishes after the Droidspaces read, and Droidspaces is probed on every visit (`ui/Tether.kt:50-55, 120`). Always present, held off with `no droidspaces`; the probe cached per launch.
 - [x] `Upstream` is a node and a row, the duplicate DESIGN.md names; in gateway mode the container and its iface appear twice (`ui/Tether.kt:106-109, 122-143`). One `Upstream`: the node shows what runs, the row becomes the setting under another label, or moves into the node. Decided: the Upstream node holds the input (placeholder what runs), and the gateway node is the container's Choice; the rows are gone.
 - [x] `Host IPv4` is computed from the plan while `Host IPv6` beside it is live (`ui/Tether.kt:134-135`). Both from status while running, from the setup otherwise; IPv6 out of "Configure".
@@ -60,7 +60,7 @@ are fixes of their own. Agent claims that turned out wrong are not listed here; 
 - [x] **arch** `TetherSetup.load` in a `LaunchedEffect` draws a default plan on a process-death restore (`ui/Tether.kt:44`).
 - [x] An empty `Its iface` is refused by the app and fine for the backend (`ui/Tether.kt:123`, `ui/Gadget.kt:480`). Empty means `usb0`.
 - [x] `validIface` accepts names the kernel rejects (`:`, `.`, `..`) (`ui/Gadget.kt:579`); `ua_valid_dns` validates a copy cut at 127 bytes so a long valid list passes the app and fails the backend (`src/config.c:120-123`). Match `dev_valid_name`; size the DNS buffer to the key's.
-- [x] `--rndis`/`--ncm` is ignored when a tether function exists unbound after a crash, and `undo()` then leaves it linked (`src/gadgets/tether.c:948-955`). Remove the leftover function when the flag disagrees with it.
+- [x] `--rndis`/`--ncm` is ignored when a tether function exists unbound after a crash, and `undo()` then leaves it linked (`src/gadgets/tether/tether.c`). Remove the leftover function when the flag disagrees with it.
 - [x] A poll during another function's replug draws Phone `off` and `-` counters for one beat (`src/main.c:160-179`). **arch** (mid-command reads dropped).
 - [x] The ChoiceSheet's empty line says `No containers are running` while the read is still running (`ui/Tether.kt:152`). Say `reading` until `ds` is known, or draw from the cache.
 - [x] `tether apply` as stop then start hands the port to Android between the two when tether is the only function (`ui/Gadget.kt:271`). **arch**: `tether apply` in C inside one begin and commit.
