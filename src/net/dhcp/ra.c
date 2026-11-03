@@ -1,5 +1,5 @@
 /*
- * USB Arsenal - lifted from Droidspaces (src/net/dhcp/ra.c) by the same author
+ * USB Arsenal - lifted from Droidspaces (src/net/dhcp/ra.c)
  *
  * IPv6 Router Advertisements for NAT containers (RFC 4861).
  *
@@ -17,6 +17,8 @@
 
 #include "net/net.h"
 #include "usbarsenal.h"
+
+#include "internal.h"
 
 #define ETH_LEN 14
 #define IP6_HLEN 40

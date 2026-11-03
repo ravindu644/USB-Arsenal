@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * The file, process and logging helpers are lifted from Droidspaces
- * (src/utils.c, src/android/android.c) by the same author.
+ * (src/utils.c, src/android/android.c).
  */
 
 #include "usbarsenal.h"

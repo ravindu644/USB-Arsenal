@@ -1,5 +1,5 @@
 /*
- * USB Arsenal - lifted from Droidspaces (src/net/network.c) by the same author
+ * USB Arsenal - lifted from Droidspaces (src/net/network.c)
  *
  * Finds the interface and routing table that currently reach the internet,
  * so tethered traffic can be pointed at it. Android keeps one routing table

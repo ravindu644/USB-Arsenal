@@ -1,5 +1,5 @@
 /*
- * USB Arsenal - lifted from Droidspaces (src/net/netlink.c) by the same author
+ * USB Arsenal - lifted from Droidspaces (src/net/netlink.c)
  *
  * Pure-C RTNETLINK client: link, address, route, and policy-rule management.
  * Replaces all `ip link/addr/route/rule` shell invocations.

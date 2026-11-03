@@ -1,5 +1,5 @@
 /*
- * USB Arsenal - networking pieces lifted from Droidspaces by the same author
+ * USB Arsenal - networking pieces lifted from Droidspaces
  *
  * Copyright (C) 2026 ravindu644 <droidcasts@protonmail.com>
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -15,11 +15,6 @@
 
 #define DS_DNS_DEFAULT_1 "1.1.1.1"
 #define DS_DNS_DEFAULT_2 "8.8.8.8"
-
-/* Router Advertisement frame: ethernet + IPv6 + RA with a prefix option */
-#define DS_RA_FRAME_LEN 102
-#define DS_RA_ROUTER_LIFETIME 1800
-#define DS_RA_INTERVAL_SEC 300
 
 /* netlink.c */
 
@@ -68,19 +63,13 @@ int ds_ipt_remove_nat_rules(int family, const char *subnet, const char *iface);
 int ds_ipt6_available(void);
 int ds_ipt4_nat_available(void);
 
-/* dhcp.c: single-lease DHCP server thread bound to one interface */
+/* dhcp/server.c: single-lease DHCP server thread bound to one interface */
 
 void ds_dhcp_server_start(const char *dns, const char *iface,
                           uint32_t offer_ip_be, uint32_t gw_ip_be,
                           uint32_t netmask_be,
                           const struct in6_addr *ra_prefix);
 void ds_dhcp_server_stop(void);
-
-/* dhcp/ra.c */
-
-int ds_ra_is_solicit(const uint8_t *frame, size_t len);
-void ds_ra_build(uint8_t *out, const uint8_t mac[6],
-                 const struct in6_addr *prefix);
 
 /* netns.c */
 

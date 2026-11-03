@@ -1,5 +1,5 @@
 /*
- * USB Arsenal - lifted from Droidspaces (src/net/iptables.c) by the same author
+ * USB Arsenal - lifted from Droidspaces (src/net/iptables.c)
  *
  * Surgical iptables and ip6tables rule management via the raw IP_TABLES and
  * IP6_TABLES socket APIs. One engine serves both families.

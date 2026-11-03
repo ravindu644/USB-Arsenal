@@ -1,5 +1,5 @@
 /*
- * USB Arsenal - lifted from Droidspaces (src/net/network.c) by the same author
+ * USB Arsenal - lifted from Droidspaces (src/net/network.c)
  *
  * Acting inside another network namespace from the host: the gateway tether
  * mode plugs a cable into a container (OpenWrt) the way Droidspaces' gateway
