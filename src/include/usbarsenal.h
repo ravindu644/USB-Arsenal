@@ -256,7 +256,7 @@ void ua_usage_error(const char *cmd, const char *fmt, ...)
 int ua_want_help(int argc, char **argv);
 const char *ua_bad_option(char **argv);
 
-/* gadgets/storage.c */
+/* gadgets/storage/storage.c */
 
 int ua_cmd_storage(int argc, char **argv);
 void ua_help_storage(void);

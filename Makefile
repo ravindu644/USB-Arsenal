@@ -36,7 +36,8 @@ SRCS = $(SRC_DIR)/main.c \
        $(SRC_DIR)/gadget.c \
        $(SRC_DIR)/config.c \
        $(SRC_DIR)/setup.c \
-       $(SRC_DIR)/gadgets/storage.c \
+       $(SRC_DIR)/gadgets/storage/storage.c \
+       $(SRC_DIR)/gadgets/storage/image.c \
        $(SRC_DIR)/gadgets/hid.c \
        $(SRC_DIR)/gadgets/tether.c \
        $(SRC_DIR)/net/netlink.c \

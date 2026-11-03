@@ -31,9 +31,9 @@ are fixes of their own. Agent claims that turned out wrong are not listed here; 
 - [x] **arch** Apply from a stale or null status (above).
 - [x] The Drive's LED and tray show the pick, not what runs (`ui/Panels.kt:69, 106`, `ui/Storage.kt:159-161`): Eject drops the pick and the LED goes off while the kernel serves. The face shows `running` and `status.storage`, the body the draft.
 - [x] **arch** `storage stop` with empty picks removes LUNs the app never showed (`ui/Gadget.kt:259`, `ui/Storage.kt:119`). Every LUN is in the setup file whoever added it.
-- [x] `do_start`'s in-place swap ejects the old medium before it knows the new one loads, and a failure after the eject returns with no restore (`src/gadgets/storage.c:140-163, 485-492`). Open and prepare first (already done); on a refused `file` write, put the old file back.
-- [x] The in-place swap runs outside the critical section (`src/gadgets/storage.c:480-490`). `ua_crit_enter` around it.
-- [x] `storage start` of the image a LUN already holds ejects and reloads it (`src/gadgets/storage.c:480-490`); a host lock turns it into a replug of every function. Compare first and say "already serving".
+- [x] `do_start`'s in-place swap ejects the old medium before it knows the new one loads, and a failure after the eject returns with no restore (`src/gadgets/storage/storage.c`). Open and prepare first (already done); on a refused `file` write, put the old file back.
+- [x] The in-place swap runs outside the critical section (`src/gadgets/storage/storage.c`). `ua_crit_enter` around it.
+- [x] `storage start` of the image a LUN already holds ejects and reloads it (`src/gadgets/storage/storage.c`); a host lock turns it into a replug of every function. Compare first and say "already serving".
 - [x] Pick paths come in two spellings (`/storage/emulated/0`, `/mnt/user/0`) and are compared as strings for size, selection and the LUN tag (`backend/Images.kt:43-53`, `ui/Storage.kt:125, 195-196`). **arch** for pending; the list still needs `realpath` on the picked file (one `readlink -f`).
 - [x] Storage re-lays itself: the Mode and FILES block swaps for "No image loaded" after `listImages` (`ui/Storage.kt:163`); the Fault line sits above the strip (`:155`); the Drive's size appears after Create's reload (`:159, 202-206`). Final layout from the cache; a reserved fault line.
 - [x] Drive `kind` is the pick's mode, so `4.0G · rw` plus the `rw` tag says it twice (`ui/Storage.kt:159`, `ui/Panels.kt:56`). Kind is the kernel's mode from status while running, the draft's otherwise; the tag alone says access.
@@ -42,9 +42,9 @@ are fixes of their own. Agent claims that turned out wrong are not listed here; 
 - [x] Create: `name` is `rememberSaveable` so the sheet reopens with the last name and `name taken` lit; `taken` ignores a directory of that name; `tooBig` compares a sparse size with free space (`ui/Storage.kt:216-299`). Reset the name on open; `test -e`; skip `tooBig` for sparse.
 - [x] `storageWarning` gets null bytes for a picker file so a big CD-ROM pick gets no warning (`ui/Storage.kt:180`). `stat` the picked file too.
 - [x] `modeHint("auto")` omits that auto falls to dvd past the CD limit (`ui/Storage.kt:82`). Say it.
-- [x] An image whose name starts with `-` is read as an option (`src/gadgets/storage.c:742`); the app never sends `--`. Send `--` before the images. Not a bug: `--` already works, and the app starts bare from `setup.conf`, so it sends no paths.
+- [x] An image whose name starts with `-` is read as an option (`src/gadgets/storage/storage.c`); the app never sends `--`. Send `--` before the images. Not a bug: `--` already works, and the app starts bare from `setup.conf`, so it sends no paths.
 - [x] A failed `Root.read` inside `realPath` is reported as "That picker gives no file path" (`ui/Storage.kt:139`). Say the read failed.
-- [x] Eight host-locked LUNs can exceed the 30 s change timeout and the kill lands mid-commit (`backend/RootExec.kt:295`, `src/gadgets/storage.c`). Raise the storage timeout, or have `lun_eject_wait` share one budget. Done in C: one 5 s eject budget per command, and every locked LUN out in one rebind.
+- [x] Eight host-locked LUNs can exceed the 30 s change timeout and the kill lands mid-commit (`backend/RootExec.kt:295`, `src/gadgets/storage/storage.c`). Raise the storage timeout, or have `lun_eject_wait` share one budget. Done in C: one 5 s eject budget per command, and every locked LUN out in one rebind.
 
 ## Tether
 

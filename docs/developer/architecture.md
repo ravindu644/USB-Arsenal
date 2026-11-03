@@ -16,7 +16,7 @@ controller, and always hands the controller back. Research behind the decisions 
 | `src/check.c` | capability probing, `check`, the NCM safety rule |
 | `src/config.c` | profiles: loader, `generate`, `set`, the active profile |
 | `src/utils.c` | logging, file and process helpers, workspace paths, fd passing |
-| `src/gadgets/{storage,hid,tether}.c` | the three commands |
+| `src/gadgets/storage/`, `hid.c`, `tether.c` | the three commands; `storage/image.c` gets an image ready for the kernel |
 | `src/net/` | netlink, DHCP, RA, iptables, uplink and netns helpers lifted from Droidspaces (`ds_` names kept so they can be re-synced) |
 | `module/` | the KernelSU/Magisk module (`make module`) |
 | `kernel-patches/<version>/` | `git format-patch` exports of kernel fixes |

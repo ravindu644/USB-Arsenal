@@ -64,7 +64,7 @@ import kotlinx.coroutines.withContext
 private const val MIB = 1L shl 20
 private const val GIB = 1L shl 30
 
-// storage.c's CDROM_MAX_BYTES: past this the host reads a truncated disc
+// storage/image.c's CDROM_MAX_BYTES: past this the host reads a truncated disc
 private const val CDROM_MAX = (256L * 60 * 75 - 1) * 2048
 
 // The modes as `storage start --mode` takes them, and as the segments say them

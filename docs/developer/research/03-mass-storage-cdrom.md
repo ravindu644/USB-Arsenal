@@ -1,6 +1,6 @@
 # 03. Mass storage: booting an ISO, and the CD-ROM limits
 
-Code: `src/gadgets/storage.c`. Kernel: `f_mass_storage.c`, `storage_common.c`.
+Code: `src/gadgets/storage/` (`image.c` picks the mode, checks SELinux and sets up the loop device). Kernel: `f_mass_storage.c`, `storage_common.c`.
 
 ## The mechanism
 
@@ -94,7 +94,7 @@ so the host saw "Unrecovered read error" on sector 0 until
 `allow kernel loop_device blk_file { open read getattr ioctl }` was loaded
 (`ksud sepolicy patch`; a module ships it as `sepolicy.rule`).
 
-`storage --mode dvd` does this (`loop_attach()` in `src/gadgets/storage.c`), with
+`storage --mode dvd` does this (`loop_attach()` in `src/gadgets/storage/image.c`), with
 `LO_FLAGS_AUTOCLEAR` so the loop detaches when f_mass_storage closes it, and checks the
 SELinux rule through selinuxfs `access` before serving.
 

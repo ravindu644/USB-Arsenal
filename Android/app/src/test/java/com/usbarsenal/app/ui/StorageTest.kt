@@ -7,7 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// Storage says sizes, warnings and the Create size the way the boards and storage.c do
+// Storage says sizes, warnings and the Create size the way the boards and storage/image.c do
 class StorageTest {
     @Test
     fun sizes() {
