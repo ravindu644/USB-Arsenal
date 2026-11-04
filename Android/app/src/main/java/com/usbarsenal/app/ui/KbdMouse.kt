@@ -200,6 +200,7 @@ private val KEYS_ABOVE_BOX = gridHeight(2) + gridHeight(4) + gridHeight(2) + Lcd
 fun KbdMouseScreen(back: () -> Unit) {
     BackHandler(onBack = back)
     val context = LocalContext.current
+    var german by remember { mutableStateOf(germanLayout(context)) }
     // Kept through a status read that fails: one bad poll must not kill the writers
     val status = Gadget.status
     var hid by remember { mutableStateOf(status?.hid.orEmpty()) }
