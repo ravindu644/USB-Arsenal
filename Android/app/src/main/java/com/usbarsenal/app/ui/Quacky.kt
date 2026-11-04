@@ -93,6 +93,8 @@ private val CODE = KeyboardOptions(capitalization = KeyboardCapitalization.None,
 @Composable
 fun QuackyScreen(back: () -> Unit) {
     BackHandler(onBack = back)
+    val context = LocalContext.current
+    var german by remember { mutableStateOf(germanLayout(context)) }
     val scope = rememberCoroutineScope()
     val node = Gadget.status?.hid?.firstOrNull { it.function == "keyboard" }?.node?.ifEmpty { null }
 
