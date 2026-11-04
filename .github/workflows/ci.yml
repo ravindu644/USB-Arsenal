@@ -105,7 +105,7 @@ jobs:
       run: |
         cd Android
         chmod +x gradlew
-        ./gradlew testReleaseUnitTest assembleRelease --no-daemon
+        ./gradlew testDebugUnitTest assembleRelease --no-daemon
 
     # Every build, release or not, is named <version>-<commit> so the exact
     # source a zip came from is legible from its filename, as Droidspaces does.
