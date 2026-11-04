@@ -38,7 +38,10 @@ private val SYMBOL_CODES = intArrayOf(0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x33, 0x34, 
 private const val SHIFTED_DIGITS = ")!@#$%^&*("
 
 // The modifiers and usage code that type [c] on a US layout; null for a character it cannot
-fun keyFor(c: Char): Pair<Int, Int>? = when (c) {
+fun keyFor(c: Char, german: Boolean = false): Pair<Int, Int>? =
+    if (german) germanKeyFor(c) else usKeyFor(c)
+
+private fun usKeyFor(c: Char): Pair<Int, Int>? = when (c) {
     in 'a'..'z' -> 0 to 0x04 + (c - 'a')
     in 'A'..'Z' -> MOD_SHIFT to 0x04 + (c - 'A')
     '0' -> 0 to 0x27
