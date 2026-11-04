@@ -68,6 +68,14 @@ const val MOUSE_LEFT = 0x01
 const val MOUSE_RIGHT = 0x02
 const val MOUSE_MIDDLE = 0x04
 
+fun germanLayout(context: android.content.Context): Boolean =
+    context.getSharedPreferences("hid_text_layout", 0).getBoolean("de_qwertz", false)
+
+fun setGermanLayout(context: android.content.Context, enabled: Boolean) {
+    context.getSharedPreferences("hid_text_layout", 0)
+        .edit().putBoolean("de_qwertz", enabled).apply()
+}
+
 const val MOD_CTRL = 0x01
 const val MOD_SHIFT = 0x02
 const val MOD_ALT = 0x04
