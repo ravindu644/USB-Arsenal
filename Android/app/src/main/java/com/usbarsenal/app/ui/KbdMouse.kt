@@ -401,7 +401,12 @@ fun KbdMouseScreen(back: () -> Unit) {
                     }
                 }
             } else {
-                KeysTab(text, { text = it }, mods, onMod = { mods = mods xor it }, onKey = { press(it) }, onType = { m, c -> press(c, m) })
+                Key(if (german) "DE QWERTZ" else "US QWERTY", Modifier.fillMaxWidth()) {
+                    german = !german
+                    setGermanLayout(context, german)
+                    text = ""
+                }
+                KeysTab(text, { text = it }, mods, onMod = { mods = mods xor it }, onKey = { press(it) }, onType = { m, c -> press(c, m) }, german = german)
             }
         }
         if (!on) HidOff(Gadget.caps.has(Fn.HID))
