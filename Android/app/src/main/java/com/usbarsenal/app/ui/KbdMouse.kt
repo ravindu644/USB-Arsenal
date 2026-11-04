@@ -200,6 +200,7 @@ private val KEYS_ABOVE_BOX = gridHeight(2) + gridHeight(4) + gridHeight(2) + Lcd
 fun KbdMouseScreen(back: () -> Unit) {
     BackHandler(onBack = back)
     val context = LocalContext.current
+    var german by remember { mutableStateOf(germanLayout(context)) }
     // Kept through a status read that fails: one bad poll must not kill the writers
     val status = Gadget.status
     var hid by remember { mutableStateOf(status?.hid.orEmpty()) }
@@ -400,7 +401,12 @@ fun KbdMouseScreen(back: () -> Unit) {
                     }
                 }
             } else {
-                KeysTab(text, { text = it }, mods, onMod = { mods = mods xor it }, onKey = { press(it) }, onType = { m, c -> press(c, m) })
+                Key(if (german) "DE QWERTZ" else "US QWERTY", Modifier.fillMaxWidth()) {
+                    german = !german
+                    setGermanLayout(context, german)
+                    text = ""
+                }
+                KeysTab(text, { text = it }, mods, onMod = { mods = mods xor it }, onKey = { press(it) }, onType = { m, c -> press(c, m) }, german = german)
             }
         }
         if (!on) HidOff(Gadget.caps.has(Fn.HID))
@@ -610,7 +616,7 @@ private fun MouseButtons(held: Int, onButton: (Int, Boolean) -> Unit) {
 }
 
 @Composable
-private fun KeysTab(text: String, onText: (String) -> Unit, mods: Int, onMod: (Int) -> Unit, onKey: (Int) -> Unit, onType: (Int, Int) -> Unit) {
+private fun KeysTab(text: String, onText: (String) -> Unit, mods: Int, onMod: (Int) -> Unit, onKey: (Int) -> Unit, onType: (Int, Int) -> Unit, german: Boolean) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // The box takes what the keys leave, and keeps a few lines when the keyboard is up
         val box = (maxHeight - KEYS_ABOVE_BOX).coerceAtLeast(120.dp)
@@ -625,11 +631,11 @@ private fun KeysTab(text: String, onText: (String) -> Unit, mods: Int, onMod: (I
                     { input ->
                         // The box holds only what the host was sent, so a Backspace always erases
                         // a character the host has: what no key types (é, emoji) never goes in
-                        val next = input.filter { keyFor(it) != null }
+                        val next = input.filter { keyFor(it, german) != null }
                         // What changed goes to the host: Backspace for what went, keys for what came
                         val same = text.commonPrefixWith(next).length
                         repeat(text.length - same) { onKey(NAMED_KEYS.getValue("BKSP")) }
-                        next.drop(same).forEach { c -> keyFor(c)?.let { (m, code) -> onType(m, code) } }
+                        next.drop(same).forEach { c -> keyFor(c, german)?.let { (m, code) -> onType(m, code) } }
                         onText(next.takeLast(2000))
                     },
                     Modifier.fillMaxWidth().height(box),

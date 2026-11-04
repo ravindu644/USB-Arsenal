@@ -44,6 +44,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextLayoutResult
@@ -92,6 +93,8 @@ private val CODE = KeyboardOptions(capitalization = KeyboardCapitalization.None,
 @Composable
 fun QuackyScreen(back: () -> Unit) {
     BackHandler(onBack = back)
+    val context = LocalContext.current
+    var german by remember { mutableStateOf(germanLayout(context)) }
     val scope = rememberCoroutineScope()
     val node = Gadget.status?.hid?.firstOrNull { it.function == "keyboard" }?.node?.ifEmpty { null }
 
@@ -178,7 +181,7 @@ fun QuackyScreen(back: () -> Unit) {
             running = true
             try {
                 if (dirty && !write()) return@launch
-                val c = quackyCommand(if (dry) null else node, QuackySetup.effectivePace, QuackySetup.mode, "$dir/$name")
+                val c = quackyCommand(if (dry) null else node, QuackySetup.effectivePace, QuackySetup.mode, "$dir/$name", german)
                 // The command after a root prompt, then an empty line quacky's output grows into
                 // character by character; flushed once a frame so Ultra's thousands a second never
                 // flood it
@@ -240,6 +243,12 @@ fun QuackyScreen(back: () -> Unit) {
                 CodeEditor(text, { text = it }, Modifier.fill(min = 200.dp))
             } else {
                 PickRow(str(R.string.quacky_options), str(R.string.quacky_options_value, SPEEDS[QuackySetup.mode].lowercase(), QuackySetup.effectivePace)) { options = true }
+                KeyRow {
+                    Key(if (german) "DE QWERTZ" else "US QWERTY", Modifier.weight(1f)) {
+                        german = !german
+                        setGermanLayout(context, german)
+                    }
+                }
                 Terminal(out, Modifier.fill(min = 200.dp))
             }
         }

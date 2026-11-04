@@ -10,10 +10,77 @@ const val MOUSE_LEFT = 0x01
 const val MOUSE_RIGHT = 0x02
 const val MOUSE_MIDDLE = 0x04
 
+fun germanLayout(context: android.content.Context): Boolean =
+    context.getSharedPreferences("hid_text_layout", 0).getBoolean("de_qwertz", false)
+
+fun setGermanLayout(context: android.content.Context, enabled: Boolean) {
+    context.getSharedPreferences("hid_text_layout", 0)
+        .edit().putBoolean("de_qwertz", enabled).apply()
+}
+
 const val MOD_CTRL = 0x01
 const val MOD_SHIFT = 0x02
 const val MOD_ALT = 0x04
 const val MOD_SUPER = 0x08
+const val MOD_ALTGR = 0x40
+
+private fun germanKeyFor(c: Char): Pair<Int, Int>? = when (c) {
+    in 'a'..'z' -> 0 to 0x04 + (if (c == 'y') 'z' - 'a' else if (c == 'z') 'y' - 'a' else c - 'a')
+    in 'A'..'Z' -> MOD_SHIFT to 0x04 + (if (c == 'Y') 'Z' - 'A' else if (c == 'Z') 'Y' - 'A' else c - 'A')
+    '0' -> 0 to 0x27
+    in '1'..'9' -> 0 to 0x1E + (c - '1')
+    else -> germanSymbol(c)
+}
+
+private fun germanSymbol(c: Char): Pair<Int, Int>? = when (c.code) {
+    8 -> 0 to 0x2A
+    9 -> 0 to 0x2B
+    10 -> 0 to 0x28
+    32 -> 0 to 0x2C
+    33 -> MOD_SHIFT to 0x1E
+    34 -> MOD_SHIFT to 0x1F
+    35 -> 0 to 0x32
+    36 -> MOD_SHIFT to 0x21
+    37 -> MOD_SHIFT to 0x22
+    38 -> MOD_SHIFT to 0x23
+    39 -> MOD_SHIFT to 0x32
+    40 -> MOD_SHIFT to 0x25
+    41 -> MOD_SHIFT to 0x26
+    42 -> MOD_SHIFT to 0x30
+    43 -> 0 to 0x30
+    44 -> 0 to 0x36
+    45 -> 0 to 0x38
+    46 -> 0 to 0x37
+    47 -> MOD_SHIFT to 0x24
+    58 -> MOD_SHIFT to 0x37
+    59 -> MOD_SHIFT to 0x36
+    60 -> 0 to 0x64
+    61 -> MOD_SHIFT to 0x27
+    62 -> MOD_SHIFT to 0x64
+    63 -> MOD_SHIFT to 0x2D
+    64 -> MOD_ALTGR to 0x14
+    91 -> MOD_ALTGR to 0x25
+    92 -> MOD_ALTGR to 0x2D
+    93 -> MOD_ALTGR to 0x26
+    95 -> MOD_SHIFT to 0x38
+    123 -> MOD_ALTGR to 0x24
+    124 -> MOD_ALTGR to 0x64
+    125 -> MOD_ALTGR to 0x27
+    0x00A7 -> MOD_SHIFT to 0x20
+    0x00B0 -> MOD_SHIFT to 0x35
+    0x00B2 -> MOD_ALTGR to 0x1F
+    0x00B3 -> MOD_ALTGR to 0x20
+    0x00B5 -> MOD_ALTGR to 0x10
+    0x00C4 -> MOD_SHIFT to 0x34
+    0x00D6 -> MOD_SHIFT to 0x33
+    0x00DC -> MOD_SHIFT to 0x2F
+    0x00DF -> 0 to 0x2D
+    0x00E4 -> 0 to 0x34
+    0x00F6 -> 0 to 0x33
+    0x00FC -> 0 to 0x2F
+    0x20AC -> MOD_ALTGR to 0x08
+    else -> null
+}
 
 private fun signed(v: Int) = v.coerceIn(-127, 127).toByte()
 
@@ -37,7 +104,10 @@ private val SYMBOL_CODES = intArrayOf(0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x33, 0x34, 
 private const val SHIFTED_DIGITS = ")!@#$%^&*("
 
 // The modifiers and usage code that type [c] on a US layout; null for a character it cannot
-fun keyFor(c: Char): Pair<Int, Int>? = when (c) {
+fun keyFor(c: Char, german: Boolean = false): Pair<Int, Int>? =
+    if (german) germanKeyFor(c) else usKeyFor(c)
+
+private fun usKeyFor(c: Char): Pair<Int, Int>? = when (c) {
     in 'a'..'z' -> 0 to 0x04 + (c - 'a')
     in 'A'..'Z' -> MOD_SHIFT to 0x04 + (c - 'A')
     '0' -> 0 to 0x27

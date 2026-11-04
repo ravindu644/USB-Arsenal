@@ -30,16 +30,17 @@ suspend fun readScript(path: String): String? {
  */
 data class QuackyCmd(val cmd: String, val echo: String)
 
-fun quackyCommand(node: String?, pace: Int, mode: Int, path: String): QuackyCmd {
+fun quackyCommand(node: String?, pace: Int, mode: Int, path: String, german: Boolean = false): QuackyCmd {
     val flag = when (mode) {
         1 -> " --fast"
         2 -> " --ultra"
         else -> ""
     }
+    val layout = if (german) " --layout DE" else ""
     val name = path.substringAfterLast('/')
     return QuackyCmd(
-        cmd = "$QUACKY${node?.let { " --hid ${shellQuote(it)}" } ?: ""} -d $pace$flag ${shellQuote(path)}",
-        echo = "quacky${node?.let { " --hid $it" } ?: ""} -d $pace$flag $name",
+        cmd = "$QUACKY${node?.let { " --hid ${shellQuote(it)}" } ?: ""} -d $pace$flag$layout ${shellQuote(path)}",
+        echo = "quacky${node?.let { " --hid $it" } ?: ""} -d $pace$flag$layout $name",
     )
 }
 

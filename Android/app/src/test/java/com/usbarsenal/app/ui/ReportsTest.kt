@@ -40,6 +40,22 @@ class ReportsTest {
     }
 
     @Test
+    fun germanQwertz() {
+        assertEquals(0 to 0x1D, keyFor('y', true))
+        assertEquals(0 to 0x1C, keyFor('z', true))
+        assertEquals(MOD_SHIFT to 0x1D, keyFor('Y', true))
+        assertEquals(0 to 0x34, keyFor('ä', true))
+        assertEquals(MOD_SHIFT to 0x33, keyFor('Ö', true))
+        assertEquals(0 to 0x2D, keyFor('ß', true))
+        assertEquals(MOD_ALTGR to 0x08, keyFor('€', true))
+        assertEquals(MOD_ALTGR to 0x14, keyFor('@', true))
+        assertEquals(MOD_SHIFT to 0x24, keyFor('/', true))
+        assertEquals(MOD_ALTGR to 0x2D, keyFor('\\', true))
+        assertEquals(0 to 0x64, keyFor('<', true))
+        assertNull(keyFor('é', true))
+    }
+
+    @Test
     fun namedKeys() {
         assertEquals(0x3A, NAMED_KEYS["F1"])
         assertEquals(0x45, NAMED_KEYS["F12"])

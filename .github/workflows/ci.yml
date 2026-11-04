@@ -105,7 +105,9 @@ jobs:
       run: |
         cd Android
         chmod +x gradlew
-        ./gradlew assembleRelease --no-daemon
+        ./gradlew testDebugUnitTest assembleRelease --no-daemon
+        python3 ../external/quacky/tests/test_de_layout.py ../external/quacky/output/module/bin/quacky-x86_64
+        unzip -p app/build/outputs/apk/release/app-release.apk assets/binaries/quacky-x86_64 | cmp - ../external/quacky/output/module/bin/quacky-x86_64
 
     # Every build, release or not, is named <version>-<commit> so the exact
     # source a zip came from is legible from its filename, as Droidspaces does.
