@@ -631,7 +631,7 @@ private fun KeysTab(text: String, onText: (String) -> Unit, mods: Int, onMod: (I
                     { input ->
                         // The box holds only what the host was sent, so a Backspace always erases
                         // a character the host has: what no key types (é, emoji) never goes in
-                        val next = input.filter { keyFor(it) != null }
+                        val next = input.filter { keyFor(it, german) != null }
                         // What changed goes to the host: Backspace for what went, keys for what came
                         val same = text.commonPrefixWith(next).length
                         repeat(text.length - same) { onKey(NAMED_KEYS.getValue("BKSP")) }
