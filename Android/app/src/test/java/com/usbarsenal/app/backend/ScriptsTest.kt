@@ -34,6 +34,12 @@ class ScriptsTest {
     }
 
     @Test
+    fun germanLayoutFlag() {
+        val c = quackyCommand(node = "/dev/hidg0", pace = 5, mode = 0, path = path, german = true)
+        assertEquals("quacky --hid /dev/hidg0 -d 5 --layout DE archinstall.qk", c.echo)
+    }
+
+    @Test
     fun growSameLine() {
         // Characters without a newline build up on the current line, as quacky types them
         var t = listOf("quacky demo.qk", "")
