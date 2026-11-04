@@ -14,6 +14,7 @@ const val MOD_CTRL = 0x01
 const val MOD_SHIFT = 0x02
 const val MOD_ALT = 0x04
 const val MOD_SUPER = 0x08
+const val MOD_ALTGR = 0x40
 
 private fun signed(v: Int) = v.coerceIn(-127, 127).toByte()
 
