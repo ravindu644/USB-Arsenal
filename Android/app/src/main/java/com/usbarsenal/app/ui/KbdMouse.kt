@@ -616,7 +616,7 @@ private fun MouseButtons(held: Int, onButton: (Int, Boolean) -> Unit) {
 }
 
 @Composable
-private fun KeysTab(text: String, onText: (String) -> Unit, mods: Int, onMod: (Int) -> Unit, onKey: (Int) -> Unit, onType: (Int, Int) -> Unit) {
+private fun KeysTab(text: String, onText: (String) -> Unit, mods: Int, onMod: (Int) -> Unit, onKey: (Int) -> Unit, onType: (Int, Int) -> Unit, german: Boolean) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // The box takes what the keys leave, and keeps a few lines when the keyboard is up
         val box = (maxHeight - KEYS_ABOVE_BOX).coerceAtLeast(120.dp)
