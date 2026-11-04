@@ -30,7 +30,7 @@ suspend fun readScript(path: String): String? {
  */
 data class QuackyCmd(val cmd: String, val echo: String)
 
-fun quackyCommand(node: String?, pace: Int, mode: Int, path: String): QuackyCmd {
+fun quackyCommand(node: String?, pace: Int, mode: Int, path: String, german: Boolean = false): QuackyCmd {
     val flag = when (mode) {
         1 -> " --fast"
         2 -> " --ultra"
