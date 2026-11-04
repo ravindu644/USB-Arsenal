@@ -32,6 +32,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.usbarsenal.app.R
 import com.usbarsenal.app.backend.Cache
 import com.usbarsenal.app.backend.IMAGES
 import com.usbarsenal.app.backend.ImageFile
@@ -54,6 +55,7 @@ import com.usbarsenal.app.lcd.LocalHaptics
 import com.usbarsenal.app.lcd.Pin
 import com.usbarsenal.app.lcd.SpriteIcon
 import com.usbarsenal.app.lcd.Sprites
+import com.usbarsenal.app.str
 import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -89,15 +91,15 @@ fun kindOf(mode: String) = when (mode) {
 
 // A warning only for a consequence (DESIGN.md): a CD-ROM past its limit
 fun storageWarning(mode: String, bytes: Long?): String? =
-    "over 2.36G: the host reads a truncated disc".takeIf { mode == "cdrom" && bytes != null && bytes > CDROM_MAX }
+    if (mode == "cdrom" && bytes != null && bytes > CDROM_MAX) str(R.string.storage_warning_truncated) else null
 
 // What the host gets in each mode, so the wrong one is not picked: a dead or truncated drive
 fun modeHint(mode: String): String = when (mode) {
-    "auto" -> "disk if partitioned; cd, or dvd past 2.36G"
-    "cdrom" -> "read-only cd-rom, up to 2.36G"
-    "dvd" -> "read-only, 2048-byte sectors, any size"
-    "disk" -> "read-only disk"
-    else -> "writable disk, the host can change it"
+    "auto" -> str(R.string.storage_hint_auto)
+    "cdrom" -> str(R.string.storage_hint_cdrom)
+    "dvd" -> str(R.string.storage_hint_dvd)
+    "disk" -> str(R.string.storage_hint_disk)
+    else -> str(R.string.storage_hint_rw)
 }
 
 // The Create sheet's size, in bytes; null for anything that is not a whole number from 1 to the
@@ -169,13 +171,13 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                 // Over the keys, which is where a pick fails; the body above never moves for it
                 fault?.let { Fault(it.message, onLog = openLog, modifier = Modifier.shake(shake).opener("storage/fault")) }
                 KeyRow {
-                    Key("Pick image", Modifier.weight(1f)) { picker.launch(arrayOf("*/*")) }
-                    Key("Create", Modifier.weight(1f).focusRequester(focusOn()).opener("storage/create"), primary = true) { creating = true }
+                    Key(str(R.string.storage_pick_image), Modifier.weight(1f)) { picker.launch(arrayOf("*/*")) }
+                    Key(str(R.string.common_create), Modifier.weight(1f).focusRequester(focusOn()).opener("storage/create"), primary = true) { creating = true }
                 }
             },
         ) {
             Top { BackKey() }
-            Title("Storage")
+            Title(str(R.string.storage_title))
             LunStrip(count, lun, { lun = it }, { if (count < LUNS) lun = count })
             Drive(
                 lun,
@@ -187,7 +189,7 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
             )
             run {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Mode", LcdType.labelStrong)
+                    Text(str(R.string.storage_mode), LcdType.labelStrong)
                     Segs(MODE_LABELS, MODES.indexOf(mode).coerceAtLeast(0), { i ->
                         val m = MODES[i]
                         if (path != null) serve(path, m) else nextMode = m
@@ -214,7 +216,7 @@ fun StorageScreen(back: () -> Unit, openLog: () -> Unit) {
                                 Pin(8.dp)
                             }
                         }
-                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text("No image loaded", LcdType.labelStrong) }
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(str(R.string.storage_no_image), LcdType.labelStrong) }
                     }
                     files.orEmpty().forEach { f ->
                         // A file another LUN holds is tagged with it and cannot be picked
@@ -278,7 +280,7 @@ private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, fre
         }
         job = scope.launch {
             // Anything there by that name, a folder too, which the listing leaves out
-            if (Root.read("test -e ${shellQuote(path)}").ok) return@launch fail("[-] $target is already there")
+            if (Root.read("test -e ${shellQuote(path)}").ok) return@launch fail("[-] " + str(R.string.storage_create_exists, target))
             if (sparse) {
                 val r = createSparse(path, total)
                 if (r.ok) {
@@ -290,7 +292,7 @@ private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, fre
                 return@launch
             }
             val megabytes = total / MIB
-            val dd = createFull(path, megabytes) ?: return@launch fail("[-] No root")
+            val dd = createFull(path, megabytes) ?: return@launch fail("[-] " + str(R.string.storage_create_no_root))
             written = 0L to total
             val poll = launch {
                 while (true) {
@@ -306,7 +308,7 @@ private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, fre
                     onCreated(path, megabytes * MIB)
                 } else {
                     removeFile(path)
-                    fail("[-] The image came out short; it was removed")
+                    fail("[-] " + str(R.string.storage_create_short))
                 }
             } finally {
                 // Cancel, or the screen going: dd stops, and half an image is no image
@@ -330,35 +332,35 @@ private fun CreateSheet(open: Boolean, dir: String, files: List<ImageFile>?, fre
         entry = cancelKey,
         footer = {
             if (progress == null) {
-                Key("Cancel", Modifier.weight(1f).focusRequester(cancelKey), onClick = onDismiss)
-                Key("Create", Modifier.weight(1f), primary = true, enabled = bytes != null && !taken && !tooBig && !badName && job?.isActive != true) { create() }
+                Key(str(R.string.common_cancel), Modifier.weight(1f).focusRequester(cancelKey), onClick = onDismiss)
+                Key(str(R.string.common_create), Modifier.weight(1f), primary = true, enabled = bytes != null && !taken && !tooBig && !badName && job?.isActive != true) { create() }
             } else {
-                Key("Cancel", Modifier.weight(1f).focusRequester(cancelKey)) { job?.cancel() }
+                Key(str(R.string.common_cancel), Modifier.weight(1f).focusRequester(cancelKey)) { job?.cancel() }
             }
         },
     ) {
-        Title("Create")
+        Title(str(R.string.common_create))
         if (progress == null) {
-            Field("Name") { Input(name, { name = it.filter { c -> c != '/' && !c.isISOControl() }.take(255) }, Modifier.fillMaxWidth(), placeholder = "disk.img") }
-            if (taken) Warn("name taken")
+            Field(str(R.string.storage_create_name)) { Input(name, { name = it.filter { c -> c != '/' && !c.isISOControl() }.take(255) }, Modifier.fillMaxWidth(), placeholder = "disk.img") }
+            if (taken) Warn(str(R.string.storage_create_taken))
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(Modifier.fillMaxWidth()) {
-                    Text("Size", LcdType.labelStrong, Modifier.weight(1f))
-                    if (free != null) Text("free ${sizeText(free)}", LcdType.data)
+                    Text(str(R.string.storage_create_size), LcdType.labelStrong, Modifier.weight(1f))
+                    if (free != null) Text(str(R.string.storage_create_free, sizeText(free)), LcdType.data)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(Lcd.tight), verticalAlignment = Alignment.CenterVertically) {
                     Input(size, { size = it.filter(Char::isDigit).take(6) }, Modifier.weight(1f), keyboard = KeyboardOptions(keyboardType = KeyboardType.Number))
                     Segs(listOf("MB", "GB"), if (gb) 1 else 0, { gb = it == 1 }, Modifier.width(140.dp))
                 }
             }
-            if (tooBig) Warn("more than the free ${sizeText(free)}")
-            Kv("Sparse") { Dip(sparse, { sparse = it }, "Sparse") }
+            if (tooBig) Warn(str(R.string.storage_create_too_big, sizeText(free)))
+            Kv(str(R.string.storage_create_sparse)) { Dip(sparse, { sparse = it }, str(R.string.storage_create_sparse)) }
             failed?.let { Fault(it, onLog = null, modifier = Modifier.shake(shake)) }
         } else {
             val (done, total) = progress
             Kv(target, fact = true) { Text(sizeText(total), LcdType.data) }
             Cells((done * 10 / total).toInt())
-            Text("${sizeText(done)} of ${sizeText(total)}", LcdType.data, cursor = true)
+            Text(str(R.string.storage_create_progress, sizeText(done), sizeText(total)), LcdType.data, cursor = true)
         }
     }
 }

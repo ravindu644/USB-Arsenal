@@ -1,10 +1,14 @@
 package com.usbarsenal.app.ui
 
+import com.usbarsenal.app.XmlStrings
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 // .st: 8s a pass, holding the first and last 20%, crossing the middle in 32 steps, then back
 class MarqueeTest {
+    // The strings these check are read from res/values, as the app reads them
+    init { XmlStrings.install() }
+
     @Test
     fun holdsThenStepsThenHoldsThenReturns() {
         assertEquals(0f, marqueeAt(0))

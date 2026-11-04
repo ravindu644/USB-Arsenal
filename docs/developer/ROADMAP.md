@@ -681,3 +681,10 @@ Tick a box only when the item is merged and verified as described in its phase.
   same, the imports are unchanged on aarch64, and the old and new binaries gave the same
   output over 42 commands on x86_64 and the same storage, NAT, gateway (into a throwaway
   namespace) and HID run on the a166p, with no kernel warnings.
+- 2026-11-04: Every string the app shows moved into `res/values/strings.xml` and `plurals.xml`
+  (284 strings, 3 plurals), two Weblate components, the same layout as Droidspaces. Kotlin reads
+  them through `str()` and `plural()`, the JVM tests through `XmlStrings`. The English text is
+  unchanged. `says()` uses a whole phrase per function instead of putting the command's English
+  word into a translated sentence. `generateLocaleConfig` puts the app in Android 13's per-app
+  language list once a translation lands. App()'s root-denial reset now runs in `onCreate`, as
+  lint rejects a `remember` that returns Unit and an effect would come too late.

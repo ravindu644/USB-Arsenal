@@ -80,6 +80,12 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Android 13's per-app language list comes from the values-* folders Weblate adds, with
+    // res/values as res/resources.properties names it
+    androidResources {
+        generateLocaleConfig = true
+    }
 }
 
 // The backend the app installs: `make module` builds the four binaries and the boot module

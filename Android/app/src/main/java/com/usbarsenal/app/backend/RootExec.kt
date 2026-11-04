@@ -1,5 +1,7 @@
 package com.usbarsenal.app.backend
 
+import com.usbarsenal.app.R
+import com.usbarsenal.app.str
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -31,7 +33,7 @@ data class RootResult(val code: Int, val out: List<String>, val err: List<String
     val timedOut get() = code == TIMED_OUT
 
     // What a failed change shows: the backend's last word, or its exit code when it said nothing
-    val why get() = err.lastOrNull() ?: "[-] Failed (exit $code)"
+    val why get() = err.lastOrNull() ?: ("[-] " + str(R.string.common_failed_exit, code))
 }
 
 /*
@@ -59,7 +61,7 @@ class RootExec(private val launch: (String) -> Process) {
 
     private suspend fun run(cmd: String, timeoutMs: Long): RootResult = withContext(Dispatchers.IO) {
         // No su at all is how KernelSU says no: it hides su from apps it has not granted root
-        val p = start("echo $$; $cmd") ?: return@withContext RootResult(NO_ROOT, emptyList(), listOf("no su"))
+        val p = start("echo $$; $cmd") ?: return@withContext RootResult(NO_ROOT, emptyList(), listOf(str(R.string.gadget_no_su)))
         p.outputStream.close()
         val out = ByteArrayOutputStream()
         val err = ByteArrayOutputStream()

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Home's hero: how many functions are on -->
+    <plurals name="home_up">
+        <item quantity="one">%1$d up</item>
+        <item quantity="other">%1$d up</item>
+    </plurals>
+    <!-- Storage's row: on with no image in any drive -->
+    <plurals name="gadget_row_empty_drives">
+        <item quantity="one">%1$d empty drive</item>
+        <item quantity="other">%1$d empty drives</item>
+    </plurals>
+    <!-- What a screen reader says for a power choice; the screen prints only the number and mA -->
+    <plurals name="identity_power_spoken">
+        <item quantity="one">%1$d milliamps</item>
+        <item quantity="other">%1$d milliamps</item>
+    </plurals>
+</resources>

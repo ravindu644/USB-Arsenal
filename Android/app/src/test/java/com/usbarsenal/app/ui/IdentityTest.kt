@@ -1,5 +1,6 @@
 package com.usbarsenal.app.ui
 
+import com.usbarsenal.app.XmlStrings
 import com.usbarsenal.app.backend.BUILT_IN
 import com.usbarsenal.app.backend.Profile
 import com.usbarsenal.app.backend.parseProfile
@@ -11,6 +12,9 @@ import org.junit.Test
 
 // Profiles read as config.c reads them, write only their five keys, and a pick waits only while bound
 class IdentityTest {
+    // The strings these check are read from res/values, as the app reads them
+    init { XmlStrings.install() }
+
     // As `identity show --json FILE...` prints them: config.c read each file, so a key the file
     // lacks comes back at its default and ids are 0x%04x
     @Test

@@ -1,6 +1,7 @@
 package com.usbarsenal.app
 
 import android.annotation.SuppressLint
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.graphics.Color
@@ -18,6 +19,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import com.usbarsenal.app.ui.App
 import com.usbarsenal.app.ui.Stick
+import com.usbarsenal.app.ui.forgetRootDenial
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -27,13 +29,21 @@ class MainActivity : ComponentActivity() {
         // The bars are see-through; LcdTheme sets their icons' colour, as the theme, not the system, decides it
         val bars = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
         enableEdgeToEdge(bars, bars)
+        Strings.source = ResourceStrings(resources)
         val switches = Switches(applicationContext)
         // The last reads and the trackpad's settings, so the first frame draws from them
         Cache.init(applicationContext)
         HidSetup.init(applicationContext)
         QuackySetup.init(applicationContext)
+        forgetRootDenial()
         // The launch window's Pin (Android 8 to 11's splash) has done its job once Compose draws: LcdTheme replaces it
         setContent { LcdTheme(switches) { App() } }
+    }
+
+    // A language change comes here, not through a recreate, so every string is read again
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        Strings.source = ResourceStrings(resources)
     }
 
     /*

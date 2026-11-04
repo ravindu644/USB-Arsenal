@@ -1,0 +1,484 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Words more than one screen uses. DESIGN.md's Copy section is the voice: short, lowercase
+         where the screen shows it lowercase; a Silkscreen label is drawn uppercase whatever it says -->
+    <string name="app_name" translatable="false">USB Arsenal</string>
+    <string name="common_log">Log</string>
+    <string name="common_settings">Settings</string>
+    <!-- Bottom keys -->
+    <string name="common_cancel">Cancel</string>
+    <string name="common_save">Save</string>
+    <string name="common_create">Create</string>
+    <string name="common_done">Done</string>
+    <string name="common_discard">Discard</string>
+    <string name="common_apply">Apply</string>
+    <string name="common_home">Home</string>
+    <string name="common_retry">Retry</string>
+    <string name="common_copy_log">Copy log</string>
+    <!-- The identity in force when no profile is set: Home, Identity and the profile list -->
+    <string name="common_built_in">Built-in</string>
+    <!-- A command that failed without saying why; %1$s is its exit code -->
+    <string name="common_failed_exit">Failed (exit %1$s)</string>
+    <!-- The top bar's back key, and what a screen reader says for it -->
+    <string name="common_back_key">&lt; Back</string>
+    <string name="common_back">Back</string>
+
+    <!-- The hero over the function rows -->
+    <string name="home_idle">idle</string>
+    <!-- The bottom bar once usb-arsenal has not answered three reads in a row -->
+    <string name="home_no_answer">no answer from usb-arsenal</string>
+    <!-- The attention key: what is wrong with the backend, then its fix -->
+    <string name="home_backend_update">Backend update</string>
+    <string name="home_not_installed">Not installed</string>
+    <string name="home_module_missing">Module missing</string>
+    <string name="home_backend_broken">Backend broken</string>
+    <string name="home_fix_update">update</string>
+    <string name="home_fix_install">install</string>
+    <string name="home_fix_reinstall">reinstall</string>
+
+    <!-- The gadget as every screen shares it: Home's function rows, the bottom bar's line while a
+         command runs, the faults a command leaves, and what su answered -->
+    <!-- The functions, as Home's rows name them -->
+    <string name="gadget_fn_storage">Storage</string>
+    <string name="gadget_fn_tether">Tether</string>
+    <string name="gadget_fn_hid">HID</string>
+
+    <!-- The bottom bar while a command runs: what it does in a few words -->
+    <string name="gadget_says_stop_all">stopping everything</string>
+    <string name="gadget_says_identity_unset">back to built-in identity</string>
+    <string name="gadget_says_identity_set">switching identity</string>
+    <string name="gadget_says_eject">ejecting a drive</string>
+    <string name="gadget_says_storage_start">starting storage</string>
+    <string name="gadget_says_storage_apply">applying storage</string>
+    <string name="gadget_says_storage_stop">stopping storage</string>
+    <string name="gadget_says_tether_start">starting tether</string>
+    <string name="gadget_says_tether_apply">applying tether</string>
+    <string name="gadget_says_tether_stop">stopping tether</string>
+    <string name="gadget_says_hid_start">starting HID</string>
+    <string name="gadget_says_hid_apply">applying HID</string>
+    <string name="gadget_says_hid_stop">stopping HID</string>
+
+    <!-- Faults under a row or over the bottom bar; the screen puts a [-] mark before each -->
+    <!-- %1$s is the exit code. "setup set" is the command and stays as it is -->
+    <string name="gadget_setup_set_failed">setup set failed (exit %1$s)</string>
+    <string name="gadget_another_running">Another command is running</string>
+    <!-- %1$s is a number of seconds; the s after it is the unit -->
+    <string name="gadget_timed_out_after">Timed out (%1$ss)</string>
+
+    <!-- The sheet Back opens on a function screen with a change not applied yet -->
+    <string name="gadget_not_applied">Not applied</string>
+    <string name="gadget_apply_note_storage">The host still sees the drives as they were. Apply loads your changes, and may reconnect every drive; Discard puts your picks back.</string>
+    <string name="gadget_apply_note_tether">Tether still runs as it was. Apply reconnects the gadget, every drive and function with it, for a moment; Discard puts your settings back.</string>
+    <string name="gadget_apply_note_hid">HID still runs as it was. Apply reconnects the gadget, every drive and function with it, for a moment.</string>
+
+    <!-- Home's row, first line, when the kernel lacks the function; the second line is the
+         kernel option it needs -->
+    <string name="gadget_row_no_storage">no mass storage in this kernel</string>
+    <string name="gadget_row_no_tether">no ncm or rndis in this kernel</string>
+    <string name="gadget_row_no_hid">no hid in this kernel</string>
+    <!-- Home's row, first line, while its command runs; the second line is the command -->
+    <string name="gadget_row_stopping">stopping</string>
+    <string name="gadget_row_starting">starting</string>
+    <!-- Storage's row, second line: on with no image in any drive -->
+    <string name="gadget_row_no_medium">no medium</string>
+    <!-- Storage's row while off: what it does, over two lines -->
+    <string name="gadget_row_storage_off_1">ISOs and disk images</string>
+    <string name="gadget_row_storage_off_2">as drives for the host</string>
+    <!-- Tether's row while off, over two lines -->
+    <string name="gadget_row_tether_off_1">this phone\'s internet</string>
+    <string name="gadget_row_tether_off_2">for the host, over USB</string>
+    <!-- Tether's row while on, second line. %1$s is the container's name, which can be empty -->
+    <string name="gadget_row_gateway">gateway %1$s</string>
+    <string name="gadget_row_no_network_side">no network side</string>
+    <!-- %1$s is the interface the phone's internet leaves by, such as wlan0 -->
+    <string name="gadget_row_via">via %1$s</string>
+    <string name="gadget_row_no_upstream">no upstream yet</string>
+    <!-- HID's row while on. %1$s is the device node, such as /dev/hidg1 -->
+    <string name="gadget_row_keyboard">keyboard %1$s</string>
+    <string name="gadget_row_mouse">mouse %1$s</string>
+    <!-- HID's row while off, over two lines -->
+    <string name="gadget_row_hid_off_1">a keyboard and a mouse</string>
+    <string name="gadget_row_hid_off_2">for the host</string>
+
+    <!-- What the Root step shows after "$ su", as a shell would print it; su is the command -->
+    <string name="gadget_su_none">(no su)</string>
+    <string name="gadget_su_not_found">su: inaccessible or not found</string>
+    <!-- %1$s is a number of seconds; the s after it is the unit -->
+    <string name="gadget_su_no_answer">su: no answer in %1$ss</string>
+    <string name="gadget_su_denied">su: permission denied</string>
+    <!-- A root command that could not start at all: the phone has no su this app may run -->
+    <string name="gadget_no_su">no su</string>
+    <!-- Why a backend read gave nothing back, on the Check step -->
+    <string name="gadget_read_timed_out">timed out</string>
+    <!-- %1$s is the exit code -->
+    <string name="gadget_read_exit">exit %1$s</string>
+
+    <!-- The Storage screen and its Create sheet. The mode names (auto, cd, dvd, disk, rw) and the
+         size units (M, G, MB, GB) are the backend's own tokens and are not translated -->
+    <!-- The screen: its title, the keys under it, the mode box and the empty folder -->
+    <string name="storage_title">Storage</string>
+    <string name="storage_pick_image">Pick image</string>
+    <string name="storage_mode">Mode</string>
+    <string name="storage_no_image">No image loaded</string>
+
+    <!-- The line under the mode segments: what the host gets in each mode. Keep each one no
+         longer than storage_warning_truncated, which takes its place. 2.36G is the most a CD-ROM holds -->
+    <string name="storage_hint_auto">disk if partitioned; cd, or dvd past 2.36G</string>
+    <string name="storage_hint_cdrom">read-only cd-rom, up to 2.36G</string>
+    <string name="storage_hint_dvd">read-only, 2048-byte sectors, any size</string>
+    <string name="storage_hint_disk">read-only disk</string>
+    <string name="storage_hint_rw">writable disk, the host can change it</string>
+    <!-- In the hint's place, inverted, when a CD-ROM image is larger than a CD-ROM can be -->
+    <string name="storage_warning_truncated">over 2.36G: the host reads a truncated disc</string>
+
+    <!-- Faults when an image is picked; the app puts "[-] " before each -->
+    <!-- %1$s is the list of extensions, ".iso .img .bin .raw .ima .dd" -->
+    <string name="storage_not_image">Not a disk image or ISO (%1$s)</string>
+    <!-- %1$s is the images folder, /sdcard/USB-Arsenal/Disks -->
+    <string name="storage_no_path">That picker gives no file path; copy the image into %1$s</string>
+    <string name="storage_cannot_open">Cannot open that file</string>
+    <!-- %1$s is the error root gave, in English -->
+    <string name="storage_cannot_ask_root">Cannot ask root about that file: %1$s</string>
+
+    <!-- The Create sheet: a new disk image -->
+    <string name="storage_create_name">Name</string>
+    <string name="storage_create_taken">name taken</string>
+    <string name="storage_create_size">Size</string>
+    <!-- Beside Size; %1$s is the free space, as "12.4G" -->
+    <string name="storage_create_free">free %1$s</string>
+    <!-- Under the size when a full image would not fit; %1$s is the free space, as "12.4G" -->
+    <string name="storage_create_too_big">more than the free %1$s</string>
+    <!-- A sparse image takes no space until the host writes to it -->
+    <string name="storage_create_sparse">Sparse</string>
+    <!-- While a full image is written: %1$s written so far of %2$s, as "1.2G of 4.0G" -->
+    <string name="storage_create_progress">%1$s of %2$s</string>
+    <!-- Faults on the sheet; the app puts "[-] " before each. %1$s is the image's file name -->
+    <string name="storage_create_exists">%1$s is already there</string>
+    <string name="storage_create_no_root">No root</string>
+    <string name="storage_create_short">The image came out short; it was removed</string>
+
+    <!-- Tether: the phone's internet for the host over USB, or the link handed to a container -->
+    <string name="tether_title">Tether</string>
+
+    <!-- The chain: Host, the wire, Phone, the wire, then Upstream or the container -->
+    <string name="tether_host">Host</string>
+    <string name="tether_phone">Phone</string>
+    <!-- Under Phone while tether is not running, where its interface would be -->
+    <string name="tether_off">off</string>
+    <!-- The wire from the phone onward: to a container, with no network side, or through NAT -->
+    <string name="tether_virtual_cable">virtual cable</string>
+    <string name="tether_no_network_side">no network side</string>
+    <string name="tether_masquerade">masquerade</string>
+    <!-- Under the container's node while it has not taken the link yet -->
+    <string name="tether_waiting">waiting</string>
+    <!-- The interface the phone's internet leaves by: a node in the chain, a row and its sheet -->
+    <string name="tether_upstream">Upstream</string>
+    <!-- The Upstream choice that leaves the pick to usb-arsenal -->
+    <string name="tether_upstream_auto">auto</string>
+    <!-- The traffic counters: sent and received -->
+    <string name="tether_tx">Tx</string>
+    <string name="tether_rx">Rx</string>
+
+    <!-- The settings the next start brings up -->
+    <string name="tether_configure">Configure</string>
+    <string name="tether_gateway">Gateway</string>
+    <!-- What a screen reader says for the Gateway switch -->
+    <string name="tether_gateway_mode">Gateway mode</string>
+    <!-- Beside the Gateway switch when Droidspaces, which runs the containers, is not installed -->
+    <string name="tether_no_droidspaces">no droidspaces</string>
+    <!-- A Droidspaces container: the chain's node before one is picked, the row and its sheet -->
+    <string name="tether_container">Container</string>
+    <!-- %1$s is the container's name -->
+    <string name="tether_container_not_running">%1$s · not running</string>
+    <!-- The interface inside the container that takes the link -->
+    <string name="tether_its_iface">Its iface</string>
+    <string name="tether_host_ipv4">Host IPv4</string>
+    <string name="tether_host_ipv6">Host IPv6</string>
+    <!-- Host IPv4 with a gateway: the container gives the host its address -->
+    <string name="tether_by_container">by the container</string>
+    <!-- The switch's label, and what a screen reader says for it -->
+    <string name="tether_dhcp_nat">DHCP and NAT</string>
+    <string name="tether_no_nat">no nat in this kernel</string>
+    <string name="tether_address">Address</string>
+    <string name="tether_dns">DNS</string>
+
+    <!-- Under a field while what is typed cannot be used -->
+    <string name="tether_iface_problem">an interface name, up to 15 characters</string>
+    <string name="tether_address_problem">a host address with a /8 to /30 prefix</string>
+    <string name="tether_dns_problem">IPv4 addresses, comma-separated, 127 characters at most</string>
+
+    <!-- The Container sheet with nothing to pick -->
+    <string name="tether_containers_reading">Reading Droidspaces\' containers</string>
+    <string name="tether_containers_unreadable">Cannot read Droidspaces\' containers</string>
+    <string name="tether_containers_none">No containers are running</string>
+
+    <!-- HID: the keyboard and mouse the host sees, and the keyboard's poll interval -->
+    <string name="hid_title">HID</string>
+
+    <!-- The cards into Keys + mouse and Quacky; the line under the first shows the device
+         nodes while HID runs, this text otherwise -->
+    <string name="hid_keys_card">Keyboard and mouse</string>
+    <string name="hid_keys_card_off">a trackpad and keys</string>
+    <!-- Under Quacky, the name of the typing engine -->
+    <string name="hid_quacky_card">a script that types</string>
+
+    <!-- How often the host polls the keyboard, set with the - and + keys -->
+    <string name="hid_interval">Interval</string>
+    <!-- On a kernel that cannot change it. %1$s is the period in milliseconds: 1, or 10 on a USB 1.1 host -->
+    <string name="hid_interval_fixed">%1$s ms, fixed by this kernel</string>
+    <!-- What a screen reader says for the - and + keys -->
+    <string name="hid_interval_shorter">Shorter interval</string>
+    <string name="hid_interval_longer">Longer interval</string>
+
+    <!-- Keys + mouse: the screen's title and its two tabs -->
+    <string name="keyboard_title">Keys + mouse</string>
+    <string name="keyboard_tab_mouse">Mouse</string>
+    <string name="keyboard_tab_keys">Keys</string>
+    <!-- Mouse tab: what a screen reader says for the touchpad's corner key and for the key that leaves full screen -->
+    <string name="keyboard_full_screen">Full screen</string>
+    <string name="keyboard_leave_full_screen">Leave full screen</string>
+    <!-- Mouse tab: the settings under the touchpad -->
+    <string name="keyboard_configure">Configure</string>
+    <string name="keyboard_speed">Speed</string>
+    <string name="keyboard_natural_scroll">Natural scroll</string>
+    <!-- Keys tab: the label over the box whose text is typed on the host -->
+    <string name="keyboard_type">Type</string>
+    <!-- Over the shaded page while HID is off, or when the kernel has no HID; the line break keeps it in a narrow box -->
+    <string name="keyboard_hid_off">Enable HID on Home\nto use this page</string>
+    <string name="keyboard_no_hid">No HID in\nthis kernel</string>
+
+    <!-- Quacky, the HID typing engine; its name stays as it is -->
+    <string name="quacky_title" translatable="false">Quacky</string>
+    <!-- The two tabs: Edit the script, Run it -->
+    <string name="quacky_tab_edit">Edit</string>
+    <string name="quacky_tab_run">Run</string>
+    <!-- Edit tab: the row that opens the script list, and its value before the script has a name -->
+    <string name="quacky_file">File</string>
+    <string name="quacky_new_script">new script</string>
+    <!-- Edit tab's bottom key, and the title of the sheet that names the copy -->
+    <string name="quacky_save_as">Save as</string>
+    <!-- Run tab: the note above the keys while HID is off, and the keys -->
+    <string name="quacky_hid_off">Enable HID on Home to type for real</string>
+    <string name="quacky_dry_run">Dry run</string>
+    <string name="quacky_run">Run</string>
+    <string name="quacky_stop">Stop</string>
+    <!-- Run tab: the row that opens the Options sheet, and the sheet's title -->
+    <string name="quacky_options">Options</string>
+    <!-- The Options row's value: %1$s is the typing speed in lowercase (normal, fast, ultra), %2$s the pause between keys in milliseconds -->
+    <string name="quacky_options_value">%1$s · %2$s ms</string>
+    <!-- Run tab: printed in the terminal when the quacky binary does not start -->
+    <string name="quacky_cannot_start">Could not start quacky</string>
+    <!-- Shown when a script cannot be opened; %1$s is its file name -->
+    <string name="quacky_cannot_read">Cannot read %1$s</string>
+    <!-- The sheet Back opens over unsaved edits; Apply and Discard are its keys -->
+    <string name="quacky_unsaved">Unsaved edits. Apply saves them; Discard drops them.</string>
+    <!-- The script list sheet -->
+    <string name="quacky_scripts">Scripts</string>
+    <string name="quacky_no_scripts">No scripts yet</string>
+    <!-- The script list's key, and the title of the sheet that names a fresh script -->
+    <string name="quacky_new">New</string>
+    <!-- The sheet before opening another script over unsaved edits; %1$s is the open script's file name -->
+    <string name="quacky_discard_title">Discard?</string>
+    <string name="quacky_has_unsaved">%1$s has unsaved edits</string>
+    <!-- The Options sheet: the three typing speeds, the pause between keys and its unit, and the keyboard node typed to -->
+    <string name="quacky_speed_normal">Normal</string>
+    <string name="quacky_speed_fast">Fast</string>
+    <string name="quacky_speed_ultra">Ultra</string>
+    <string name="quacky_pace">Pace</string>
+    <!-- Milliseconds -->
+    <string name="quacky_ms">ms</string>
+    <string name="quacky_target">Target</string>
+    <string name="quacky_no_keyboard">no keyboard</string>
+    <!-- The New and Save as sheet: the script's name field, and the warning when a script already has that name -->
+    <string name="quacky_name">Name</string>
+    <string name="quacky_name_taken">name taken</string>
+
+    <!-- The Identity screen and its Create or Edit sheet: how the gadget names itself to the host -->
+    <!-- The screen: its title, the key beside Create, and the list's header -->
+    <string name="identity_title">Identity</string>
+    <!-- The key that opens the sheet on a profile, and that sheet's title -->
+    <string name="identity_edit">Edit</string>
+    <string name="identity_profiles">Profiles</string>
+    <!-- The profile panel's last line when the serial is left empty -->
+    <string name="identity_serial_from_phone">serial from this phone</string>
+    <!-- Under the panel when the profile set is no longer there; %1$s is its file. Built-in as
+         in common_built_in -->
+    <string name="identity_missing">%1$s is gone: the host gets Built-in</string>
+    <!-- A fault, after "[-] ": a profile was picked before the app read which one is in use -->
+    <string name="identity_not_read_yet">The profile in force is not read yet</string>
+    <!-- The sheet on Back when a profile was picked while the host sees the gadget. Apply and
+         Discard are the sheet's keys -->
+    <string name="identity_not_applied">The host still sees the old identity. Apply reconnects the gadget once; Discard keeps it.</string>
+
+    <!-- The Create or Edit sheet's fields -->
+    <string name="identity_field_name">Name</string>
+    <!-- The product name the host shows for the gadget -->
+    <string name="identity_field_product">Product</string>
+    <!-- The manufacturer name the host shows for the gadget -->
+    <string name="identity_field_maker">Maker</string>
+    <string name="identity_field_serial">Serial</string>
+    <!-- Hint in the empty Serial field -->
+    <string name="identity_serial_placeholder">from this phone</string>
+    <!-- The vendor and product IDs, two four-digit hex numbers -->
+    <string name="identity_field_ids">USB IDs</string>
+    <!-- The most current the gadget asks the host for -->
+    <string name="identity_field_power">Power</string>
+
+    <!-- What is wrong with a field, shown under it -->
+    <string name="identity_problem_no_name">a name for the file</string>
+    <string name="identity_problem_name_chars">letters, digits, space, . _ - only</string>
+    <string name="identity_problem_name_taken">name taken</string>
+    <string name="identity_problem_empty">cannot be empty</string>
+    <string name="identity_problem_ascii">plain ASCII letters, digits and symbols only</string>
+    <!-- The # character is not allowed -->
+    <string name="identity_problem_hash">no #</string>
+    <string name="identity_problem_too_long">126 characters at most</string>
+    <string name="identity_problem_ids">four hex digits each</string>
+    <!-- A fault when saving, after "[-] ": a new profile's name is already a file -->
+    <string name="identity_profile_exists">A profile by that name is already there</string>
+
+    <!-- First launch: Welcome, Root, Controller, Check and Backend (the install). The shell comments
+         are typed after "# " the app adds itself, so they stay lowercase as a shell comment would -->
+    <!-- Welcome: one line beside each function's sprite, then the key that starts setup -->
+    <string name="setup_feature_storage">boot an iso or share a disk</string>
+    <string name="setup_feature_tether">network over the usb cable</string>
+    <string name="setup_feature_hid">keyboard and mouse on the host</string>
+    <string name="setup_get_started">Get started</string>
+
+    <!-- Root, Controller and Check: the key to the next step -->
+    <string name="setup_next">Next</string>
+
+    <!-- Root: the screen's title, the shell comment while su is asked, and the one once it said yes -->
+    <string name="setup_title_root">Root</string>
+    <string name="setup_root_asking">checking root access</string>
+    <string name="setup_root_granted">root access granted !</string>
+    <!-- The shade over every screen while the app has no root; the line break is where it wraps -->
+    <string name="setup_no_root">Grant root, then\nreopen the app</string>
+
+    <!-- Check: the screen's title, the shell comment above usb-arsenal check, and the key that runs it again -->
+    <string name="setup_title_check">Check</string>
+    <string name="setup_check_comment">checking this kernel for usb arsenal</string>
+    <string name="setup_recheck">Recheck</string>
+    <!-- Under check's output when the app ships no binary for this phone. %1$s is the CPU ABI, e.g. arm64-v8a -->
+    <string name="setup_check_no_binary">no usb-arsenal binary for %1$s</string>
+    <!-- Under check's output when it stopped without saying why -->
+    <string name="setup_check_failed">check failed</string>
+
+    <!-- Backend (the install): the screen's title and the shell comments above the installer -->
+    <string name="setup_title_backend">Backend</string>
+    <!-- %1$s is the installed version, %2$s the one this app brings -->
+    <string name="setup_install_update">update %1$s → %2$s</string>
+    <!-- %1$s is the version, %2$s the CPU architecture, e.g. aarch64 -->
+    <string name="setup_install_version">usb-arsenal %1$s for %2$s</string>
+    <string name="setup_install_gadget_stays">the gadget stays up while it updates</string>
+    <!-- The label Android gives the copied install log -->
+    <string name="setup_install_clip">install log</string>
+
+    <!-- The installer's own lines, after a [+], [-] or [!] the app adds; the commands' output between them is not translated -->
+    <!-- %1$s is the CPU ABI, e.g. arm64-v8a -->
+    <string name="setup_installer_no_binary">No usb-arsenal binary for %1$s</string>
+    <!-- %1$s is the architecture, e.g. aarch64 -->
+    <string name="setup_installer_arch">Device architecture: %1$s</string>
+    <!-- %1$s is a folder on the phone -->
+    <string name="setup_installer_binary">Installing the binary in %1$s</string>
+    <!-- quacky is the HID typing engine's name. %1$s is a folder on the phone -->
+    <string name="setup_installer_quacky">Installing quacky in %1$s</string>
+    <!-- %1$s is a folder on the phone -->
+    <string name="setup_installer_module">Installing the boot module in %1$s</string>
+    <string name="setup_installer_installed">Installed</string>
+    <string name="setup_installer_check_failed">Installed, but the check after it failed</string>
+    <string name="setup_installer_reboot">Reboot to load the SELinux rule</string>
+    <string name="setup_installer_timed_out">Timed out</string>
+
+    <!-- Controller: shown on a phone with more than one USB controller -->
+    <string name="setup_title_controller">Controller</string>
+    <string name="setup_controller_help">This phone has more than one USB controller. Pick the one your cable is in.</string>
+    <!-- Under each controller's kernel state, what that state means -->
+    <string name="setup_udc_configured">a computer is using it</string>
+    <string name="setup_udc_suspended">plugged in, the computer is asleep</string>
+    <string name="setup_udc_plugged">plugged in, not set up by a computer</string>
+    <string name="setup_udc_unplugged">nothing plugged in</string>
+
+    <!-- Settings and Fonts. A section heading is drawn uppercase whatever it says -->
+    <!-- Identity section: the row that opens Identity, beside the profile in force -->
+    <string name="settings_section_identity">Identity</string>
+    <string name="settings_profile">Profile</string>
+
+    <!-- USB section, on a phone with more than one controller -->
+    <string name="settings_section_usb">USB</string>
+    <!-- The row and the sheet that picks the controller -->
+    <string name="settings_controller">Controller</string>
+    <!-- The row's value when no controller is picked -->
+    <string name="settings_controller_none">none</string>
+    <!-- Under the row while the gadget is bound, which is when the controller cannot change -->
+    <string name="settings_controller_bound">stop all to change it</string>
+    <!-- The sheet when no controller was found -->
+    <string name="settings_controller_empty">No controllers</string>
+
+    <!-- Backend section -->
+    <string name="settings_section_backend">Backend</string>
+    <!-- The switch that puts usb-arsenal on PATH -->
+    <string name="settings_system_path">System path</string>
+    <!-- Under the switch once it was flipped: the link is read at boot -->
+    <string name="settings_path_next_boot">applies from the next boot</string>
+    <!-- Under the switch when it is turned on with no backend installed -->
+    <string name="settings_path_install_first">Install the backend first</string>
+    <!-- The key that runs Check again, and the one that installs the backend again -->
+    <string name="settings_requirements">Requirements</string>
+    <string name="settings_reinstall">Reinstall</string>
+
+    <!-- App section: the app's own switches -->
+    <string name="settings_section_app">App</string>
+    <string name="settings_motion">Motion</string>
+    <string name="settings_haptics">Haptics</string>
+    <!-- The row and the sheet that pick the colour theme -->
+    <string name="settings_theme">Theme</string>
+    <!-- Beside each theme in the sheet: a backlit panel with dark pixels, or dark glass with lit pixels -->
+    <string name="settings_theme_lit">lit</string>
+    <string name="settings_theme_negative">negative</string>
+
+    <!-- Credits section: the rows for the fonts' licence and the touchpad's gesture rules -->
+    <string name="settings_section_credits">Credits</string>
+    <string name="settings_fonts">Fonts</string>
+    <string name="settings_touchpad">Touchpad</string>
+
+    <!-- About section: the app's version, and where its source is -->
+    <string name="settings_section_about">About</string>
+    <string name="settings_about_app">App</string>
+    <string name="settings_source">Source</string>
+
+    <!-- Log: the backend's log; the lines themselves are the backend's and are not translated -->
+    <!-- The bottom keys: empty the log, and copy it whole -->
+    <string name="log_clear">Clear</string>
+    <string name="log_copy">Copy logs</string>
+    <!-- The label Android gives the copied log -->
+    <string name="log_clip">usb-arsenal log</string>
+
+    <!-- Setup's step dots in the top bar, as a screen reader says them; %1$s is the current step, %2$s how many there are -->
+    <string name="parts_step">Step %1$s of %2$s</string>
+    <!-- Storage: the eject key on a drive, as a screen reader says it, and the label over the file list -->
+    <string name="parts_eject">Eject</string>
+    <string name="parts_files">Files</string>
+    <!-- Storage: the LUN strip, as a screen reader says its cells; %1$s is the LUN's number -->
+    <string name="parts_lun">LUN %1$s</string>
+    <string name="parts_lun_add">Add a LUN</string>
+    <!-- Home's bottom bar: who holds the USB port, and the key that stops every function -->
+    <string name="parts_port_bound">Bound</string>
+    <string name="parts_port_replugging">Replugging</string>
+    <string name="parts_port_stopping">Stopping</string>
+    <string name="parts_port_failed">Failed</string>
+    <string name="parts_port_android">Port with Android</string>
+    <string name="parts_stop_all">Stop all</string>
+    <!-- Settings: the colour themes, named after the screens they copy; a name can stay as it is -->
+    <string name="parts_theme_amber">Amber</string>
+    <string name="parts_theme_orange">Orange</string>
+    <string name="parts_theme_pea">Pea</string>
+    <string name="parts_theme_pocket">Pocket</string>
+    <string name="parts_theme_nokia">Nokia</string>
+    <string name="parts_theme_paper">Paper</string>
+    <string name="parts_theme_night">Night</string>
+    <string name="parts_theme_phosphor">Phosphor</string>
+    <string name="parts_theme_matrix">Matrix</string>
+    <string name="parts_theme_vfd">Vfd</string>
+    <string name="parts_theme_plasma">Plasma</string>
+</resources>

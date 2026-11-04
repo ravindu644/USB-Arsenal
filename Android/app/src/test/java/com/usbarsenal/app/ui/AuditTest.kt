@@ -1,5 +1,6 @@
 package com.usbarsenal.app.ui
 
+import com.usbarsenal.app.XmlStrings
 import com.usbarsenal.app.backend.GadgetStatus
 import com.usbarsenal.app.backend.Lun
 import com.usbarsenal.app.backend.parseProfiles
@@ -14,6 +15,9 @@ import org.junit.Test
  * Each failed on the code as audited.
  */
 class AuditTest {
+    // The strings these check are read from res/values, as the app reads them
+    init { XmlStrings.install() }
+
     // A generated profile leaves `serial=` empty with a comment after it. The app no longer reads
     // files itself: config.c does (`identity show --json FILE`), and its empty serial stays empty
     @Test

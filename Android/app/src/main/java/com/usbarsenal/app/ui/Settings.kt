@@ -25,6 +25,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.usbarsenal.app.BuildConfig
+import com.usbarsenal.app.R
+import com.usbarsenal.app.str
 import com.usbarsenal.app.backend.Backend
 import com.usbarsenal.app.backend.BackendState
 import com.usbarsenal.app.backend.RootResult
@@ -102,56 +104,56 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
     Box(Modifier.fillMaxSize()) {
         Screen {
             Top { BackKey() }
-            Title("Settings")
+            Title(str(R.string.common_settings))
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Group("Identity")
-                LinkRow("Profile", profileName(Gadget.profile), openIdentity, Modifier.opener("settings/identity").focusRequester(focusOn()))
+                Group(str(R.string.settings_section_identity))
+                LinkRow(str(R.string.settings_profile), profileName(Gadget.profile), openIdentity, Modifier.opener("settings/identity").focusRequester(focusOn()))
 
                 // Every command names it. The backend keeps the controller it holds while bound,
                 // so a change waits until nothing is
                 if (udcs.size > 1) {
-                    Section("USB")
+                    Section(str(R.string.settings_section_usb))
                     val bound = Gadget.status?.bound == true
-                    LinkRow("Controller", Controller.picked ?: "none", if (bound) null else ({ choosingUdc = true }), Modifier.opener("settings/controller"))
-                    if (bound) Note("stop all to change it")
+                    LinkRow(str(R.string.settings_controller), Controller.picked ?: str(R.string.settings_controller_none), if (bound) null else ({ choosingUdc = true }), Modifier.opener("settings/controller"))
+                    if (bound) Note(str(R.string.settings_controller_bound))
                 }
 
-                Section("Backend")
+                Section(str(R.string.settings_section_backend))
                 // The link lives in the module, so it is held until read, and without a backend
                 // installed: it would name a binary not there
-                Kv("System path", Modifier.shake(shake)) {
-                    Dip(linked == true, { on -> linking = true; scope.launch { write(setPathLinked(on)) { linked = on }; linking = false } }, "System path", held = linking || linked == null || !installed)
+                Kv(str(R.string.settings_system_path), Modifier.shake(shake)) {
+                    Dip(linked == true, { on -> linking = true; scope.launch { write(setPathLinked(on)) { linked = on }; linking = false } }, str(R.string.settings_system_path), held = linking || linked == null || !installed)
                 }
                 // One line kept for its fault or its warning, so the sections below never move
                 Box(Modifier.heightIn(min = Lcd.touch)) {
                     val f = fault
                     when {
                         f != null -> Fault(f, onLog = null)
-                        changed -> Warn("applies from the next boot")
+                        changed -> Warn(str(R.string.settings_path_next_boot))
                     }
                 }
-                Key("Requirements", Modifier.fillMaxWidth().padding(top = 6.dp).opener("settings/check"), onClick = openCheck)
-                Key("Reinstall", Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 10.dp).opener("settings/reinstall"), enabled = backend != null) {
+                Key(str(R.string.settings_requirements), Modifier.fillMaxWidth().padding(top = 6.dp).opener("settings/check"), onClick = openCheck)
+                Key(str(R.string.settings_reinstall), Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 10.dp).opener("settings/reinstall"), enabled = backend != null) {
                     backend?.let(fix)
                 }
 
-                Section("App")
-                Kv("Motion") { Dip(switches.motion, { switches.motion = it }, "Motion") }
-                Kv("Haptics") { Dip(switches.haptics, { switches.haptics = it }, "Haptics") }
-                LinkRow("Theme", switches.theme.label, { choosingTheme = true }, Modifier.opener("settings/theme"))
+                Section(str(R.string.settings_section_app))
+                Kv(str(R.string.settings_motion)) { Dip(switches.motion, { switches.motion = it }, str(R.string.settings_motion)) }
+                Kv(str(R.string.settings_haptics)) { Dip(switches.haptics, { switches.haptics = it }, str(R.string.settings_haptics)) }
+                LinkRow(str(R.string.settings_theme), switches.theme.label, { choosingTheme = true }, Modifier.opener("settings/theme"))
 
-                Section("Credits")
-                LinkRow("Fonts", "SIL OFL 1.1", openFonts, Modifier.opener("settings/fonts"))
+                Section(str(R.string.settings_section_credits))
+                LinkRow(str(R.string.settings_fonts), "SIL OFL 1.1", openFonts, Modifier.opener("settings/fonts"))
                 // The trackpad's gestures follow libinput's touchpad rules
-                LinkRow("Touchpad", "libinput, MIT", { context.open(LIBINPUT) }, Modifier.opener("settings/libinput"))
+                LinkRow(str(R.string.settings_touchpad), "libinput, MIT", { context.open(LIBINPUT) }, Modifier.opener("settings/libinput"))
 
-                Section("About")
-                Kv("App", fact = true) { Text(BuildConfig.VERSION_NAME, LcdType.data) }
-                LinkRow("Source", SOURCE, { context.open("https://$SOURCE") })
+                Section(str(R.string.settings_section_about))
+                Kv(str(R.string.settings_about_app), fact = true) { Text(BuildConfig.VERSION_NAME, LcdType.data) }
+                LinkRow(str(R.string.settings_source), SOURCE, { context.open("https://$SOURCE") })
             }
         }
         ChoiceSheet(
-            choosingUdc, "Controller", udcs.map { it.name }, Controller.picked.orEmpty(), "No controllers",
+            choosingUdc, str(R.string.settings_controller), udcs.map { it.name }, Controller.picked.orEmpty(), str(R.string.settings_controller_empty),
             onPick = { name ->
                 choosingUdc = false
                 scope.launch {
@@ -170,13 +172,13 @@ fun SettingsScreen(back: () -> Unit, openIdentity: () -> Unit, openFonts: () -> 
         )
         // The pick cuts the whole screen over in one frame, as an LCD would
         ChoiceSheet(
-            choosingTheme, "Theme", Theme.entries.map { it.label }, switches.theme.label, "",
+            choosingTheme, str(R.string.settings_theme), Theme.entries.map { it.label }, switches.theme.label, "",
             onPick = { label ->
                 choosingTheme = false
                 switches.theme = Theme.entries.first { it.label == label }
             },
             onDismiss = { choosingTheme = false },
-            detail = { label -> if (Theme.entries.first { it.label == label }.lit) "lit" else "negative" },
+            detail = { label -> if (Theme.entries.first { it.label == label }.lit) str(R.string.settings_theme_lit) else str(R.string.settings_theme_negative) },
         )
     }
 }
@@ -205,7 +207,7 @@ fun FontsScreen(back: () -> Unit) {
     val text by produceState(emptyList<String>()) { value = withContext(Dispatchers.IO) { licence(context) } }
     Screen {
         Top { BackKey(Modifier.focusRequester(focusOn())) }
-        Title("Fonts")
+        Title(str(R.string.settings_fonts))
         Column {
             for (face in listOf("Jersey 10", "Silkscreen", "VT323")) Kv(face, fact = true) { Text("OFL 1.1", LcdType.data) }
         }

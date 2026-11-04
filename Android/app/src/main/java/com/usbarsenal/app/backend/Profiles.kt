@@ -1,5 +1,7 @@
 package com.usbarsenal.app.backend
 
+import com.usbarsenal.app.R
+import com.usbarsenal.app.str
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -13,7 +15,7 @@ const val PROFILES = "$FOLDER/Profiles"
  */
 // An empty [serial] is the phone's own: config.c derives it from ro.serialno (or /etc/machine-id)
 data class Profile(val path: String, val product: String, val maker: String, val vid: String, val pid: String, val power: Int, val serial: String = "") {
-    val name get() = if (path.isEmpty()) "Built-in" else path.substringAfterLast('/').removeSuffix(".conf")
+    val name: String get() = if (path.isEmpty()) str(R.string.common_built_in) else path.substringAfterLast('/').removeSuffix(".conf")
 }
 
 // config.c's defaults, which `identity unset` goes back to
@@ -101,6 +103,6 @@ suspend fun writeProfile(p: Profile, create: Boolean): RootResult {
 suspend fun writeText(path: String, text: String, fresh: Boolean = false): RootResult {
     val f = shellQuote(path)
     val tmp = shellQuote("$path.new")
-    val guard = if (fresh) "if [ -e $f ]; then rm -f $tmp; echo '[-] A profile by that name is already there' >&2; exit 1; fi; " else ""
+    val guard = if (fresh) "if [ -e $f ]; then rm -f $tmp; printf '%s\\n' ${shellQuote("[-] " + str(R.string.identity_profile_exists))} >&2; exit 1; fi; " else ""
     return Root.change("${guard}printf '%s' ${shellQuote(text)} > $tmp && mv -f $tmp $f")
 }

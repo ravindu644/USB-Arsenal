@@ -72,6 +72,8 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import com.usbarsenal.app.R
+import com.usbarsenal.app.str
 import com.usbarsenal.app.lcd.SpriteIcon
 import com.usbarsenal.app.lcd.Sprite
 import androidx.compose.ui.unit.Dp
@@ -482,7 +484,8 @@ fun Key(
 @Composable
 fun BackKey(modifier: Modifier = Modifier, enabled: Boolean = true) {
     val dispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
-    Key("< Back", modifier.semantics { contentDescription = "Back" }, enabled = enabled) { dispatcher?.onBackPressed() }
+    val spoken = str(R.string.common_back)
+    Key(str(R.string.common_back_key), modifier.semantics { contentDescription = spoken }, enabled = enabled) { dispatcher?.onBackPressed() }
 }
 
 // .top: 44dp, even when empty, so titles line up from screen to screen
@@ -502,8 +505,9 @@ fun Top(content: @Composable RowScope.() -> Unit = {}) = Row(
 fun Steps(at: Int, of: Int, joins: Boolean = false) {
     // The count this row first drew; with [joins], a dot past it has just joined
     val first = remember { if (joins) of else Int.MAX_VALUE }
+    val spoken = str(R.string.parts_step, at, of)
     Row(
-        Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = "Step $at of $of" },
+        Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = spoken },
         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {

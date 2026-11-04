@@ -37,6 +37,8 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.usbarsenal.app.R
+import com.usbarsenal.app.str
 import com.usbarsenal.app.lcd.dashes
 import com.usbarsenal.app.lcd.Inverted
 import com.usbarsenal.app.lcd.Lcd
@@ -113,6 +115,7 @@ fun Drive(lun: Int, image: DriveImage?, serving: Boolean, onEject: () -> Unit, m
                 Text("lun$lun", LcdType.labelStrong)
                 Spacer(Modifier.weight(1f))
                 if (image != null) {
+                    val eject = str(R.string.parts_eject)
                     val interaction = remember { MutableInteractionSource() }
                     Box(
                         Modifier
@@ -121,7 +124,7 @@ fun Drive(lun: Int, image: DriveImage?, serving: Boolean, onEject: () -> Unit, m
                                 haptics.gestureEnd()
                                 onEject()
                             }
-                            .semantics { contentDescription = "Eject" },
+                            .semantics { contentDescription = eject },
                         contentAlignment = Alignment.Center,
                     ) { SpriteIcon(Sprites.Eject, 2.dp) }
                 }
@@ -132,7 +135,7 @@ fun Drive(lun: Int, image: DriveImage?, serving: Boolean, onEject: () -> Unit, m
 
 // FILES and the folder the list reads
 @Composable
-fun FilesHeader(path: String, modifier: Modifier = Modifier, label: String = "Files") = Row(
+fun FilesHeader(path: String, modifier: Modifier = Modifier, label: String = str(R.string.parts_files)) = Row(
     modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 4.dp),
     horizontalArrangement = Arrangement.spacedBy(Lcd.tight),
 ) {

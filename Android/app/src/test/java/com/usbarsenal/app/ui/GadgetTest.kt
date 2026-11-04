@@ -1,5 +1,6 @@
 package com.usbarsenal.app.ui
 
+import com.usbarsenal.app.XmlStrings
 import com.usbarsenal.app.backend.Capabilities
 import com.usbarsenal.app.backend.GadgetStatus
 import com.usbarsenal.app.backend.HidNode
@@ -12,6 +13,9 @@ import org.junit.Test
 
 // Home's rows say what status --json says, and Storage's switch starts every pick in one command
 class GadgetTest {
+    // The strings these check are read from res/values, as the app reads them
+    init { XmlStrings.install() }
+
     private val live = GadgetStatus(
         version = "1.2.0", udc = "11201000.usb0", udcState = "configured", bound = true,
         storage = listOf(Lun(0, "/sdcard/USB-Arsenal/Win11.iso", "dvd", "ro"), Lun(1, "", "", "")),
@@ -49,6 +53,7 @@ class GadgetTest {
         assertEquals("starting HID", says(listOf("hid", "start", "--interval", "1")))
         assertEquals("starting storage", says(listOf("storage", "start", "--lun", "0", "--mode", "rw", "/sdcard/backstop")))
         assertEquals("stopping tether", says(listOf("tether", "stop")))
+        assertEquals("applying HID", says(listOf("hid", "apply")))
         assertEquals("stopping everything", says(listOf("stop")))
         assertEquals("ejecting a drive", says(listOf("storage", "eject", "--lun", "1")))
         assertEquals("switching identity", says(listOf("identity", "set", "/sdcard/USB-Arsenal/Profiles/a.conf")))

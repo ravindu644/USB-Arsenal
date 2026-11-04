@@ -52,6 +52,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.usbarsenal.app.R
+import com.usbarsenal.app.str
 import com.usbarsenal.app.backend.Cache
 import com.usbarsenal.app.backend.ImageFile
 import com.usbarsenal.app.backend.SCRIPTS
@@ -77,7 +79,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 // The three speeds: no flag, --fast (one key per report, no gap), --ultra (up to six keys a report)
-private val SPEEDS = listOf("Normal", "Fast", "Ultra")
+private val SPEEDS: List<String> get() = listOf(str(R.string.quacky_speed_normal), str(R.string.quacky_speed_fast), str(R.string.quacky_speed_ultra))
 private val CODE = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, keyboardType = KeyboardType.Ascii)
 
 /*
@@ -141,7 +143,7 @@ fun QuackyScreen(back: () -> Unit) {
 
     fun open(f: ImageFile) {
         scope.launch {
-            val t = readScript(f.path) ?: run { fault = "[-] Cannot read ${f.name}"; return@launch }
+            val t = readScript(f.path) ?: run { fault = "[-] " + str(R.string.quacky_cannot_read, f.name); return@launch }
             name = f.name; text = t; fault = null; picking = false
             QuackySetup.open(f.name, t)
         }
@@ -181,7 +183,7 @@ fun QuackyScreen(back: () -> Unit) {
                 // character by character; flushed once a frame so Ultra's thousands a second never
                 // flood it
                 out = listOf("# ${c.echo}", "")
-                val s = runQuacky(c.cmd) ?: run { out = out + "[-] Could not start quacky"; return@launch }
+                val s = runQuacky(c.cmd) ?: run { out = out + ("[-] " + str(R.string.quacky_cannot_start)); return@launch }
                 val buf = StringBuilder()
                 val drain = launch {
                     while (true) {
@@ -214,30 +216,30 @@ fun QuackyScreen(back: () -> Unit) {
             fault?.let { Fault(it, onLog = null) }
             if (tab == 0) {
                 KeyRow {
-                    Key("Save as", Modifier.weight(1f)) { naming = 2 }
-                    Key("Save", Modifier.weight(1f).focusRequester(focusOn(tab)), primary = true) { save() }
+                    Key(str(R.string.quacky_save_as), Modifier.weight(1f)) { naming = 2 }
+                    Key(str(R.string.common_save), Modifier.weight(1f).focusRequester(focusOn(tab)), primary = true) { save() }
                 }
             } else {
-                if (node == null) Note("Enable HID on Home to type for real")
+                if (node == null) Note(str(R.string.quacky_hid_off))
                 KeyRow {
                     // Focus the Dry run key: it is always enabled (even with HID off), unlike Run
-                    Key("Dry run", Modifier.weight(1f).focusRequester(focusOn(tab)), enabled = !running) { run(dry = true) }
+                    Key(str(R.string.quacky_dry_run), Modifier.weight(1f).focusRequester(focusOn(tab)), enabled = !running) { run(dry = true) }
                     if (running) {
-                        Key("Stop", Modifier.weight(1f), primary = true) { job?.cancel() }
+                        Key(str(R.string.quacky_stop), Modifier.weight(1f), primary = true) { job?.cancel() }
                     } else {
-                        Key("Run", Modifier.weight(1f), primary = true, enabled = node != null) { run(dry = false) }
+                        Key(str(R.string.quacky_run), Modifier.weight(1f), primary = true, enabled = node != null) { run(dry = false) }
                     }
                 }
             }
         }) {
             Top { BackKey() }
-            Title("Quacky")
-            Segs(listOf("Edit", "Run"), tab, { tab = it })
+            Title(str(R.string.quacky_title))
+            Segs(listOf(str(R.string.quacky_tab_edit), str(R.string.quacky_tab_run)), tab, { tab = it })
             if (tab == 0) {
-                PickRow("File", name.ifEmpty { "new script" } + if (dirty) " *" else "") { picking = true }
+                PickRow(str(R.string.quacky_file), name.ifEmpty { str(R.string.quacky_new_script) } + if (dirty) " *" else "") { picking = true }
                 CodeEditor(text, { text = it }, Modifier.fill(min = 200.dp))
             } else {
-                PickRow("Options", "${SPEEDS[QuackySetup.mode].lowercase()} · ${QuackySetup.effectivePace} ms") { options = true }
+                PickRow(str(R.string.quacky_options), str(R.string.quacky_options_value, SPEEDS[QuackySetup.mode].lowercase(), QuackySetup.effectivePace)) { options = true }
                 Terminal(out, Modifier.fill(min = 200.dp))
             }
         }
@@ -246,7 +248,7 @@ fun QuackyScreen(back: () -> Unit) {
         // screens use. Save runs on the app scope so the Back that follows never cancels the write
         NotAppliedSheet(
             pending = dirty && name.isNotEmpty(),
-            note = "Unsaved edits. Apply saves them; Discard drops them.",
+            note = str(R.string.quacky_unsaved),
             canApply = true,
             onDiscard = { text = QuackySetup.text },
             onApply = { Gadget.scope.launch { write() } },
@@ -258,16 +260,16 @@ fun QuackyScreen(back: () -> Unit) {
             picking,
             { picking = false },
             footer = {
-                Key("Cancel", Modifier.weight(1f)) { picking = false }
-                Key("New", Modifier.weight(1f), primary = true) {
+                Key(str(R.string.common_cancel), Modifier.weight(1f)) { picking = false }
+                Key(str(R.string.quacky_new), Modifier.weight(1f), primary = true) {
                     picking = false
                     naming = 1
                 }
             },
         ) {
-            Title("Scripts")
+            Title(str(R.string.quacky_scripts))
             Text(dir, LcdType.data)
-            if (files.isEmpty()) Note("No scripts yet")
+            if (files.isEmpty()) Note(str(R.string.quacky_no_scripts))
             files.forEach { f ->
                 FileRow(f.name, sizeText(f.bytes), null, f.name == name, onPick = {
                     when {
@@ -293,26 +295,26 @@ fun QuackyScreen(back: () -> Unit) {
             discard != null,
             { discard = null },
             footer = {
-                Key("Cancel", Modifier.weight(1f)) { discard = null }
-                Key("Discard", Modifier.weight(1f), primary = true) {
+                Key(str(R.string.common_cancel), Modifier.weight(1f)) { discard = null }
+                Key(str(R.string.common_discard), Modifier.weight(1f), primary = true) {
                     discard?.let { open(it) }
                     discard = null
                 }
             },
         ) {
-            Title("Discard?")
-            Note("$name has unsaved edits")
+            Title(str(R.string.quacky_discard_title))
+            Note(str(R.string.quacky_has_unsaved, name))
         }
 
         // Speed and pace for the run. Fast and Ultra drop the pace to 0, still editable
         Sheet(
             options,
             { options = false },
-            footer = { Key("Done", Modifier.weight(1f), primary = true) { options = false } },
+            footer = { Key(str(R.string.common_done), Modifier.weight(1f), primary = true) { options = false } },
         ) {
-            Title("Options")
+            Title(str(R.string.quacky_options))
             Segs(SPEEDS, QuackySetup.mode, { QuackySetup.mode(it) })
-            Field("Pace") {
+            Field(str(R.string.quacky_pace)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Input(
                         QuackySetup.pace,
@@ -321,10 +323,10 @@ fun QuackyScreen(back: () -> Unit) {
                         placeholder = QuackySetup.defaultPace.toString(),
                         keyboard = KeyboardOptions(keyboardType = KeyboardType.Number),
                     )
-                    Text("ms", LcdType.data)
+                    Text(str(R.string.quacky_ms), LcdType.data)
                 }
             }
-            Kv("Target") { Text(node ?: "no keyboard", LcdType.data) }
+            Kv(str(R.string.quacky_target)) { Text(node ?: str(R.string.quacky_no_keyboard), LcdType.data) }
         }
     }
 }
@@ -438,18 +440,18 @@ private fun NamingSheet(mode: Int, dir: String, preset: String, existing: List<S
         onDismiss = onClose,
         entry = cancel,
         footer = {
-            Key("Cancel", Modifier.weight(1f).focusRequester(cancel), onClick = onClose)
-            Key(if (mode == 1) "Create" else "Save", Modifier.weight(1f), primary = true, enabled = !badName && !taken) { onName(file) }
+            Key(str(R.string.common_cancel), Modifier.weight(1f).focusRequester(cancel), onClick = onClose)
+            Key(if (mode == 1) str(R.string.common_create) else str(R.string.common_save), Modifier.weight(1f), primary = true, enabled = !badName && !taken) { onName(file) }
         },
     ) {
-        Title(if (mode == 1) "New" else "Save as")
-        Field("Name") {
+        Title(if (mode == 1) str(R.string.quacky_new) else str(R.string.quacky_save_as))
+        Field(str(R.string.quacky_name)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Input(raw, { raw = it.filter { c -> c != '/' && !c.isISOControl() }.take(255) }, Modifier.weight(1f), placeholder = "archinstall")
                 Text(".qk", LcdType.data)
             }
         }
-        if (taken) Warn("name taken")
+        if (taken) Warn(str(R.string.quacky_name_taken))
         Text(dir, LcdType.data)
     }
 }

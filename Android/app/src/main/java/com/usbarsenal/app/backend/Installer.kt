@@ -2,6 +2,8 @@ package com.usbarsenal.app.backend
 
 import android.content.Context
 import android.os.Build
+import com.usbarsenal.app.R
+import com.usbarsenal.app.str
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
@@ -90,10 +92,10 @@ private val installing = Mutex()
 
 private suspend fun install(context: Context, log: (String) -> Unit): Boolean {
     val arch = deviceArch() ?: run {
-        log("[-] No usb-arsenal binary for ${Build.SUPPORTED_ABIS.firstOrNull()}")
+        log("[-] " + str(R.string.setup_installer_no_binary, Build.SUPPORTED_ABIS.firstOrNull().toString()))
         return false
     }
-    log("[+] Device architecture: $arch")
+    log("[+] " + str(R.string.setup_installer_arch, arch))
 
     // The manager loads sepolicy.rule at boot. The rule already in the module is in the policy
     // now; a new or changed one waits for a reboot. It is never patched into the live policy,
@@ -113,7 +115,7 @@ private suspend fun install(context: Context, log: (String) -> Unit): Boolean {
         }
         val s = shellQuote(staging.absolutePath)
 
-        log("[+] Installing the binary in $WORKSPACE/bin")
+        log("[+] " + str(R.string.setup_installer_binary, "$WORKSPACE/bin"))
         // Copied beside the target and renamed over it, so a hard reboot leaves the old binary or
         // the new one, and a copy still running the old one is never written to (Droidspaces'
         // installFileDurably). It also replaces the link an older install left here
@@ -126,7 +128,7 @@ private suspend fun install(context: Context, log: (String) -> Unit): Boolean {
         )
         if (!step(log, binary)) return false
 
-        log("[+] Installing quacky in $WORKSPACE/bin")
+        log("[+] " + str(R.string.setup_installer_quacky, "$WORKSPACE/bin"))
         val quacky = Root.change(
             """
             { cp $s/quacky $QUACKY.new && chmod 755 $QUACKY.new && sync && mv -f $QUACKY.new $QUACKY && sync; } ||
@@ -135,7 +137,7 @@ private suspend fun install(context: Context, log: (String) -> Unit): Boolean {
         )
         if (!step(log, quacky)) return false
 
-        log("[+] Installing the boot module in $MODULE")
+        log("[+] " + str(R.string.setup_installer_module, MODULE))
         // A remove or disable mark from the manager, or a zip still pending in modules_update,
         // would undo this at the next boot. An older install kept the binary itself in
         // system/bin; that goes, and a PATH link the user asked for stays
@@ -159,15 +161,15 @@ private suspend fun install(context: Context, log: (String) -> Unit): Boolean {
     }
 
     val ok = backendState(context).state == BackendState.READY
-    log(if (ok) "[+] Installed" else "[-] Installed, but the check after it failed")
-    if (ok && ruleIsNew) log("[!] Reboot to load the SELinux rule")
+    log(if (ok) "[+] " + str(R.string.setup_installer_installed) else "[-] " + str(R.string.setup_installer_check_failed))
+    if (ok && ruleIsNew) log("[!] " + str(R.string.setup_installer_reboot))
     return ok
 }
 
 // A step prints what it really printed, then, when it failed, why it stopped
 private fun step(log: (String) -> Unit, r: RootResult): Boolean {
     (r.out + r.err).forEach(log)
-    if (!r.ok) log(if (r.timedOut) "[-] Timed out" else "[-] Failed (exit ${r.code})")
+    if (!r.ok) log(if (r.timedOut) "[-] " + str(R.string.setup_installer_timed_out) else "[-] " + str(R.string.common_failed_exit, r.code))
     return r.ok
 }
 
@@ -193,7 +195,7 @@ suspend fun pathLinked(): Boolean? = Root.read("test -L $MODULE_LINK && echo 1 |
 // Only into an installed module, to the binary there; off takes system/ away whole, as the installer does
 suspend fun setPathLinked(on: Boolean) = Root.change(
     if (on) {
-        "test -f $MODULE/module.prop -a -x $UA || { echo '[-] Install the backend first' >&2; exit 1; }; " +
+        "test -f $MODULE/module.prop -a -x $UA || { printf '%s\\n' ${shellQuote("[-] " + str(R.string.settings_path_install_first))} >&2; exit 1; }; " +
             "mkdir -p $MODULE/system/bin && ln -sfn $UA $MODULE_LINK"
     } else {
         "rm -rf $MODULE/system"

@@ -1,11 +1,15 @@
 package com.usbarsenal.app.backend
 
+import com.usbarsenal.app.XmlStrings
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 // The run command the Quacky screen builds: the real one uses the absolute binary and a quoted
 // path; the echo the terminal shows uses the bare `quacky` and filename, as usb-arsenal does.
 class ScriptsTest {
+    // The strings these check are read from res/values, as the app reads them
+    init { XmlStrings.install() }
+
     private val path = "/sdcard/USB-Arsenal/Scripts/archinstall.qk"
 
     @Test

@@ -1,5 +1,6 @@
 package com.usbarsenal.app.backend
 
+import com.usbarsenal.app.XmlStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -14,6 +15,9 @@ import org.junit.Test
 
 // The host's sh stands in for su; the process handling is the same
 class RootExecTest {
+    // The strings these check are read from res/values, as the app reads them
+    init { XmlStrings.install() }
+
     private val root = RootExec { ProcessBuilder("sh", "-c", it).start() }
 
     private fun since(start: Long) = (System.nanoTime() - start) / 1_000_000
