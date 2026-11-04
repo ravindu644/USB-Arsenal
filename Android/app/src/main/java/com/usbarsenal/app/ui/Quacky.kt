@@ -243,6 +243,12 @@ fun QuackyScreen(back: () -> Unit) {
                 CodeEditor(text, { text = it }, Modifier.fill(min = 200.dp))
             } else {
                 PickRow(str(R.string.quacky_options), str(R.string.quacky_options_value, SPEEDS[QuackySetup.mode].lowercase(), QuackySetup.effectivePace)) { options = true }
+                KeyRow {
+                    Key(if (german) "DE QWERTZ" else "US QWERTY", Modifier.weight(1f)) {
+                        german = !german
+                        setGermanLayout(context, german)
+                    }
+                }
                 Terminal(out, Modifier.fill(min = 200.dp))
             }
         }
