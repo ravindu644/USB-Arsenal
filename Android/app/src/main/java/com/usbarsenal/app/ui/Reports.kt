@@ -6,7 +6,7 @@ private fun germanKeyFor(c: Char): Pair<Int, Int>? = when (c) {
     else -> germanSymbol(c)
 }
 
-private fun germanSymbol(c: Char): Pair<Int, Int>? = when (c) {
+private fun germanSymbol(c: Char): Pair<Int, Int>? = when (c.code) {
     // DE_SYMBOLS
     else -> null
 }
