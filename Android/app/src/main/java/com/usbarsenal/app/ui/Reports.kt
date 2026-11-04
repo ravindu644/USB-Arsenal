@@ -30,6 +30,13 @@ private fun germanSymbol(c: Char): Pair<Int, Int>? = when (c.code) {
     59 -> MOD_SHIFT to 0x36
     60 -> 0 to 0x64
     61 -> MOD_SHIFT to 0x27
+    62 -> MOD_SHIFT to 0x64
+    63 -> MOD_SHIFT to 0x2D
+    64 -> MOD_ALTGR to 0x14
+    91 -> MOD_ALTGR to 0x25
+    92 -> MOD_ALTGR to 0x2D
+    93 -> MOD_ALTGR to 0x26
+    95 -> MOD_SHIFT to 0x38
     // DE_SYMBOLS
     else -> null
 }
