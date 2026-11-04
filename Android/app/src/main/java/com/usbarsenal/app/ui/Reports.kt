@@ -7,6 +7,13 @@ private fun germanKeyFor(c: Char): Pair<Int, Int>? = when (c) {
 }
 
 private fun germanSymbol(c: Char): Pair<Int, Int>? = when (c.code) {
+    8 -> 0 to 0x2A
+    9 -> 0 to 0x2B
+    10 -> 0 to 0x28
+    32 -> 0 to 0x2C
+    33 -> MOD_SHIFT to 0x1E
+    34 -> MOD_SHIFT to 0x1F
+    35 -> 0 to 0x32
     // DE_SYMBOLS
     else -> null
 }
