@@ -1,3 +1,16 @@
+private fun germanKeyFor(c: Char): Pair<Int, Int>? = when (c) {
+    in 'a'..'z' -> 0 to 0x04 + (if (c == 'y') 'z' - 'a' else if (c == 'z') 'y' - 'a' else c - 'a')
+    in 'A'..'Z' -> MOD_SHIFT to 0x04 + (if (c == 'Y') 'Z' - 'A' else if (c == 'Z') 'Y' - 'A' else c - 'A')
+    '0' -> 0 to 0x27
+    in '1'..'9' -> 0 to 0x1E + (c - '1')
+    else -> germanSymbol(c)
+}
+
+private fun germanSymbol(c: Char): Pair<Int, Int>? = when (c) {
+    // DE_SYMBOLS
+    else -> null
+}
+
 package com.usbarsenal.app.ui
 
 /*
