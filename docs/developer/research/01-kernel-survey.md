@@ -175,3 +175,25 @@ uses RNDIS. Samsung's `rndis_alloc_inst` allocates everything per instance and i
 The real fix is a kernel one: drop the `device_destroy()` in that error path, since the
 device belongs to Android's gadget, not to this NCM instance.
 
+### MirrorLink's f_ncm frees one global per instance
+
+```c
+/* f_ncm.c, CONFIG_USB_CONFIGFS_UEVENT (Qualcomm 4.14 and 4.19) */
+static struct ncm_setup_desc *_ncm_setup_desc;           /* one for the system */
+/* ncm_alloc_inst(), every NCM mkdir: overwritten, result never checked */
+_ncm_setup_desc->device = create_function_device("f_ncm");
+/* ncm_free_inst(), every NCM rmdir */
+device_destroy(_ncm_setup_desc->device->class, _ncm_setup_desc->device->devt);
+kfree(_ncm_setup_desc);
+```
+
+- Android's `g1` holds `ncm.0`, so `android0/f_ncm` exists and a second instance gets
+  `ERR_PTR(-EEXIST)` ("sysfs: cannot create duplicate filename").
+- Its rmdir dereferences that pointer: `ncm_free_inst+0x20`, fault at 0x29f (-17 + 0x2b0).
+  Seen on the curtana (sm6250, 4.14.357) at `check`'s NCM probe.
+- Had the device been created, freeing either instance would free the other's state.
+
+USB Arsenal's guard: `android_usb/f_ncm` existing without `f_ncm/ncm_instances` means no NCM
+directory is created. The kernel fix counts the instances, sets up with the first, tears down
+after the last, and never stores an error pointer.
+

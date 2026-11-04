@@ -533,7 +533,7 @@ fun setPlan(next: TetherPlan) = Gadget.set(*next.keys().toTypedArray())
 
 const val DEFAULT_ADDRESS = "192.168.42.129/24"
 
-// Whether this kernel can run NCM: missing, or unsafe as Samsung's f_ncm is, means RNDIS
+// Whether this kernel can run NCM: missing, or unsafe as Samsung's and MirrorLink's f_ncm are, means RNDIS
 fun Capabilities?.ncmOk() = this == null || ncm == Probe.OK
 
 // RNDIS left GKI after 5.10, so a kernel can have NCM alone

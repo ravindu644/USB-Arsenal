@@ -117,6 +117,12 @@ instance next to Android's `ncm.0` destroys `android0` and panics. `ua_ncm_unsaf
 `android0/ncm_instances` (the marker patch `0003` adds). When it is true, no NCM
 directory is created, not even to probe, and `tether` uses RNDIS.
 
+AOSP's MirrorLink hook in f_ncm (`CONFIG_USB_CONFIGFS_UEVENT`, Qualcomm 4.14 and 4.19) is
+the same trap with another marker: one global `android_usb/f_ncm` device that every NCM
+instance creates and frees, so a second instance oopses on rmdir. `ua_ncm_unsafe()` is also
+true when `android_usb/f_ncm` exists without `f_ncm/ncm_instances` (the 4.14 sm6250 patch adds
+it).
+
 Samsung's f_ncm also creates its netdev only at bind, and the `u_ether_configfs` stores
 (`dev_addr`, `host_addr`, `qmult`) dereference it unchecked. So `tether` reads `dev_addr`
 before writing the MACs, and skips them if the read fails. Patch `0003` gives the netdev

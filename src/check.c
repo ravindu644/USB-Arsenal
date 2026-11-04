@@ -21,15 +21,24 @@
  * create_terminal_attribute). The next NCM instance, or Android's own
  * gadget, then touches a freed device and the kernel BUGs. The attribute
  * existing means an instance is already there: never make another one,
- * not even to probe. */
+ * not even to probe.
+ *
+ * AOSP's MirrorLink hook in f_ncm (CONFIG_USB_CONFIGFS_UEVENT, Qualcomm 4.14
+ * and 4.19) keeps one global for every instance: each NCM mkdir overwrites it
+ * with a new android_usb/f_ncm device, and each rmdir destroys and frees it.
+ * With Android's ncm.0 holding f_ncm, a second mkdir stores ERR_PTR(-EEXIST)
+ * there and its rmdir dereferences it (ncm_free_inst oops on the curtana).
+ * f_ncm existing means an instance is already there. */
 int ua_ncm_unsafe(void) {
   /* A kernel carrying the fix (an instance count instead of per-instance
-   * create and destroy) says so with android0/ncm_instances. Without it,
-   * Samsung's extras present means the bug is present. Asked by looking,
-   * never by trying: trying is what panics. */
-  return access("/sys/class/android_usb/android0/terminal_version", F_OK) ==
-             0 &&
-         access("/sys/class/android_usb/android0/ncm_instances", F_OK) != 0;
+   * create and destroy) says so with ncm_instances, on android0 for Samsung's
+   * extras and on f_ncm for MirrorLink's. Asked by looking, never by trying:
+   * trying is what panics. */
+  if (access("/sys/class/android_usb/android0/terminal_version", F_OK) == 0 &&
+      access("/sys/class/android_usb/android0/ncm_instances", F_OK) != 0)
+    return 1;
+  return access("/sys/class/android_usb/f_ncm", F_OK) == 0 &&
+         access("/sys/class/android_usb/f_ncm/ncm_instances", F_OK) != 0;
 }
 
 /* 1 if the kernel can create a <type> function (and, if attr is given, that
@@ -235,13 +244,18 @@ int ua_cmd_check(int argc, char **argv) {
            0, "HID poll interval (f_hid)",
            "Stock f_hid polls the keyboard every 1 ms; the f_hid patch in "
            "kernel-patches/ makes 'hid --interval' work");
-    if (ua_ncm_unsafe())
-      line("ncm", -1, 0,
-           "ncm (unsafe on this Samsung kernel; tether uses rndis)",
-           "Another NCM instance would make f_ncm destroy android0 and the "
-           "kernel BUG. The kernel fix (kernel-patches/) adds "
-           "android0/ncm_instances, and NCM is used again once it is "
-           "there.");
+    /* While tether runs NCM, its instance is what holds f_ncm: NCM works,
+     * and a probe would be the second instance that panics */
+    char ncm[PATH_MAX];
+    if (ua_gadget_func_dir(&g, UA_F_NCM, ncm, sizeof(ncm)) == 0 &&
+        access(ncm, F_OK) == 0)
+      line("ncm", 1, 0, "ncm", NULL);
+    else if (ua_ncm_unsafe())
+      line("ncm", -1, 0, "ncm (unsafe on this kernel; tether uses rndis)",
+           "Android's gadget holds an NCM instance, and this kernel's f_ncm "
+           "crashes when a second one is created or removed. The f_ncm fix "
+           "in kernel-patches/ adds ncm_instances, and NCM is used again "
+           "once it is there.");
     else
       line("ncm", ua_probe_function(&g, "ncm", NULL), 0, "ncm",
            "CONFIG_USB_CONFIGFS_NCM; preferred by 'tether'");

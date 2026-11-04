@@ -1,0 +1,167 @@
+From 4bc1afdac73c59896069f4026c2f363982daaba1 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 4 Nov 2026 05:33:23 +0000
+Subject: [PATCH] usb: gadget: f_ncm: count the instances sharing MirrorLink's
+ state
+
+Under CONFIG_USB_CONFIGFS_UEVENT, f_ncm keeps one android_usb/f_ncm
+device and one _ncm_setup_desc for the whole system, but every NCM
+instance created and destroyed them. ncm_alloc_inst() overwrote the
+global without checking create_function_device(), and ncm_free_inst()
+destroyed and freed whatever it pointed at.
+
+With Android's ncm.0 holding f_ncm, an NCM function made in a second
+configfs gadget failed to add f_ncm ("sysfs: cannot create duplicate
+filename .../android0/f_ncm"), stored ERR_PTR(-EEXIST) as the device,
+and its rmdir oopsed in ncm_free_inst() dereferencing it ("Unable to
+handle kernel NULL pointer dereference at virtual address 0000029f").
+Had the second device been created, freeing either instance would have
+destroyed the other's device and freed the descriptor under it.
+
+Count the instances under a mutex: create the device and descriptor
+with the first, tear them down after the last, and skip MirrorLink when
+the device cannot be created rather than store an error pointer. The
+work item finds its descriptor from the work_struct, and teardown waits
+for it with cancel_work_sync() before freeing. The count is exposed
+read-only as f_ncm/ncm_instances, which tells userspace the kernel is
+fixed.
+
+Signed-off-by: Claude <noreply@anthropic.com>
+---
+ drivers/usb/gadget/function/f_ncm.c | 88 +++++++++++++++++++++++------
+ 1 file changed, 72 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/usb/gadget/function/f_ncm.c b/drivers/usb/gadget/function/f_ncm.c
+index 34b2394fe..8c9536f5e 100644
+--- a/drivers/usb/gadget/function/f_ncm.c
++++ b/drivers/usb/gadget/function/f_ncm.c
+@@ -1658,13 +1658,14 @@ static struct ncm_setup_desc *_ncm_setup_desc;
+ #define MIRROR_LINK_STRING_LENGTH_MAX 32
+ static void ncm_setup_work(struct work_struct *data)
+ {
++	struct ncm_setup_desc *desc =
++		container_of(data, struct ncm_setup_desc, work);
+ 	char mirror_link_string[MIRROR_LINK_STRING_LENGTH_MAX];
+ 	char *envp[2] = { mirror_link_string, NULL };
+ 
+ 	snprintf(mirror_link_string, MIRROR_LINK_STRING_LENGTH_MAX,
+-		"MirrorLink=V%d.%d",
+-		_ncm_setup_desc->major, _ncm_setup_desc->minor);
+-	kobject_uevent_env(&_ncm_setup_desc->device->kobj, KOBJ_CHANGE, envp);
++		"MirrorLink=V%d.%d", desc->major, desc->minor);
++	kobject_uevent_env(&desc->device->kobj, KOBJ_CHANGE, envp);
+ }
+ 
+ int ncm_ctrlrequest(struct usb_composite_dev *cdev,
+@@ -1682,6 +1683,69 @@ int ncm_ctrlrequest(struct usb_composite_dev *cdev,
+ 
+ 	return value;
+ }
++
++/*
++ * There is one android_usb/f_ncm device and one _ncm_setup_desc for the whole
++ * system, but every NCM instance created and destroyed them. A second instance
++ * next to Android's ncm.0 (a separate configfs gadget) then stored
++ * ERR_PTR(-EEXIST) in _ncm_setup_desc->device and oopsed dereferencing it in
++ * ncm_free_inst(); without the error it would have destroyed the first
++ * instance's device and freed the shared descriptor under it. Count the
++ * instances: set up with the first, tear down after the last. ncm_instances on
++ * f_ncm exposes the count and tells userspace this kernel takes more than one
++ * NCM instance safely.
++ */
++static DEFINE_MUTEX(ncm_setup_lock);
++static int ncm_instances;
++
++static ssize_t ncm_instances_show(struct device *dev,
++		struct device_attribute *attr, char *buf)
++{
++	return sprintf(buf, "%d\n", ncm_instances);
++}
++static DEVICE_ATTR_RO(ncm_instances);
++
++static void ncm_setup_get(void)
++{
++	struct ncm_setup_desc *desc;
++	struct device *dev;
++
++	mutex_lock(&ncm_setup_lock);
++	if (ncm_instances++)
++		goto out;
++	/* MirrorLink is optional: without the device the instance still works */
++	dev = create_function_device("f_ncm");
++	if (IS_ERR(dev))
++		goto out;
++	desc = kzalloc(sizeof(*desc), GFP_KERNEL);
++	if (!desc) {
++		device_destroy(dev->class, dev->devt);
++		goto out;
++	}
++	INIT_WORK(&desc->work, ncm_setup_work);
++	desc->device = dev;
++	if (device_create_file(dev, &dev_attr_ncm_instances))
++		pr_debug("%s: failed to create ncm_instances\n", __func__);
++	_ncm_setup_desc = desc;
++out:
++	mutex_unlock(&ncm_setup_lock);
++}
++
++static void ncm_setup_put(void)
++{
++	struct ncm_setup_desc *desc;
++
++	mutex_lock(&ncm_setup_lock);
++	desc = _ncm_setup_desc;
++	if (--ncm_instances || !desc)
++		goto out;
++	_ncm_setup_desc = NULL;
++	cancel_work_sync(&desc->work);
++	device_destroy(desc->device->class, desc->device->devt);
++	kfree(desc);
++out:
++	mutex_unlock(&ncm_setup_lock);
++}
+ #endif
+ 
+ static void ncm_free_inst(struct usb_function_instance *f)
+@@ -1689,11 +1753,7 @@ static void ncm_free_inst(struct usb_function_instance *f)
+ 	struct f_ncm_opts *opts;
+ 
+ #ifdef CONFIG_USB_CONFIGFS_UEVENT
+-	/* release _ncm_setup_desc related resource */
+-	device_destroy(_ncm_setup_desc->device->class,
+-		_ncm_setup_desc->device->devt);
+-	cancel_work(&_ncm_setup_desc->work);
+-	kfree(_ncm_setup_desc);
++	ncm_setup_put();
+ #endif
+ 
+ 	opts = container_of(f, struct f_ncm_opts, func_inst);
+@@ -1726,6 +1786,10 @@ static struct usb_function_instance *ncm_alloc_inst(void)
+ 		return ERR_CAST(net);
+ 	}
+ 	INIT_LIST_HEAD(&opts->ncm_os_desc.ext_prop);
++#ifdef CONFIG_USB_CONFIGFS_UEVENT
++	/* before the first error path that calls ncm_free_inst(), which puts */
++	ncm_setup_get();
++#endif
+ 
+ 	descs[0] = &opts->ncm_os_desc;
+ 	names[0] = "ncm";
+@@ -1740,14 +1804,6 @@ static struct usb_function_instance *ncm_alloc_inst(void)
+ 	}
+ 	opts->ncm_interf_group = ncm_interf_group;
+ 
+-#ifdef CONFIG_USB_CONFIGFS_UEVENT
+-	_ncm_setup_desc = kzalloc(sizeof(*_ncm_setup_desc), GFP_KERNEL);
+-	if (!_ncm_setup_desc)
+-		return ERR_PTR(-ENOMEM);
+-	INIT_WORK(&_ncm_setup_desc->work, ncm_setup_work);
+-	_ncm_setup_desc->device = create_function_device("f_ncm");
+-#endif
+-
+ 	return &opts->func_inst;
+ }
+ 
+-- 
+2.43.0
+

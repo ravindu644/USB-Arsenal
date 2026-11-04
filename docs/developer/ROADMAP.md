@@ -681,3 +681,13 @@ Tick a box only when the item is merged and verified as described in its phase.
   same, the imports are unchanged on aarch64, and the old and new binaries gave the same
   output over 42 commands on x86_64 and the same storage, NAT, gateway (into a throwaway
   namespace) and HID run on the a166p, with no kernel warnings.
+- 2026-11-04: `check` panicked a Redmi Note 9 Pro (curtana, sm6250, 4.14.357 reporting
+  itself as 5.10) at the NCM probe, the third time on a Qualcomm 4.x kernel; ramoops caught it.
+  AOSP's MirrorLink hook in f_ncm (`CONFIG_USB_CONFIGFS_UEVENT`) keeps one global
+  `_ncm_setup_desc` and one `android_usb/f_ncm` device for every instance. Android's `ncm.0`
+  holds the device, so the probe's mkdir stored `ERR_PTR(-EEXIST)` there and its rmdir oopsed in
+  `ncm_free_inst()` (fault at 0x29f, -17 + 0x2b0). `ua_ncm_unsafe()` is now also true when
+  `android_usb/f_ncm` exists without `f_ncm/ncm_instances`, so neither `check` nor `tether`
+  creates the second instance and `tether` uses RNDIS; `check` reports NCM as working while
+  tether's own instance holds the device. `kernel-patches/4.14/sm6250/0001` counts the
+  instances and adds the marker. It applies to the curtana tree but is not built or run yet.

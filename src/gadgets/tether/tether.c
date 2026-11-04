@@ -325,7 +325,7 @@ static int do_start(struct tether *t, int rndis, int no_net, int fg) {
   int added = 0;
   if (!func || !ua_gadget_live(&g)) {
     if (!rndis && ua_ncm_unsafe())
-      ua_log("NCM would crash this Samsung kernel (see 'check'); using RNDIS");
+      ua_log("NCM would crash this kernel (see 'check'); using RNDIS");
     func = (rndis || !ua_probe_function(&g, "ncm", NULL)) ? RNDIS : NCM;
     char dir[PATH_MAX], dev[32], host[32], other[PATH_MAX];
     ua_gadget_func_dir(&g, func, dir, sizeof(dir));
