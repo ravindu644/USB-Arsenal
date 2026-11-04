@@ -39,8 +39,8 @@ fun quackyCommand(node: String?, pace: Int, mode: Int, path: String, german: Boo
     val layout = if (german) " --layout DE" else ""
     val name = path.substringAfterLast('/')
     return QuackyCmd(
-        cmd = "$QUACKY${node?.let { " --hid ${shellQuote(it)}" } ?: ""} -d $pace$flag ${shellQuote(path)}",
-        echo = "quacky${node?.let { " --hid $it" } ?: ""} -d $pace$flag $name",
+        cmd = "$QUACKY${node?.let { " --hid ${shellQuote(it)}" } ?: ""} -d $pace$flag$layout ${shellQuote(path)}",
+        echo = "quacky${node?.let { " --hid $it" } ?: ""} -d $pace$flag$layout $name",
     )
 }
 
