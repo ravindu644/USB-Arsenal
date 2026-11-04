@@ -1,3 +1,29 @@
+package com.usbarsenal.app.ui
+
+/*
+ * The HID reports, as hid.c's report descriptors lay them out: a keyboard report is 8 bytes
+ * (modifiers, a reserved 0, six keycodes from usage page 7), a mouse report 5 (buttons, then X,
+ * Y, the wheel and the horizontal wheel, each a signed byte).
+ */
+
+const val MOUSE_LEFT = 0x01
+const val MOUSE_RIGHT = 0x02
+const val MOUSE_MIDDLE = 0x04
+
+fun germanLayout(context: android.content.Context): Boolean =
+    context.getSharedPreferences("hid_text_layout", 0).getBoolean("de_qwertz", false)
+
+fun setGermanLayout(context: android.content.Context, enabled: Boolean) {
+    context.getSharedPreferences("hid_text_layout", 0)
+        .edit().putBoolean("de_qwertz", enabled).apply()
+}
+
+const val MOD_CTRL = 0x01
+const val MOD_SHIFT = 0x02
+const val MOD_ALT = 0x04
+const val MOD_SUPER = 0x08
+const val MOD_ALTGR = 0x40
+
 private fun germanKeyFor(c: Char): Pair<Int, Int>? = when (c) {
     in 'a'..'z' -> 0 to 0x04 + (if (c == 'y') 'z' - 'a' else if (c == 'z') 'y' - 'a' else c - 'a')
     in 'A'..'Z' -> MOD_SHIFT to 0x04 + (if (c == 'Y') 'Z' - 'A' else if (c == 'Z') 'Y' - 'A' else c - 'A')
@@ -55,32 +81,6 @@ private fun germanSymbol(c: Char): Pair<Int, Int>? = when (c.code) {
     0x20AC -> MOD_ALTGR to 0x08
     else -> null
 }
-
-package com.usbarsenal.app.ui
-
-/*
- * The HID reports, as hid.c's report descriptors lay them out: a keyboard report is 8 bytes
- * (modifiers, a reserved 0, six keycodes from usage page 7), a mouse report 5 (buttons, then X,
- * Y, the wheel and the horizontal wheel, each a signed byte).
- */
-
-const val MOUSE_LEFT = 0x01
-const val MOUSE_RIGHT = 0x02
-const val MOUSE_MIDDLE = 0x04
-
-fun germanLayout(context: android.content.Context): Boolean =
-    context.getSharedPreferences("hid_text_layout", 0).getBoolean("de_qwertz", false)
-
-fun setGermanLayout(context: android.content.Context, enabled: Boolean) {
-    context.getSharedPreferences("hid_text_layout", 0)
-        .edit().putBoolean("de_qwertz", enabled).apply()
-}
-
-const val MOD_CTRL = 0x01
-const val MOD_SHIFT = 0x02
-const val MOD_ALT = 0x04
-const val MOD_SUPER = 0x08
-const val MOD_ALTGR = 0x40
 
 private fun signed(v: Int) = v.coerceIn(-127, 127).toByte()
 
