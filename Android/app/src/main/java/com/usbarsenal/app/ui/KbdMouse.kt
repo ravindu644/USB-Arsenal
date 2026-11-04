@@ -635,7 +635,7 @@ private fun KeysTab(text: String, onText: (String) -> Unit, mods: Int, onMod: (I
                         // What changed goes to the host: Backspace for what went, keys for what came
                         val same = text.commonPrefixWith(next).length
                         repeat(text.length - same) { onKey(NAMED_KEYS.getValue("BKSP")) }
-                        next.drop(same).forEach { c -> keyFor(c)?.let { (m, code) -> onType(m, code) } }
+                        next.drop(same).forEach { c -> keyFor(c, german)?.let { (m, code) -> onType(m, code) } }
                         onText(next.takeLast(2000))
                     },
                     Modifier.fillMaxWidth().height(box),
