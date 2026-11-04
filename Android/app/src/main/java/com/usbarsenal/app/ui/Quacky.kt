@@ -181,7 +181,7 @@ fun QuackyScreen(back: () -> Unit) {
             running = true
             try {
                 if (dirty && !write()) return@launch
-                val c = quackyCommand(if (dry) null else node, QuackySetup.effectivePace, QuackySetup.mode, "$dir/$name")
+                val c = quackyCommand(if (dry) null else node, QuackySetup.effectivePace, QuackySetup.mode, "$dir/$name", german)
                 // The command after a root prompt, then an empty line quacky's output grows into
                 // character by character; flushed once a frame so Ultra's thousands a second never
                 // flood it
