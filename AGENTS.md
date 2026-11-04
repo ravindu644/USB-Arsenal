@@ -265,6 +265,10 @@ name.
 - **Where and what:** `Android/`, a Kotlin and Jetpack Compose app, package
   `com.usbarsenal.app`, minSdk 26. Compose foundation only: no Material component is
   visible, every widget is ours and follows DESIGN.md. The version comes from `UA_VERSION`.
+- **No text in Kotlin.** Every string the app shows is in `res/values/strings_<screen>.xml`,
+  read with `str()` or `plural()` (`Strings.kt`), so Weblate can translate it. Commands, keys,
+  keycap legends and backend output stay in code.
+  [docs/developer/translations.md](docs/developer/translations.md) has the rules.
 - **Never run root commands through one shared shell.** One stuck command would freeze every
   other one behind it. Each operation runs in its own short-lived root shell with a timeout,
   and the shell is killed (not just abandoned) on timeout or cancel. Commands that change the

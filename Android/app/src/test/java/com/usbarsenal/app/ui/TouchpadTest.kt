@@ -1,5 +1,6 @@
 package com.usbarsenal.app.ui
 
+import com.usbarsenal.app.XmlStrings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -7,6 +8,9 @@ import org.junit.Test
 
 // The pad's gestures do what a laptop touchpad does: every case here is one libinput rule
 class TouchpadTest {
+    // The strings these check are read from res/values, as the app reads them
+    init { XmlStrings.install() }
+
     private val log = mutableListOf<String>()
     private val out = object : Pad.Out {
         override fun move(dx: Int, dy: Int) { log += "move $dx $dy" }

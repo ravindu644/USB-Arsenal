@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Words more than one screen uses. DESIGN.md's Copy section is the voice: short, lowercase
+     where the screen shows it lowercase; a Silkscreen label is drawn uppercase whatever it says -->
+<resources>
+    <string name="app_name" translatable="false">USB Arsenal</string>
+    <string name="common_log">Log</string>
+    <string name="common_settings">Settings</string>
+    <!-- Bottom keys -->
+    <string name="common_cancel">Cancel</string>
+    <string name="common_save">Save</string>
+    <string name="common_create">Create</string>
+    <string name="common_done">Done</string>
+    <string name="common_discard">Discard</string>
+    <string name="common_apply">Apply</string>
+    <string name="common_home">Home</string>
+    <string name="common_retry">Retry</string>
+    <string name="common_copy_log">Copy log</string>
+    <!-- The identity in force when no profile is set: Home, Identity and the profile list -->
+    <string name="common_built_in">Built-in</string>
+    <!-- A command that failed without saying why; %1$s is its exit code -->
+    <string name="common_failed_exit">Failed (exit %1$s)</string>
+    <!-- The top bar's back key, and what a screen reader says for it -->
+    <string name="common_back_key">&lt; Back</string>
+    <string name="common_back">Back</string>
+</resources>

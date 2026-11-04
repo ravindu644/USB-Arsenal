@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The hero over the function rows -->
+    <string name="home_idle">idle</string>
+    <plurals name="home_up">
+        <item quantity="one">%1$d up</item>
+        <item quantity="other">%1$d up</item>
+    </plurals>
+    <!-- The bottom bar once usb-arsenal has not answered three reads in a row -->
+    <string name="home_no_answer">no answer from usb-arsenal</string>
+    <!-- The attention key: what is wrong with the backend, then its fix -->
+    <string name="home_backend_update">Backend update</string>
+    <string name="home_not_installed">Not installed</string>
+    <string name="home_module_missing">Module missing</string>
+    <string name="home_backend_broken">Backend broken</string>
+    <string name="home_fix_update">update</string>
+    <string name="home_fix_install">install</string>
+    <string name="home_fix_reinstall">reinstall</string>
+</resources>

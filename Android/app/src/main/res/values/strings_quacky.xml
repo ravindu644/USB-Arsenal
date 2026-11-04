@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Quacky, the HID typing engine; its name stays as it is -->
+    <string name="quacky_title" translatable="false">Quacky</string>
+    <!-- The two tabs: Edit the script, Run it -->
+    <string name="quacky_tab_edit">Edit</string>
+    <string name="quacky_tab_run">Run</string>
+    <!-- Edit tab: the row that opens the script list, and its value before the script has a name -->
+    <string name="quacky_file">File</string>
+    <string name="quacky_new_script">new script</string>
+    <!-- Edit tab's bottom key, and the title of the sheet that names the copy -->
+    <string name="quacky_save_as">Save as</string>
+    <!-- Run tab: the note above the keys while HID is off, and the keys -->
+    <string name="quacky_hid_off">Enable HID on Home to type for real</string>
+    <string name="quacky_dry_run">Dry run</string>
+    <string name="quacky_run">Run</string>
+    <string name="quacky_stop">Stop</string>
+    <!-- Run tab: the row that opens the Options sheet, and the sheet's title -->
+    <string name="quacky_options">Options</string>
+    <!-- The Options row's value: %1$s is the typing speed in lowercase (normal, fast, ultra), %2$s the pause between keys in milliseconds -->
+    <string name="quacky_options_value">%1$s · %2$s ms</string>
+    <!-- Run tab: printed in the terminal when the quacky binary does not start -->
+    <string name="quacky_cannot_start">Could not start quacky</string>
+    <!-- Shown when a script cannot be opened; %1$s is its file name -->
+    <string name="quacky_cannot_read">Cannot read %1$s</string>
+    <!-- The sheet Back opens over unsaved edits; Apply and Discard are its keys -->
+    <string name="quacky_unsaved">Unsaved edits. Apply saves them; Discard drops them.</string>
+    <!-- The script list sheet -->
+    <string name="quacky_scripts">Scripts</string>
+    <string name="quacky_no_scripts">No scripts yet</string>
+    <!-- The script list's key, and the title of the sheet that names a fresh script -->
+    <string name="quacky_new">New</string>
+    <!-- The sheet before opening another script over unsaved edits; %1$s is the open script's file name -->
+    <string name="quacky_discard_title">Discard?</string>
+    <string name="quacky_has_unsaved">%1$s has unsaved edits</string>
+    <!-- The Options sheet: the three typing speeds, the pause between keys and its unit, and the keyboard node typed to -->
+    <string name="quacky_speed_normal">Normal</string>
+    <string name="quacky_speed_fast">Fast</string>
+    <string name="quacky_speed_ultra">Ultra</string>
+    <string name="quacky_pace">Pace</string>
+    <!-- Milliseconds -->
+    <string name="quacky_ms">ms</string>
+    <string name="quacky_target">Target</string>
+    <string name="quacky_no_keyboard">no keyboard</string>
+    <!-- The New and Save as sheet: the script's name field, and the warning when a script already has that name -->
+    <string name="quacky_name">Name</string>
+    <string name="quacky_name_taken">name taken</string>
+</resources>

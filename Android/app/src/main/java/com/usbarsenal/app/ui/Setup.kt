@@ -58,6 +58,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.usbarsenal.app.BuildConfig
+import com.usbarsenal.app.R
+import com.usbarsenal.app.str
 import com.usbarsenal.app.backend.Backend
 import com.usbarsenal.app.backend.BackendState
 import com.usbarsenal.app.backend.Cache
@@ -284,7 +286,7 @@ private fun setupSteps() = if (several()) 4 else 3
 private fun Welcome(next: () -> Unit) {
     val shown = rememberTyped(5, 1)
     fun Modifier.from(i: Int) = drawnFrom(i, shown)
-    Screen(footer = { Key("Get started", Modifier.fillMaxWidth().from(4).focusRequester(focusOn(Unit)), primary = true, onClick = next) }) {
+    Screen(footer = { Key(str(R.string.setup_get_started), Modifier.fillMaxWidth().from(4).focusRequester(focusOn(Unit)), primary = true, onClick = next) }) {
         Top {
             Spacer(Modifier.weight(1f))
             Text("v${BuildConfig.VERSION_NAME}", LcdType.data, Modifier.from(0))
@@ -292,9 +294,9 @@ private fun Welcome(next: () -> Unit) {
         Pin(8.dp, Modifier.from(1))
         Text("USB\nArsenal", LcdType.hero, Modifier.from(2))
         Column(Modifier.from(3)) {
-            Feature(Sprites.Storage, "boot an iso or share a disk")
-            Feature(Sprites.Tether, "network over the usb cable")
-            Feature(Sprites.Hid, "keyboard and mouse on the host")
+            Feature(Sprites.Storage, str(R.string.setup_feature_storage))
+            Feature(Sprites.Tether, str(R.string.setup_feature_tether))
+            Feature(Sprites.Hid, str(R.string.setup_feature_hid))
         }
     }
 }
@@ -309,8 +311,6 @@ private fun Feature(sprite: Sprite, text: String) = Row(
     Text(text, LcdType.data)
 }
 
-private const val ASKING = "# checking root access"
-
 /*
  * `id -u; su -v` in a root shell, played as that shell: a comment saying what is happening,
  * `su`, and once it answers, the root prompt's commands and what they printed. su is asked the
@@ -324,10 +324,10 @@ private fun RootScreen(back: () -> Unit, next: () -> Unit) {
     val had = remember { Setup.root != null }
     val result = Setup.root
     val session = buildList {
-        add(ShellLine("$ ", ASKING))
+        add(ShellLine("$ ", "# " + str(R.string.setup_root_asking)))
         add(ShellLine("$ ", "su", result?.exceptionOrNull()?.let { listOf(it.message.orEmpty()) }.orEmpty()))
         result?.onSuccess {
-            add(ShellLine("# ", "# root access granted !"))
+            add(ShellLine("# ", "# " + str(R.string.setup_root_granted)))
             add(ShellLine("# ", "id -u", listOf("0")))
             add(ShellLine("# ", "su -v", listOf(it)))
             add(ShellLine("# "))
@@ -356,14 +356,14 @@ private fun RootScreen(back: () -> Unit, next: () -> Unit) {
             footer = {
                 // Next is there from the start, dashed until su has said yes, so nothing pops in
                 if (done && result.isSuccess) {
-                    Key("Next", Modifier.fillMaxWidth().focusRequester(focus), primary = true, onClick = next)
+                    Key(str(R.string.setup_next), Modifier.fillMaxWidth().focusRequester(focus), primary = true, onClick = next)
                 } else {
-                    Key("Next", Modifier.fillMaxWidth(), primary = true, enabled = false) {}
+                    Key(str(R.string.setup_next), Modifier.fillMaxWidth(), primary = true, enabled = false) {}
                 }
             },
         ) {
             Top { Steps(1, setupSteps(), joins = true) }
-            Title("Root")
+            Title(str(R.string.setup_title_root))
             Shell("su", if (!done) Led.BUSY else if (result.isSuccess) Led.ON else Led.OFF, session.shownAt(step), Modifier.fill(min = 200.dp))
         }
         // Root managers today only take a grant at the app's next start, so there is no retry
@@ -374,7 +374,7 @@ private fun RootScreen(back: () -> Unit, next: () -> Unit) {
 // No root: the page shaded, Pin in tears, and what to do, which happens outside the app. On
 // Root it sits over the terminal, so the box is [light]
 @Composable
-private fun NoRoot(light: Boolean = false) = Shade("Grant root, then\nreopen the app", light) { SpriteIcon(Sprites.PinSad, 3.dp) }
+private fun NoRoot(light: Boolean = false) = Shade(str(R.string.setup_no_root), light) { SpriteIcon(Sprites.PinSad, 3.dp) }
 
 // What Check types; the app runs the binary it staged (backend/readCheckReport)
 private const val CHECK = "usb-arsenal check"
@@ -394,7 +394,7 @@ private fun CheckScreen(setup: Boolean, back: () -> Unit, next: () -> Unit) {
     val had = remember { Setup.check != null }
     val result = Setup.check
     val session = buildList {
-        add(ShellLine("# ", "# checking this kernel for usb arsenal"))
+        add(ShellLine("# ", "# " + str(R.string.setup_check_comment)))
         if (result == null) {
             add(ShellLine("# ", CHECK))
         } else {
@@ -413,9 +413,9 @@ private fun CheckScreen(setup: Boolean, back: () -> Unit, next: () -> Unit) {
         // The install deletes the staged copy, so a Recheck after it stages again
         val bin = Setup.staged?.takeIf { it.exists() } ?: stageBinary(context)?.also { Setup.staged = it }
         val (report, r) = bin?.let { readCheckReport(it.absolutePath) }
-            ?: (emptyList<String>() to Result.failure(IllegalStateException("no usb-arsenal binary for ${Build.SUPPORTED_ABIS.firstOrNull()}")))
+            ?: (emptyList<String>() to Result.failure(IllegalStateException(str(R.string.setup_check_no_binary, Build.SUPPORTED_ABIS.firstOrNull().toString()))))
         // A check that could not finish says why in the shell, under what it printed
-        Setup.report = report + listOfNotNull(r.exceptionOrNull()?.let { it.message ?: "check failed" })
+        Setup.report = report + listOfNotNull(r.exceptionOrNull()?.let { it.message ?: str(R.string.setup_check_failed) })
         Setup.check = r
         r.getOrNull()?.let { Gadget.caps = it; Cache.caps = it }
     }
@@ -432,25 +432,25 @@ private fun CheckScreen(setup: Boolean, back: () -> Unit, next: () -> Unit) {
             KeyRow {
                 if (setup) {
                     Key(
-                        "Recheck",
+                        str(R.string.setup_recheck),
                         Modifier.weight(1f).then(if (done && !canNext) Modifier.focusRequester(focus) else Modifier),
                         enabled = done,
                     ) { run++ }
                     Key(
-                        "Next",
+                        str(R.string.setup_next),
                         Modifier.weight(1f).then(if (canNext) Modifier.focusRequester(focus) else Modifier),
                         primary = true,
                         enabled = canNext,
                         onClick = next,
                     )
                 } else {
-                    Key("Done", Modifier.weight(1f).focusRequester(focus), primary = true, enabled = done, onClick = back)
+                    Key(str(R.string.common_done), Modifier.weight(1f).focusRequester(focus), primary = true, enabled = done, onClick = back)
                 }
             }
         },
     ) {
         Top { if (setup) Steps(setupSteps() - 1, setupSteps()) else BackKey(enabled = done || step < enter) }
-        Title("Check")
+        Title(str(R.string.setup_title_check))
         Shell("sh", if (!done) Led.BUSY else if (canNext) Led.ON else Led.OFF, session.shownAt(step), Modifier.fill(min = 200.dp))
     }
 }
@@ -477,11 +477,11 @@ private fun InstallScreen(setup: Boolean, update: String?, back: () -> Unit, hom
     val opening = buildList {
         if (update != null) {
             // The same version rebuilt is still an update, but "1.2.0 → 1.2.0" would say nothing
-            add(ShellLine("# ", if (update != version) "# update $update → $version" else "# usb-arsenal $version for $arch"))
+            add(ShellLine("# ", "# " + if (update != version) str(R.string.setup_install_update, update, version) else str(R.string.setup_install_version, version, arch)))
             // The install never touches the gadget, so this holds
-            add(ShellLine("# ", "# the gadget stays up while it updates"))
+            add(ShellLine("# ", "# " + str(R.string.setup_install_gadget_stays)))
         } else {
-            add(ShellLine("# ", "# usb-arsenal $version for $arch"))
+            add(ShellLine("# ", "# " + str(R.string.setup_install_version, version, arch)))
         }
     }
     val session = opening + when {
@@ -538,20 +538,20 @@ private fun InstallScreen(setup: Boolean, update: String?, back: () -> Unit, hom
             KeyRow {
                 val key = Modifier.weight(1f).focusRequester(focus)
                 when {
-                    phase == Phase.DONE && finished -> Key("Home", key, primary = true, onClick = home)
+                    phase == Phase.DONE && finished -> Key(str(R.string.common_home), key, primary = true, onClick = home)
                     phase == Phase.FAILED && finished -> {
-                        Key("Copy log", Modifier.weight(1f)) {
+                        Key(str(R.string.common_copy_log), Modifier.weight(1f)) {
                             context.getSystemService(ClipboardManager::class.java)
-                                .setPrimaryClip(ClipData.newPlainText("install log", log.joinToString("\n")))
+                                .setPrimaryClip(ClipData.newPlainText(str(R.string.setup_install_clip), log.joinToString("\n")))
                         }
-                        Key("Retry", key, primary = true) {
+                        Key(str(R.string.common_retry), key, primary = true) {
                             watching = true
                             Setup.retries++
                             Setup.enter()
                         }
                     }
                     // Where Home will be, dashed until the install has ended
-                    else -> Key("Home", Modifier.weight(1f), primary = true, enabled = false) {}
+                    else -> Key(str(R.string.common_home), Modifier.weight(1f), primary = true, enabled = false) {}
                 }
             }
         },
@@ -561,7 +561,7 @@ private fun InstallScreen(setup: Boolean, update: String?, back: () -> Unit, hom
             if (setup) Steps(setupSteps(), setupSteps())
             else BackKey(enabled = finished || phase == Phase.BEFORE)
         }
-        Title("Backend")
+        Title(str(R.string.setup_title_backend))
         Shell("sh", led, session.shownAt(step), Modifier.fill(min = 200.dp))
     }
 }
@@ -587,7 +587,7 @@ private fun ControllerScreen(setup: Boolean, back: () -> Unit, next: () -> Unit)
     Screen(
         footer = {
             KeyRow {
-                Key("Next", Modifier.weight(1f), primary = true, enabled = !writing && udcs.any { it.name == picked }) {
+                Key(str(R.string.setup_next), Modifier.weight(1f), primary = true, enabled = !writing && udcs.any { it.name == picked }) {
                     // Into the setup, through the binary at hand: the staged one before the
                     // backend is installed, since Check runs that
                     writing = true
@@ -606,8 +606,8 @@ private fun ControllerScreen(setup: Boolean, back: () -> Unit, next: () -> Unit)
         },
     ) {
         Top { if (setup) Steps(2, setupSteps()) else BackKey() }
-        Title("Controller")
-        Text("This phone has more than one USB controller. Pick the one your cable is in.", LcdType.data)
+        Title(str(R.string.setup_title_controller))
+        Text(str(R.string.setup_controller_help), LcdType.data)
         Column(Modifier.bleed(10.dp).selectableGroup()) {
             udcs.forEachIndexed { i, udc ->
                 val focus = if (i == 0) Modifier.focusRequester(first) else Modifier
@@ -627,10 +627,10 @@ private fun ControllerRow(udc: Udc, picked: Boolean, rule: Boolean, modifier: Mo
     val ink = LocalLcd.current.ink
     val hint = when (udc.state) {
         // Only a computer configures a controller; a charger stops at powered
-        "configured" -> "a computer is using it"
-        "suspended" -> "plugged in, the computer is asleep"
-        "attached", "powered", "default", "addressed" -> "plugged in, not set up by a computer"
-        "not attached" -> "nothing plugged in"
+        "configured" -> str(R.string.setup_udc_configured)
+        "suspended" -> str(R.string.setup_udc_suspended)
+        "attached", "powered", "default", "addressed" -> str(R.string.setup_udc_plugged)
+        "not attached" -> str(R.string.setup_udc_unplugged)
         else -> null
     }
     Box(

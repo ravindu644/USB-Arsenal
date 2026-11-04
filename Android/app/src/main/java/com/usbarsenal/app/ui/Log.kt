@@ -10,7 +10,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import com.usbarsenal.app.R
 import com.usbarsenal.app.backend.logView
+import com.usbarsenal.app.str
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -37,16 +39,16 @@ fun LogScreen(back: () -> Unit) {
     Screen(
         footer = {
             KeyRow {
-                Key("Clear", Modifier.weight(1f)) { scope.launch { Gadget.clearLog() } }
-                Key("Copy logs", Modifier.weight(1f).focusRequester(focusOn()), primary = true) {
+                Key(str(R.string.log_clear), Modifier.weight(1f)) { scope.launch { Gadget.clearLog() } }
+                Key(str(R.string.log_copy), Modifier.weight(1f).focusRequester(focusOn()), primary = true) {
                     context.getSystemService(ClipboardManager::class.java)
-                        .setPrimaryClip(ClipData.newPlainText("usb-arsenal log", Gadget.log.joinToString("\n")))
+                        .setPrimaryClip(ClipData.newPlainText(str(R.string.log_clip), Gadget.log.joinToString("\n")))
                 }
             }
         },
     ) {
         Top { BackKey() }
-        Title("Log")
+        Title(str(R.string.common_log))
         // A short window scrolls the screen to it, and it keeps a dozen lines
         Terminal(lines, Modifier.fill(min = 240.dp))
     }

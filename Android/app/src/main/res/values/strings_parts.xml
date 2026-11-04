@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Setup's step dots in the top bar, as a screen reader says them; %1$s is the current step, %2$s how many there are -->
+    <string name="parts_step">Step %1$s of %2$s</string>
+    <!-- Storage: the eject key on a drive, as a screen reader says it, and the label over the file list -->
+    <string name="parts_eject">Eject</string>
+    <string name="parts_files">Files</string>
+    <!-- Storage: the LUN strip, as a screen reader says its cells; %1$s is the LUN's number -->
+    <string name="parts_lun">LUN %1$s</string>
+    <string name="parts_lun_add">Add a LUN</string>
+    <!-- Home's bottom bar: who holds the USB port, and the key that stops every function -->
+    <string name="parts_port_bound">Bound</string>
+    <string name="parts_port_replugging">Replugging</string>
+    <string name="parts_port_stopping">Stopping</string>
+    <string name="parts_port_failed">Failed</string>
+    <string name="parts_port_android">Port with Android</string>
+    <string name="parts_stop_all">Stop all</string>
+    <!-- Settings: the colour themes, named after the screens they copy; a name can stay as it is -->
+    <string name="parts_theme_amber">Amber</string>
+    <string name="parts_theme_orange">Orange</string>
+    <string name="parts_theme_pea">Pea</string>
+    <string name="parts_theme_pocket">Pocket</string>
+    <string name="parts_theme_nokia">Nokia</string>
+    <string name="parts_theme_paper">Paper</string>
+    <string name="parts_theme_night">Night</string>
+    <string name="parts_theme_phosphor">Phosphor</string>
+    <string name="parts_theme_matrix">Matrix</string>
+    <string name="parts_theme_vfd">Vfd</string>
+    <string name="parts_theme_plasma">Plasma</string>
+</resources>

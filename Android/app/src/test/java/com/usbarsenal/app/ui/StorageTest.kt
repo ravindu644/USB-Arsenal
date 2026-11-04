@@ -1,5 +1,6 @@
 package com.usbarsenal.app.ui
 
+import com.usbarsenal.app.XmlStrings
 import com.usbarsenal.app.backend.isImage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -9,6 +10,9 @@ import org.junit.Test
 
 // Storage says sizes, warnings and the Create size the way the boards and storage/image.c do
 class StorageTest {
+    // The strings these check are read from res/values, as the app reads them
+    init { XmlStrings.install() }
+
     @Test
     fun sizes() {
         assertEquals("412M", sizeText(412L shl 20))

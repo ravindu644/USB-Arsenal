@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
-        android:label="USB Arsenal"
+        android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:theme="@style/Lcd">
         <!-- Compose redraws for every one of these itself. Recreating the activity would cancel a

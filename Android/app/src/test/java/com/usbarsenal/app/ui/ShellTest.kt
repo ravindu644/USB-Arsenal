@@ -1,10 +1,14 @@
 package com.usbarsenal.app.ui
 
+import com.usbarsenal.app.XmlStrings
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 // The session timeline Root and Backend play: beat, command, Enter, output, next prompt
 class ShellTest {
+    // The strings these check are read from res/values, as the app reads them
+    init { XmlStrings.install() }
+
     private val session = listOf(ShellLine("# ", "ls", listOf("a", "bb")), ShellLine("# "))
     private val p = LINE_PAUSE
 

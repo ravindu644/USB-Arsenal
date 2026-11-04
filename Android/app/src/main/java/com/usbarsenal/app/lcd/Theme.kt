@@ -2,6 +2,7 @@ package com.usbarsenal.app.lcd
 
 import android.app.Activity
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.core.content.edit
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toDrawable
 import androidx.core.view.WindowCompat
 import com.usbarsenal.app.R
+import com.usbarsenal.app.str
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
@@ -75,20 +77,21 @@ object LcdType {
  * so a theme is only these two values. [lit] is a backlight with dark pixels; a negative theme
  * is dark glass with lit pixels, and the system bars' icons follow it.
  */
-enum class Theme(val label: String, val ground: Color, val ink: Color) {
-    Amber("Amber", Color(0xFFFFA62E), Color(0xFF1C1005)),
-    Orange("Orange", Color(0xFFFF8200), Color(0xFF000000)),
-    Pea("Pea", Color(0xFF9BBC0F), Color(0xFF0F380F)),
-    Pocket("Pocket", Color(0xFFC4CFA1), Color(0xFF2A2B26)),
-    Nokia("Nokia", Color(0xFFC7F0D8), Color(0xFF43523D)),
-    Paper("Paper", Color(0xFFE9E6DC), Color(0xFF1A1A1A)),
-    Night("Night", Color(0xFF1C1005), Color(0xFFFFA62E)),
-    Phosphor("Phosphor", Color(0xFF0B1A0E), Color(0xFF3DF07A)),
-    Matrix("Matrix", Color(0xFF000000), Color(0xFF00FF41)),
-    Vfd("Vfd", Color(0xFF0A1412), Color(0xFF5EFFD2)),
-    Plasma("Plasma", Color(0xFF1A0300), Color(0xFFFF6A2A)),
+enum class Theme(@StringRes private val labelId: Int, val ground: Color, val ink: Color) {
+    Amber(R.string.parts_theme_amber, Color(0xFFFFA62E), Color(0xFF1C1005)),
+    Orange(R.string.parts_theme_orange, Color(0xFFFF8200), Color(0xFF000000)),
+    Pea(R.string.parts_theme_pea, Color(0xFF9BBC0F), Color(0xFF0F380F)),
+    Pocket(R.string.parts_theme_pocket, Color(0xFFC4CFA1), Color(0xFF2A2B26)),
+    Nokia(R.string.parts_theme_nokia, Color(0xFFC7F0D8), Color(0xFF43523D)),
+    Paper(R.string.parts_theme_paper, Color(0xFFE9E6DC), Color(0xFF1A1A1A)),
+    Night(R.string.parts_theme_night, Color(0xFF1C1005), Color(0xFFFFA62E)),
+    Phosphor(R.string.parts_theme_phosphor, Color(0xFF0B1A0E), Color(0xFF3DF07A)),
+    Matrix(R.string.parts_theme_matrix, Color(0xFF000000), Color(0xFF00FF41)),
+    Vfd(R.string.parts_theme_vfd, Color(0xFF0A1412), Color(0xFF5EFFD2)),
+    Plasma(R.string.parts_theme_plasma, Color(0xFF1A0300), Color(0xFFFF6A2A)),
     ;
 
+    val label: String get() = str(labelId)
     val colors get() = LcdColors(ground, ink)
     val lit get() = colors.lit
 }

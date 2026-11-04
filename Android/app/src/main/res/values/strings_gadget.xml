@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The gadget as every screen shares it: Home's function rows, the bottom bar's line while a
+     command runs, the faults a command leaves, and what su answered -->
+<resources>
+    <!-- The functions, as Home's rows name them -->
+    <string name="gadget_fn_storage">Storage</string>
+    <string name="gadget_fn_tether">Tether</string>
+    <string name="gadget_fn_hid">HID</string>
+
+    <!-- The bottom bar while a command runs: what it does in a few words -->
+    <string name="gadget_says_stop_all">stopping everything</string>
+    <string name="gadget_says_identity_unset">back to built-in identity</string>
+    <string name="gadget_says_identity_set">switching identity</string>
+    <string name="gadget_says_eject">ejecting a drive</string>
+    <!-- %1$s is the function, as the command names it: storage, tether or HID -->
+    <string name="gadget_says_starting">starting %1$s</string>
+    <string name="gadget_says_applying">applying %1$s</string>
+    <string name="gadget_says_stopping">stopping %1$s</string>
+
+    <!-- Faults under a row or over the bottom bar; the screen puts a [-] mark before each -->
+    <!-- %1$s is the exit code. "setup set" is the command and stays as it is -->
+    <string name="gadget_setup_set_failed">setup set failed (exit %1$s)</string>
+    <string name="gadget_another_running">Another command is running</string>
+    <!-- %1$s is a number of seconds; the s after it is the unit -->
+    <string name="gadget_timed_out_after">Timed out (%1$ss)</string>
+
+    <!-- The sheet Back opens on a function screen with a change not applied yet -->
+    <string name="gadget_not_applied">Not applied</string>
+    <string name="gadget_apply_note_storage">The host still sees the drives as they were. Apply loads your changes, and may reconnect every drive; Discard puts your picks back.</string>
+    <string name="gadget_apply_note_tether">Tether still runs as it was. Apply reconnects the gadget, every drive and function with it, for a moment; Discard puts your settings back.</string>
+    <string name="gadget_apply_note_hid">HID still runs as it was. Apply reconnects the gadget, every drive and function with it, for a moment.</string>
+
+    <!-- Home's row, first line, when the kernel lacks the function; the second line is the
+         kernel option it needs -->
+    <string name="gadget_row_no_storage">no mass storage in this kernel</string>
+    <string name="gadget_row_no_tether">no ncm or rndis in this kernel</string>
+    <string name="gadget_row_no_hid">no hid in this kernel</string>
+    <!-- Home's row, first line, while its command runs; the second line is the command -->
+    <string name="gadget_row_stopping">stopping</string>
+    <string name="gadget_row_starting">starting</string>
+    <!-- Storage's row: on with no image in any drive -->
+    <plurals name="gadget_row_empty_drives">
+        <item quantity="one">%1$d empty drive</item>
+        <item quantity="other">%1$d empty drives</item>
+    </plurals>
+    <string name="gadget_row_no_medium">no medium</string>
+    <!-- Storage's row while off: what it does, over two lines -->
+    <string name="gadget_row_storage_off_1">ISOs and disk images</string>
+    <string name="gadget_row_storage_off_2">as drives for the host</string>
+    <!-- Tether's row while off, over two lines -->
+    <string name="gadget_row_tether_off_1">this phone\'s internet</string>
+    <string name="gadget_row_tether_off_2">for the host, over USB</string>
+    <!-- Tether's row while on, second line. %1$s is the container's name, which can be empty -->
+    <string name="gadget_row_gateway">gateway %1$s</string>
+    <string name="gadget_row_no_network_side">no network side</string>
+    <!-- %1$s is the interface the phone's internet leaves by, such as wlan0 -->
+    <string name="gadget_row_via">via %1$s</string>
+    <string name="gadget_row_no_upstream">no upstream yet</string>
+    <!-- HID's row while on. %1$s is the device node, such as /dev/hidg1 -->
+    <string name="gadget_row_keyboard">keyboard %1$s</string>
+    <string name="gadget_row_mouse">mouse %1$s</string>
+    <!-- HID's row while off, over two lines -->
+    <string name="gadget_row_hid_off_1">a keyboard and a mouse</string>
+    <string name="gadget_row_hid_off_2">for the host</string>
+
+    <!-- What the Root step shows after "$ su", as a shell would print it; su is the command -->
+    <string name="gadget_su_none">(no su)</string>
+    <string name="gadget_su_not_found">su: inaccessible or not found</string>
+    <!-- %1$s is a number of seconds; the s after it is the unit -->
+    <string name="gadget_su_no_answer">su: no answer in %1$ss</string>
+    <string name="gadget_su_denied">su: permission denied</string>
+    <!-- A root command that could not start at all: the phone has no su this app may run -->
+    <string name="gadget_no_su">no su</string>
+    <!-- Why a backend read gave nothing back, on the Check step -->
+    <string name="gadget_read_timed_out">timed out</string>
+    <!-- %1$s is the exit code -->
+    <string name="gadget_read_exit">exit %1$s</string>
+</resources>

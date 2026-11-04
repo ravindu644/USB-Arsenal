@@ -1,5 +1,6 @@
 package com.usbarsenal.app.ui
 
+import com.usbarsenal.app.XmlStrings
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -7,6 +8,9 @@ import org.junit.Test
 
 // The reports match hid.c's descriptors, and typed text maps to the keys a US keyboard uses
 class ReportsTest {
+    // The strings these check are read from res/values, as the app reads them
+    init { XmlStrings.install() }
+
     @Test
     fun mouse() {
         assertArrayEquals(byteArrayOf(1, 10, -2, 0, 0), mouseReport(MOUSE_LEFT, 10, -2))

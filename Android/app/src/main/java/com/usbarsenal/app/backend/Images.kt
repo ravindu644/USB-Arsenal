@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
 import android.system.Os
+import com.usbarsenal.app.R
+import com.usbarsenal.app.str
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -25,7 +27,7 @@ fun isImage(path: String): Boolean {
     return ext.lowercase() in IMAGE_EXTS && name.length > ext.length + 1
 }
 
-const val NOT_IMAGE = "[-] Not a disk image or ISO (.iso .img .bin .raw .ima .dd)"
+val NOT_IMAGE: String get() = "[-] " + str(R.string.storage_not_image, IMAGE_EXTS.joinToString(" ") { ".$it" })
 
 // An image the folder holds: where it is, and how big
 data class ImageFile(val path: String, val bytes: Long) {
@@ -46,7 +48,7 @@ suspend fun freeBytes(): Long? = Root.read("stat -f -c '%a %S' $IMAGES").out.fir
     (a.toLongOrNull() ?: return@let null) * (s.toLongOrNull() ?: return@let null)
 }
 
-const val NO_PATH = "[-] That picker gives no file path; copy the image into $IMAGES"
+val NO_PATH: String get() = "[-] " + str(R.string.storage_no_path, IMAGES)
 
 /*
  * The file a provider actually opened for [uri], as a path root can open: Droidspaces'
@@ -58,7 +60,7 @@ const val NO_PATH = "[-] That picker gives no file path; copy the image into $IM
  */
 suspend fun realPath(context: Context, uri: Uri): Result<String> = withContext(Dispatchers.IO) {
     val pfd = runCatching { context.contentResolver.openFileDescriptor(uri, "r") }.getOrNull()
-        ?: return@withContext Result.failure(IllegalStateException("[-] Cannot open that file"))
+        ?: return@withContext Result.failure(IllegalStateException("[-] " + str(R.string.storage_cannot_open)))
     pfd.use {
         val path = runCatching { Os.readlink("/proc/self/fd/${it.fd}") }.getOrNull()?.takeIf { p -> p.startsWith("/") }
             ?: return@withContext Result.failure(IllegalStateException(NO_PATH))
@@ -66,7 +68,7 @@ suspend fun realPath(context: Context, uri: Uri): Result<String> = withContext(D
         val q = shellQuote(path)
         val r = Root.read("stat -c '%d %i' $q && readlink -f $q")
         when {
-            r.timedOut || r.code == NO_ROOT -> Result.failure(IllegalStateException("[-] Cannot ask root about that file: ${r.why}"))
+            r.timedOut || r.code == NO_ROOT -> Result.failure(IllegalStateException("[-] " + str(R.string.storage_cannot_ask_root, r.why)))
             r.out.firstOrNull() != "${st.st_dev} ${st.st_ino}" -> Result.failure(IllegalStateException(NO_PATH))
             else -> Result.success(r.out.getOrNull(1) ?: path)
         }

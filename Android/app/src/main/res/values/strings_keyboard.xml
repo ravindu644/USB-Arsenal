@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Keys + mouse: the screen's title and its two tabs -->
+    <string name="keyboard_title">Keys + mouse</string>
+    <string name="keyboard_tab_mouse">Mouse</string>
+    <string name="keyboard_tab_keys">Keys</string>
+    <!-- Mouse tab: what a screen reader says for the touchpad's corner key and for the key that leaves full screen -->
+    <string name="keyboard_full_screen">Full screen</string>
+    <string name="keyboard_leave_full_screen">Leave full screen</string>
+    <!-- Mouse tab: the settings under the touchpad -->
+    <string name="keyboard_configure">Configure</string>
+    <string name="keyboard_speed">Speed</string>
+    <string name="keyboard_natural_scroll">Natural scroll</string>
+    <!-- Keys tab: the label over the box whose text is typed on the host -->
+    <string name="keyboard_type">Type</string>
+    <!-- Over the shaded page while HID is off, or when the kernel has no HID; the line break keeps it in a narrow box -->
+    <string name="keyboard_hid_off">Enable HID on Home\nto use this page</string>
+    <string name="keyboard_no_hid">No HID in\nthis kernel</string>
+</resources>

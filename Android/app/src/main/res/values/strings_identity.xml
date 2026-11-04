@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Identity screen and its Create or Edit sheet: how the gadget names itself to the host -->
+<resources>
+    <!-- The screen: its title, the key beside Create, and the list's header -->
+    <string name="identity_title">Identity</string>
+    <!-- The key that opens the sheet on a profile, and that sheet's title -->
+    <string name="identity_edit">Edit</string>
+    <string name="identity_profiles">Profiles</string>
+    <!-- The profile panel's last line when the serial is left empty -->
+    <string name="identity_serial_from_phone">serial from this phone</string>
+    <!-- Under the panel when the profile set is no longer there; %1$s is its file. Built-in as
+         in common_built_in -->
+    <string name="identity_missing">%1$s is gone: the host gets Built-in</string>
+    <!-- A fault, after "[-] ": a profile was picked before the app read which one is in use -->
+    <string name="identity_not_read_yet">The profile in force is not read yet</string>
+    <!-- The sheet on Back when a profile was picked while the host sees the gadget. Apply and
+         Discard are the sheet's keys -->
+    <string name="identity_not_applied">The host still sees the old identity. Apply reconnects the gadget once; Discard keeps it.</string>
+
+    <!-- The Create or Edit sheet's fields -->
+    <string name="identity_field_name">Name</string>
+    <!-- The product name the host shows for the gadget -->
+    <string name="identity_field_product">Product</string>
+    <!-- The manufacturer name the host shows for the gadget -->
+    <string name="identity_field_maker">Maker</string>
+    <string name="identity_field_serial">Serial</string>
+    <!-- Hint in the empty Serial field -->
+    <string name="identity_serial_placeholder">from this phone</string>
+    <!-- The vendor and product IDs, two four-digit hex numbers -->
+    <string name="identity_field_ids">USB IDs</string>
+    <!-- The most current the gadget asks the host for -->
+    <string name="identity_field_power">Power</string>
+    <!-- What a screen reader says for a power choice; the screen prints only the number and mA -->
+    <plurals name="identity_power_spoken">
+        <item quantity="one">%1$d milliamps</item>
+        <item quantity="other">%1$d milliamps</item>
+    </plurals>
+
+    <!-- What is wrong with a field, shown under it -->
+    <string name="identity_problem_no_name">a name for the file</string>
+    <string name="identity_problem_name_chars">letters, digits, space, . _ - only</string>
+    <string name="identity_problem_name_taken">name taken</string>
+    <string name="identity_problem_empty">cannot be empty</string>
+    <string name="identity_problem_ascii">plain ASCII letters, digits and symbols only</string>
+    <!-- The # character is not allowed -->
+    <string name="identity_problem_hash">no #</string>
+    <string name="identity_problem_too_long">126 characters at most</string>
+    <string name="identity_problem_ids">four hex digits each</string>
+    <!-- A fault when saving, after "[-] ": a new profile's name is already a file -->
+    <string name="identity_profile_exists">A profile by that name is already there</string>
+</resources>

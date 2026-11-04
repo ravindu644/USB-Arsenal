@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Storage screen and its Create sheet. The mode names (auto, cd, dvd, disk, rw) and the
+     size units (M, G, MB, GB) are the backend's own tokens and are not translated -->
+<resources>
+    <!-- The screen: its title, the keys under it, the mode box and the empty folder -->
+    <string name="storage_title">Storage</string>
+    <string name="storage_pick_image">Pick image</string>
+    <string name="storage_mode">Mode</string>
+    <string name="storage_no_image">No image loaded</string>
+
+    <!-- The line under the mode segments: what the host gets in each mode. Keep each one no
+         longer than storage_warning_truncated, which takes its place. 2.36G is the most a CD-ROM holds -->
+    <string name="storage_hint_auto">disk if partitioned; cd, or dvd past 2.36G</string>
+    <string name="storage_hint_cdrom">read-only cd-rom, up to 2.36G</string>
+    <string name="storage_hint_dvd">read-only, 2048-byte sectors, any size</string>
+    <string name="storage_hint_disk">read-only disk</string>
+    <string name="storage_hint_rw">writable disk, the host can change it</string>
+    <!-- In the hint's place, inverted, when a CD-ROM image is larger than a CD-ROM can be -->
+    <string name="storage_warning_truncated">over 2.36G: the host reads a truncated disc</string>
+
+    <!-- Faults when an image is picked; the app puts "[-] " before each -->
+    <!-- %1$s is the list of extensions, ".iso .img .bin .raw .ima .dd" -->
+    <string name="storage_not_image">Not a disk image or ISO (%1$s)</string>
+    <!-- %1$s is the images folder, /sdcard/USB-Arsenal/Disks -->
+    <string name="storage_no_path">That picker gives no file path; copy the image into %1$s</string>
+    <string name="storage_cannot_open">Cannot open that file</string>
+    <!-- %1$s is the error root gave, in English -->
+    <string name="storage_cannot_ask_root">Cannot ask root about that file: %1$s</string>
+
+    <!-- The Create sheet: a new disk image -->
+    <string name="storage_create_name">Name</string>
+    <string name="storage_create_taken">name taken</string>
+    <string name="storage_create_size">Size</string>
+    <!-- Beside Size; %1$s is the free space, as "12.4G" -->
+    <string name="storage_create_free">free %1$s</string>
+    <!-- Under the size when a full image would not fit; %1$s is the free space, as "12.4G" -->
+    <string name="storage_create_too_big">more than the free %1$s</string>
+    <!-- A sparse image takes no space until the host writes to it -->
+    <string name="storage_create_sparse">Sparse</string>
+    <!-- While a full image is written: %1$s written so far of %2$s, as "1.2G of 4.0G" -->
+    <string name="storage_create_progress">%1$s of %2$s</string>
+    <!-- Faults on the sheet; the app puts "[-] " before each. %1$s is the image's file name -->
+    <string name="storage_create_exists">%1$s is already there</string>
+    <string name="storage_create_no_root">No root</string>
+    <string name="storage_create_short">The image came out short; it was removed</string>
+</resources>

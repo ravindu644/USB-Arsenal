@@ -27,6 +27,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.usbarsenal.app.R
+import com.usbarsenal.app.str
 import com.usbarsenal.app.backend.Cache
 import com.usbarsenal.app.backend.readDroidspaces
 import com.usbarsenal.app.backend.readUplinks
@@ -110,7 +112,7 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
     var uplinks by remember { mutableStateOf(Cache.uplinks.orEmpty()) }
     LaunchedEffect(pickingUp) { if (pickingUp) readUplinks()?.let { uplinks = it; Cache.uplinks = it } }
     // An empty upstream is the profile's, or the backend's own pick
-    val auto = profile["tether_upstream"] ?: "auto"
+    val auto = profile["tether_upstream"] ?: str(R.string.tether_upstream_auto)
 
     // The chain shows what runs; the rows show what the next start brings up
     val gatewayLive = live?.gateway ?: plan.gateway
@@ -118,7 +120,7 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
     Box(Modifier.fillMaxSize()) {
         Screen {
             Top { BackKey() }
-            Title("Tether")
+            Title(str(R.string.tether_title))
             fault?.let { Fault(it.message, onLog = openLog, modifier = Modifier.shake(shake).opener("tether/fault")) }
             Column(verticalArrangement = Arrangement.spacedBy(Lcd.section)) {
                 Segs(
@@ -129,66 +131,66 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
                     enabled = { if (it == 0) caps.ncmOk() else caps.rndisOk() },
                 )
                 Column {
-                    Node("Host")
+                    Node(str(R.string.tether_host))
                     Wire(function, moving = on)
-                    Node("Phone", live?.iface ?: "off", inverted = true)
+                    Node(str(R.string.tether_phone), live?.iface ?: str(R.string.tether_off), inverted = true)
                     Wire(
                         when {
-                            gatewayLive -> "virtual cable"
-                            live != null && !live.running -> "no network side"
-                            else -> "masquerade"
+                            gatewayLive -> str(R.string.tether_virtual_cable)
+                            live != null && !live.running -> str(R.string.tether_no_network_side)
+                            else -> str(R.string.tether_masquerade)
                         },
                         up = true,
                         moving = on,
                     )
                     // Values are live only: off, the rows below already say what a start would use
                     if (gatewayLive) {
-                        val name = live?.gatewayContainer?.ifEmpty { null } ?: plan.container.ifEmpty { "Container" }
-                        Node(name, if (live?.gatewayWaiting == true) "waiting" else live?.gatewayIface)
+                        val name = live?.gatewayContainer?.ifEmpty { null } ?: plan.container.ifEmpty { str(R.string.tether_container) }
+                        Node(name, if (live?.gatewayWaiting == true) str(R.string.tether_waiting) else live?.gatewayIface)
                     } else {
-                        Node("Upstream", live?.upstream?.ifEmpty { null })
+                        Node(str(R.string.tether_upstream), live?.upstream?.ifEmpty { null })
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(Lcd.tight)) {
-                    ValueBox("Tx", live?.txBytes?.takeIf { it >= 0 }?.let(::sizeText) ?: "-", Modifier.weight(1f))
-                    ValueBox("Rx", live?.rxBytes?.takeIf { it >= 0 }?.let(::sizeText) ?: "-", Modifier.weight(1f))
+                    ValueBox(str(R.string.tether_tx), live?.txBytes?.takeIf { it >= 0 }?.let(::sizeText) ?: "-", Modifier.weight(1f))
+                    ValueBox(str(R.string.tether_rx), live?.rxBytes?.takeIf { it >= 0 }?.let(::sizeText) ?: "-", Modifier.weight(1f))
                 }
                 // What the next start brings up
                 Column {
-                    Group("Configure")
+                    Group(str(R.string.tether_configure))
                     // A gateway is a container: switching it on picks one, off forgets it. Without
                     // Droidspaces there is no container to hand the link to, so the switch is held
-                    Kv("Gateway") {
-                        if (ds?.installed == false) Text("no droidspaces", LcdType.data)
-                        Dip(plan.gateway, { if (it) choosing = true else set(plan.copy(container = "")) }, "Gateway mode", enabled = ds?.installed != false)
+                    Kv(str(R.string.tether_gateway)) {
+                        if (ds?.installed == false) Text(str(R.string.tether_no_droidspaces), LcdType.data)
+                        Dip(plan.gateway, { if (it) choosing = true else set(plan.copy(container = "")) }, str(R.string.tether_gateway_mode), enabled = ds?.installed != false)
                     }
                     if (plan.gateway) {
                         val stopped = containers != null && plan.container !in containers
-                        LinkRow("Container", if (stopped) "${plan.container} · not running" else plan.container, { choosing = true }, Modifier.opener("tether/container"))
-                        TypedRow("Its iface", plan.iface, "usb0", "an interface name, up to 15 characters", ::validIface, NAME_KEYS, ::ifaceInput) {
+                        LinkRow(str(R.string.tether_container), if (stopped) str(R.string.tether_container_not_running, plan.container) else plan.container, { choosing = true }, Modifier.opener("tether/container"))
+                        TypedRow(str(R.string.tether_its_iface), plan.iface, "usb0", str(R.string.tether_iface_problem), ::validIface, NAME_KEYS, ::ifaceInput) {
                             set(plan.copy(iface = it))
                         }
-                        Kv("Host IPv4") { Text("by the container", LcdType.data) }
+                        Kv(str(R.string.tether_host_ipv4)) { Text(str(R.string.tether_by_container), LcdType.data) }
                     } else {
                         // Without NAT in the kernel only --no-net can start
-                        Kv("DHCP and NAT") {
-                            if (!caps.natOk()) Text("no nat in this kernel", LcdType.data)
-                            Dip(plan.net && caps.natOk(), { set(plan.copy(net = it)) }, "DHCP and NAT", enabled = caps.natOk())
+                        Kv(str(R.string.tether_dhcp_nat)) {
+                            if (!caps.natOk()) Text(str(R.string.tether_no_nat), LcdType.data)
+                            Dip(plan.net && caps.natOk(), { set(plan.copy(net = it)) }, str(R.string.tether_dhcp_nat), enabled = caps.natOk())
                         }
                         if (plan.net) {
                             TypedRow(
-                                "Address", plan.address, profile["tether_address"] ?: DEFAULT_ADDRESS,
-                                "a host address with a /8 to /30 prefix", ::validAddress, ADDRESS_KEYS,
+                                str(R.string.tether_address), plan.address, profile["tether_address"] ?: DEFAULT_ADDRESS,
+                                str(R.string.tether_address_problem), ::validAddress, ADDRESS_KEYS,
                                 { it.filter { c -> c.isDigit() || c in "./" }.take(18) },
                             ) { set(plan.copy(address = it)) }
-                            Kv("Host IPv4") { Text(hostOf(address.trim()) ?: "-", LcdType.data) }
-                            Kv("Host IPv6") { Text(live?.ipv6?.ifEmpty { null } ?: "-", LcdType.data) }
+                            Kv(str(R.string.tether_host_ipv4)) { Text(hostOf(address.trim()) ?: "-", LcdType.data) }
+                            Kv(str(R.string.tether_host_ipv6)) { Text(live?.ipv6?.ifEmpty { null } ?: "-", LcdType.data) }
                             TypedRow(
-                                "DNS", plan.dns, profile["tether_dns"]?.replace(",", ", ") ?: "1.1.1.1, 8.8.8.8",
-                                "IPv4 addresses, comma-separated, 127 characters at most", ::validDns, ADDRESS_KEYS,
+                                str(R.string.tether_dns), plan.dns, profile["tether_dns"]?.replace(",", ", ") ?: "1.1.1.1, 8.8.8.8",
+                                str(R.string.tether_dns_problem), ::validDns, ADDRESS_KEYS,
                                 { it.filter { c -> c.isDigit() || c in ".," }.take(127) },
                             ) { set(plan.copy(dns = it)) }
-                            LinkRow("Upstream", plan.upstream.ifBlank { auto }, { pickingUp = true }, Modifier.opener("tether/upstream"))
+                            LinkRow(str(R.string.tether_upstream), plan.upstream.ifBlank { auto }, { pickingUp = true }, Modifier.opener("tether/upstream"))
                         }
                     }
                 }
@@ -196,8 +198,8 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
         }
         UnappliedSheet(Fn.TETHER, back)
         ChoiceSheet(
-            choosing, "Container", containers.orEmpty(), plan.container,
-            if (ds == null) "Reading Droidspaces' containers" else if (containers == null) "Cannot read Droidspaces' containers" else "No containers are running",
+            choosing, str(R.string.tether_container), containers.orEmpty(), plan.container,
+            if (ds == null) str(R.string.tether_containers_reading) else if (containers == null) str(R.string.tether_containers_unreadable) else str(R.string.tether_containers_none),
             onPick = {
                 set(plan.copy(container = it))
                 choosing = false
@@ -206,7 +208,7 @@ fun TetherScreen(back: () -> Unit, openLog: () -> Unit) {
         )
         // What is set stays listed while it is down, or when the command line set it
         ChoiceSheet(
-            pickingUp, "Upstream", (listOf(auto) + listOfNotNull(plan.upstream.ifBlank { null }) + uplinks).distinct(), plan.upstream.ifBlank { auto }, "",
+            pickingUp, str(R.string.tether_upstream), (listOf(auto) + listOfNotNull(plan.upstream.ifBlank { null }) + uplinks).distinct(), plan.upstream.ifBlank { auto }, "",
             onPick = {
                 set(plan.copy(upstream = if (it == auto) "" else it))
                 pickingUp = false

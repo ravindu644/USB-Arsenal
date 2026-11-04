@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- First launch: Welcome, Root, Controller, Check and Backend (the install). The shell comments
+     are typed after "# " the app adds itself, so they stay lowercase as a shell comment would -->
+<resources>
+    <!-- Welcome: one line beside each function's sprite, then the key that starts setup -->
+    <string name="setup_feature_storage">boot an iso or share a disk</string>
+    <string name="setup_feature_tether">network over the usb cable</string>
+    <string name="setup_feature_hid">keyboard and mouse on the host</string>
+    <string name="setup_get_started">Get started</string>
+
+    <!-- Root, Controller and Check: the key to the next step -->
+    <string name="setup_next">Next</string>
+
+    <!-- Root: the screen's title, the shell comment while su is asked, and the one once it said yes -->
+    <string name="setup_title_root">Root</string>
+    <string name="setup_root_asking">checking root access</string>
+    <string name="setup_root_granted">root access granted !</string>
+    <!-- The shade over every screen while the app has no root; the line break is where it wraps -->
+    <string name="setup_no_root">Grant root, then\nreopen the app</string>
+
+    <!-- Check: the screen's title, the shell comment above usb-arsenal check, and the key that runs it again -->
+    <string name="setup_title_check">Check</string>
+    <string name="setup_check_comment">checking this kernel for usb arsenal</string>
+    <string name="setup_recheck">Recheck</string>
+    <!-- Under check's output when the app ships no binary for this phone. %1$s is the CPU ABI, e.g. arm64-v8a -->
+    <string name="setup_check_no_binary">no usb-arsenal binary for %1$s</string>
+    <!-- Under check's output when it stopped without saying why -->
+    <string name="setup_check_failed">check failed</string>
+
+    <!-- Backend (the install): the screen's title and the shell comments above the installer -->
+    <string name="setup_title_backend">Backend</string>
+    <!-- %1$s is the installed version, %2$s the one this app brings -->
+    <string name="setup_install_update">update %1$s → %2$s</string>
+    <!-- %1$s is the version, %2$s the CPU architecture, e.g. aarch64 -->
+    <string name="setup_install_version">usb-arsenal %1$s for %2$s</string>
+    <string name="setup_install_gadget_stays">the gadget stays up while it updates</string>
+    <!-- The label Android gives the copied install log -->
+    <string name="setup_install_clip">install log</string>
+
+    <!-- The installer's own lines, after a [+], [-] or [!] the app adds; the commands' output between them is not translated -->
+    <!-- %1$s is the CPU ABI, e.g. arm64-v8a -->
+    <string name="setup_installer_no_binary">No usb-arsenal binary for %1$s</string>
+    <!-- %1$s is the architecture, e.g. aarch64 -->
+    <string name="setup_installer_arch">Device architecture: %1$s</string>
+    <!-- %1$s is a folder on the phone -->
+    <string name="setup_installer_binary">Installing the binary in %1$s</string>
+    <!-- quacky is the HID typing engine's name. %1$s is a folder on the phone -->
+    <string name="setup_installer_quacky">Installing quacky in %1$s</string>
+    <!-- %1$s is a folder on the phone -->
+    <string name="setup_installer_module">Installing the boot module in %1$s</string>
+    <string name="setup_installer_installed">Installed</string>
+    <string name="setup_installer_check_failed">Installed, but the check after it failed</string>
+    <string name="setup_installer_reboot">Reboot to load the SELinux rule</string>
+    <string name="setup_installer_timed_out">Timed out</string>
+
+    <!-- Controller: shown on a phone with more than one USB controller -->
+    <string name="setup_title_controller">Controller</string>
+    <string name="setup_controller_help">This phone has more than one USB controller. Pick the one your cable is in.</string>
+    <!-- Under each controller's kernel state, what that state means -->
+    <string name="setup_udc_configured">a computer is using it</string>
+    <string name="setup_udc_suspended">plugged in, the computer is asleep</string>
+    <string name="setup_udc_plugged">plugged in, not set up by a computer</string>
+    <string name="setup_udc_unplugged">nothing plugged in</string>
+</resources>

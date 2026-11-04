@@ -1,11 +1,15 @@
 package com.usbarsenal.app.backend
 
+import com.usbarsenal.app.XmlStrings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 // The JSON below is what the a166p printed with HID, an RW image and an NCM tether live, then idle
 class ParsersTest {
+    // The strings these check are read from res/values, as the app reads them
+    init { XmlStrings.install() }
+
     @Test
     fun liveStatus() {
         val s = parseStatus(

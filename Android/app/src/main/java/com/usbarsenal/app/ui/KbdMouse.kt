@@ -78,6 +78,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.usbarsenal.app.R
+import com.usbarsenal.app.str
 import com.usbarsenal.app.backend.hidWrite
 import com.usbarsenal.app.lcd.dashes
 import com.usbarsenal.app.lcd.Dither
@@ -363,7 +365,7 @@ fun KbdMouseScreen(back: () -> Unit) {
                 trackpad(Modifier.weight(1f).systemGestureExclusion(), null)
                 Row(horizontalArrangement = Arrangement.spacedBy(Lcd.tight), verticalAlignment = Alignment.CenterVertically) {
                     Key(
-                        "Leave full screen",
+                        str(R.string.keyboard_leave_full_screen),
                         Modifier.width(56.dp),
                         icon = Sprites.Collapse,
                         padding = 0.dp,
@@ -373,8 +375,8 @@ fun KbdMouseScreen(back: () -> Unit) {
             }
         } else Screen(scroll = tab == 0 && short) {
             Top { BackKey() }
-            Title("Keys + mouse")
-            Segs(listOf("Mouse", "Keys"), tab, { tab = it })
+            Title(str(R.string.keyboard_title))
+            Segs(listOf(str(R.string.keyboard_tab_mouse), str(R.string.keyboard_tab_keys)), tab, { tab = it })
             if (tab == 0) {
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     // The pad takes what L M R, the rule, Speed and Natural scroll leave, up to the
@@ -390,10 +392,10 @@ fun KbdMouseScreen(back: () -> Unit) {
                         trackpad(Modifier.height(padHeight), if (on) ({ wantFull = true }) else null)
                         MouseButtons(dragBit or flashBit) { bit, down -> click(bit, down) }
                         Column(verticalArrangement = Arrangement.spacedBy(Lcd.section)) {
-                            Group("Configure")
+                            Group(str(R.string.keyboard_configure))
                             val speed = HidSetup.speed
-                            Slider("Speed", speed, 1..16, if (speed % 4 == 0) "${speed / 4}.0x" else "${speed / 4f}x", { HidSetup.speed(it) })
-                            Kv("Natural scroll") { Dip(HidSetup.natural, { HidSetup.natural(it) }, "Natural scroll") }
+                            Slider(str(R.string.keyboard_speed), speed, 1..16, if (speed % 4 == 0) "${speed / 4}.0x" else "${speed / 4f}x", { HidSetup.speed(it) })
+                            Kv(str(R.string.keyboard_natural_scroll)) { Dip(HidSetup.natural, { HidSetup.natural(it) }, str(R.string.keyboard_natural_scroll)) }
                         }
                     }
                 }
@@ -498,7 +500,7 @@ private fun Trackpad(
             }
             if (onFull != null) {
                 Key(
-                    "Full screen",
+                    str(R.string.keyboard_full_screen),
                     Modifier.padding(6.dp).size(Lcd.touch),
                     icon = Sprites.Expand,
                     padding = 0.dp,
@@ -617,7 +619,7 @@ private fun KeysTab(text: String, onText: (String) -> Unit, mods: Int, onMod: (I
             KeyGrid(TABLE, mods, onMod, onKey)
             KeyGrid(listOf(listOf("", "UP", ""), listOf("LEFT", "DOWN", "RIGHT")), mods, onMod, onKey)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Type", LcdType.labelStrong, Modifier.height(TYPE_LABEL.dp))
+                Text(str(R.string.keyboard_type), LcdType.labelStrong, Modifier.height(TYPE_LABEL.dp))
                 Input(
                     text,
                     { input ->
@@ -681,4 +683,4 @@ private fun KeyGrid(rows: List<List<String>>, mods: Int, onMod: (Int) -> Unit, o
 
 // HID off: the page shaded, Pin asking for HID first, or saying this kernel has none, as Home's row does
 @Composable
-private fun HidOff(kernelHas: Boolean) = Shade(if (kernelHas) "Enable HID on Home\nto use this page" else "No HID in\nthis kernel") { Pin(3.dp) }
+private fun HidOff(kernelHas: Boolean) = Shade(if (kernelHas) str(R.string.keyboard_hid_off) else str(R.string.keyboard_no_hid)) { Pin(3.dp) }

@@ -691,3 +691,9 @@ Tick a box only when the item is merged and verified as described in its phase.
   creates the second instance and `tether` uses RNDIS; `check` reports NCM as working while
   tether's own instance holds the device. `kernel-patches/4.14/sm6250/0001` counts the
   instances and adds the marker. It applies to the curtana tree but is not built or run yet.
+- 2026-11-04: Every string the app shows moved into `res/values/strings_<screen>.xml` (278
+  strings, 3 plurals, 13 files), one Weblate component a file; Kotlin reads them through `str()`
+  and `plural()`, the JVM tests through `XmlStrings`. The English text is unchanged.
+  `generateLocaleConfig` puts the app in Android 13's per-app language list once a translation
+  lands. Checked by a script (aapt's escapes, every id defined and used, argument counts, imports),
+  not yet built: there is no SDK in the session, so CI's release build is the first compile.

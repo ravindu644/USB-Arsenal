@@ -1,5 +1,6 @@
 package com.usbarsenal.app.ui
 
+import com.usbarsenal.app.XmlStrings
 import com.usbarsenal.app.backend.Capabilities
 import com.usbarsenal.app.backend.GadgetStatus
 import com.usbarsenal.app.backend.HidNode
@@ -12,6 +13,9 @@ import org.junit.Test
 
 // Home's rows say what status --json says, and Storage's switch starts every pick in one command
 class GadgetTest {
+    // The strings these check are read from res/values, as the app reads them
+    init { XmlStrings.install() }
+
     private val live = GadgetStatus(
         version = "1.2.0", udc = "11201000.usb0", udcState = "configured", bound = true,
         storage = listOf(Lun(0, "/sdcard/USB-Arsenal/Win11.iso", "dvd", "ro"), Lun(1, "", "", "")),

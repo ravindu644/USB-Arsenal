@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- HID: the keyboard and mouse the host sees, and the keyboard's poll interval -->
+<resources>
+    <string name="hid_title">HID</string>
+
+    <!-- The cards into Keys + mouse and Quacky; the line under the first shows the device
+         nodes while HID runs, this text otherwise -->
+    <string name="hid_keys_card">Keyboard and mouse</string>
+    <string name="hid_keys_card_off">a trackpad and keys</string>
+    <!-- Under Quacky, the name of the typing engine -->
+    <string name="hid_quacky_card">a script that types</string>
+
+    <!-- How often the host polls the keyboard, set with the - and + keys -->
+    <string name="hid_interval">Interval</string>
+    <!-- On a kernel that cannot change it. %1$s is the period in milliseconds: 1, or 10 on a USB 1.1 host -->
+    <string name="hid_interval_fixed">%1$s ms, fixed by this kernel</string>
+    <!-- What a screen reader says for the - and + keys -->
+    <string name="hid_interval_shorter">Shorter interval</string>
+    <string name="hid_interval_longer">Longer interval</string>
+</resources>

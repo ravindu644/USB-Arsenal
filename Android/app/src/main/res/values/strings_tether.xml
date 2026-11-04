@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tether: the phone's internet for the host over USB, or the link handed to a container -->
+<resources>
+    <string name="tether_title">Tether</string>
+
+    <!-- The chain: Host, the wire, Phone, the wire, then Upstream or the container -->
+    <string name="tether_host">Host</string>
+    <string name="tether_phone">Phone</string>
+    <!-- Under Phone while tether is not running, where its interface would be -->
+    <string name="tether_off">off</string>
+    <!-- The wire from the phone onward: to a container, with no network side, or through NAT -->
+    <string name="tether_virtual_cable">virtual cable</string>
+    <string name="tether_no_network_side">no network side</string>
+    <string name="tether_masquerade">masquerade</string>
+    <!-- Under the container's node while it has not taken the link yet -->
+    <string name="tether_waiting">waiting</string>
+    <!-- The interface the phone's internet leaves by: a node in the chain, a row and its sheet -->
+    <string name="tether_upstream">Upstream</string>
+    <!-- The Upstream choice that leaves the pick to usb-arsenal -->
+    <string name="tether_upstream_auto">auto</string>
+    <!-- The traffic counters: sent and received -->
+    <string name="tether_tx">Tx</string>
+    <string name="tether_rx">Rx</string>
+
+    <!-- The settings the next start brings up -->
+    <string name="tether_configure">Configure</string>
+    <string name="tether_gateway">Gateway</string>
+    <!-- What a screen reader says for the Gateway switch -->
+    <string name="tether_gateway_mode">Gateway mode</string>
+    <!-- Beside the Gateway switch when Droidspaces, which runs the containers, is not installed -->
+    <string name="tether_no_droidspaces">no droidspaces</string>
+    <!-- A Droidspaces container: the chain's node before one is picked, the row and its sheet -->
+    <string name="tether_container">Container</string>
+    <!-- %1$s is the container's name -->
+    <string name="tether_container_not_running">%1$s · not running</string>
+    <!-- The interface inside the container that takes the link -->
+    <string name="tether_its_iface">Its iface</string>
+    <string name="tether_host_ipv4">Host IPv4</string>
+    <string name="tether_host_ipv6">Host IPv6</string>
+    <!-- Host IPv4 with a gateway: the container gives the host its address -->
+    <string name="tether_by_container">by the container</string>
+    <!-- The switch's label, and what a screen reader says for it -->
+    <string name="tether_dhcp_nat">DHCP and NAT</string>
+    <string name="tether_no_nat">no nat in this kernel</string>
+    <string name="tether_address">Address</string>
+    <string name="tether_dns">DNS</string>
+
+    <!-- Under a field while what is typed cannot be used -->
+    <string name="tether_iface_problem">an interface name, up to 15 characters</string>
+    <string name="tether_address_problem">a host address with a /8 to /30 prefix</string>
+    <string name="tether_dns_problem">IPv4 addresses, comma-separated, 127 characters at most</string>
+
+    <!-- The Container sheet with nothing to pick -->
+    <string name="tether_containers_reading">Reading Droidspaces\' containers</string>
+    <string name="tether_containers_unreadable">Cannot read Droidspaces\' containers</string>
+    <string name="tether_containers_none">No containers are running</string>
+</resources>

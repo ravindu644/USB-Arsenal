@@ -1,6 +1,7 @@
 package com.usbarsenal.app.ui
 
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -15,6 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.core.content.edit
+import com.usbarsenal.app.R
+import com.usbarsenal.app.plural
+import com.usbarsenal.app.str
 import com.usbarsenal.app.backend.Backend
 import com.usbarsenal.app.backend.BackendState
 import com.usbarsenal.app.backend.CHANGE_TIMEOUT_MS
@@ -60,19 +64,25 @@ fun says(args: List<String>): String {
     val verb = args.getOrNull(1)
     val name = if (what == "hid") "HID" else what
     return when {
-        what == "stop" -> "stopping everything"
-        what == "identity" && verb == "unset" -> "back to built-in identity"
-        what == "identity" -> "switching identity"
-        verb == "eject" -> "ejecting a drive"
-        verb == "start" -> "starting $name"
-        verb == "apply" -> "applying $name"
-        verb == "stop" -> "stopping $name"
+        what == "stop" -> str(R.string.gadget_says_stop_all)
+        what == "identity" && verb == "unset" -> str(R.string.gadget_says_identity_unset)
+        what == "identity" -> str(R.string.gadget_says_identity_set)
+        verb == "eject" -> str(R.string.gadget_says_eject)
+        verb == "start" -> str(R.string.gadget_says_starting, name)
+        verb == "apply" -> str(R.string.gadget_says_applying, name)
+        verb == "stop" -> str(R.string.gadget_says_stopping, name)
         else -> args.joinToString(" ")
     }
 }
 
 // The functions Home lists, in its order; [prefix] is their keys' in the setup
-enum class Fn(val label: String, val prefix: String) { STORAGE("Storage", "storage_"), TETHER("Tether", "tether_"), HID("HID", "hid_") }
+enum class Fn(@StringRes val labelRes: Int, val prefix: String) {
+    STORAGE(R.string.gadget_fn_storage, "storage_"),
+    TETHER(R.string.gadget_fn_tether, "tether_"),
+    HID(R.string.gadget_fn_hid, "hid_");
+
+    val label: String get() = str(labelRes)
+}
 
 // What a log on screen keeps; the file keeps the rest, and the cache the newest few hundred
 const val LOG_KEEP = 2_000
@@ -204,7 +214,7 @@ object Gadget {
             batch.forEach { (k, v) -> if (edits[k] == v) edits.remove(k) }
             Cache.edits = edits
         } else {
-            fault = Fault(null, r.err.lastOrNull()?.let(::plain) ?: "[-] setup set failed (exit ${r.code})")
+            fault = Fault(null, r.err.lastOrNull()?.let(::plain) ?: ("[-] " + str(R.string.gadget_setup_set_failed, r.code)))
             if (r.err.isEmpty()) note(fault!!.message)
             fails++
             // Refused, they are dropped: the setup stays what the backend holds, and a batch it
@@ -284,7 +294,7 @@ object Gadget {
     fun run(fn: Fn?, vararg args: String, quiet: Boolean = false, onDone: (Boolean) -> Unit = {}): Boolean {
         if (busy != null) {
             // Refused, as a tap that lands in the beat before the keys are held: say so
-            fault = Fault(fn, "[-] Another command is running", identity = args.firstOrNull() == "identity")
+            fault = Fault(fn, "[-] " + str(R.string.gadget_another_running), identity = args.firstOrNull() == "identity")
             note(fault!!.message)
             fails++
             return false
@@ -301,8 +311,8 @@ object Gadget {
             if (!r.ok) {
                 // The backend logged what it said itself; what it could not say is noted here
                 val why = when {
-                    r.timedOut -> "[-] Timed out (${CHANGE_TIMEOUT_MS / 1000}s)".also(::note)
-                    else -> r.err.lastOrNull()?.let(::plain) ?: "[-] Failed (exit ${r.code})".also(::note)
+                    r.timedOut -> ("[-] " + str(R.string.gadget_timed_out_after, CHANGE_TIMEOUT_MS / 1000)).also(::note)
+                    else -> r.err.lastOrNull()?.let(::plain) ?: ("[-] " + str(R.string.common_failed_exit, r.code)).also(::note)
                 }
                 fault = Fault(fn, why, identity = args.firstOrNull() == "identity")
                 fails++
@@ -343,9 +353,9 @@ fun canApply(fn: Fn) = Gadget.busy == null && !Gadget.backend.holds() && (starta
 
 // What applying does, for the sheet that asks: the consequence on the host
 private fun applyNote(fn: Fn) = when (fn) {
-    Fn.STORAGE -> "The host still sees the drives as they were. Apply loads your changes, and may reconnect every drive; Discard puts your picks back."
-    Fn.TETHER -> "Tether still runs as it was. Apply reconnects the gadget, every drive and function with it, for a moment; Discard puts your settings back."
-    Fn.HID -> "HID still runs as it was. Apply reconnects the gadget, every drive and function with it, for a moment."
+    Fn.STORAGE -> str(R.string.gadget_apply_note_storage)
+    Fn.TETHER -> str(R.string.gadget_apply_note_tether)
+    Fn.HID -> str(R.string.gadget_apply_note_hid)
 }
 
 /*
@@ -371,19 +381,19 @@ fun NotAppliedSheet(pending: Boolean, note: String, canApply: Boolean, onDiscard
         onDismiss = { asking = false },
         entry = discardKey,
         footer = {
-            Key("Discard", Modifier.weight(1f).focusRequester(discardKey)) {
+            Key(str(R.string.common_discard), Modifier.weight(1f).focusRequester(discardKey)) {
                 asking = false
                 onDiscard()
                 back()
             }
-            Key("Apply", Modifier.weight(1f), primary = true, enabled = canApply) {
+            Key(str(R.string.common_apply), Modifier.weight(1f), primary = true, enabled = canApply) {
                 asking = false
                 onApply()
                 back()
             }
         },
     ) {
-        Title("Not applied")
+        Title(str(R.string.gadget_not_applied))
         Note(note)
     }
 }
@@ -421,41 +431,41 @@ fun GadgetStatus?.isOn(fn: Fn) = this != null && when (fn) {
 fun rowLines(fn: Fn, status: GadgetStatus?, caps: Capabilities?, busy: Busy?): Pair<String, String> {
     if (!caps.has(fn)) {
         return when (fn) {
-            Fn.STORAGE -> "no mass storage in this kernel" to "CONFIG_USB_CONFIGFS_MASS_STORAGE"
-            Fn.TETHER -> "no ncm or rndis in this kernel" to "CONFIG_USB_CONFIGFS_NCM"
-            Fn.HID -> "no hid in this kernel" to "CONFIG_USB_CONFIGFS_F_HID"
+            Fn.STORAGE -> str(R.string.gadget_row_no_storage) to "CONFIG_USB_CONFIGFS_MASS_STORAGE"
+            Fn.TETHER -> str(R.string.gadget_row_no_tether) to "CONFIG_USB_CONFIGFS_NCM"
+            Fn.HID -> str(R.string.gadget_row_no_hid) to "CONFIG_USB_CONFIGFS_F_HID"
         }
     }
-    if (busy != null && busy.fn == fn) return (if (busy.stopping) "stopping" else "starting") to busy.typed
+    if (busy != null && busy.fn == fn) return str(if (busy.stopping) R.string.gadget_row_stopping else R.string.gadget_row_starting) to busy.typed
     val on = status.isOn(fn)
     return when (fn) {
         Fn.STORAGE -> if (on) {
             val luns = status!!.storage.filter { it.file.isNotEmpty() }.map { "LUN${it.lun} ${it.file.substringAfterLast('/')} · ${it.mode}" }
-            if (luns.isEmpty()) "${status.storage.size} empty drive${if (status.storage.size == 1) "" else "s"}" to "no medium" else luns[0] to luns.drop(1).joinToString("  ")
+            if (luns.isEmpty()) plural(R.plurals.gadget_row_empty_drives, status.storage.size) to str(R.string.gadget_row_no_medium) else luns[0] to luns.drop(1).joinToString("  ")
         } else {
-            "ISOs and disk images" to "as drives for the host"
+            str(R.string.gadget_row_storage_off_1) to str(R.string.gadget_row_storage_off_2)
         }
         Fn.TETHER -> {
             val t = status?.tether
             if (t == null) {
-                "this phone's internet" to "for the host, over USB"
+                str(R.string.gadget_row_tether_off_1) to str(R.string.gadget_row_tether_off_2)
             } else {
                 val ip = t.address.substringBefore('/')
                 val line1 = hostOf(t.address)?.let { "${t.function} $ip → .${it.substringAfterLast('.')}" } ?: "${t.function} ${t.iface}"
                 val line2 = when {
-                    t.gateway -> "gateway ${t.gatewayContainer}".trimEnd()
-                    !t.running -> "no network side"
-                    t.upstream.isNotEmpty() -> "via ${t.upstream}"
-                    else -> "no upstream yet"
+                    t.gateway -> str(R.string.gadget_row_gateway, t.gatewayContainer).trimEnd()
+                    !t.running -> str(R.string.gadget_row_no_network_side)
+                    t.upstream.isNotEmpty() -> str(R.string.gadget_row_via, t.upstream)
+                    else -> str(R.string.gadget_row_no_upstream)
                 }
                 line1 to line2
             }
         }
         Fn.HID -> if (on) {
             val node = { f: String -> status!!.hid.firstOrNull { it.function == f }?.node.orEmpty() }
-            "keyboard ${node("keyboard")}" to "mouse ${node("mouse")}"
+            str(R.string.gadget_row_keyboard, node("keyboard")) to str(R.string.gadget_row_mouse, node("mouse"))
         } else {
-            "a keyboard and a mouse" to "for the host"
+            str(R.string.gadget_row_hid_off_1) to str(R.string.gadget_row_hid_off_2)
         }
     }
 }
@@ -597,7 +607,7 @@ object IdentitySetup {
 fun activeProfile(profile: Map<String, String>): String? = profile["profile"]?.ifEmpty { null }
 
 // The name Settings shows for it: the file's, without .conf
-fun profileName(profile: Map<String, String>) = activeProfile(profile)?.substringAfterLast('/')?.removeSuffix(".conf") ?: "Built-in"
+fun profileName(profile: Map<String, String>) = activeProfile(profile)?.substringAfterLast('/')?.removeSuffix(".conf") ?: str(R.string.common_built_in)
 
 // A pick waits only while the host sees the gadget: otherwise it is set at once, with no replug
 fun identityPending(bound: Boolean, chosen: String?, active: String?, edited: Boolean) = bound && (chosen != active || edited)

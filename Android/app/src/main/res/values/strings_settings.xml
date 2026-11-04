@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings and Fonts. A section heading is drawn uppercase whatever it says -->
+<resources>
+    <!-- Identity section: the row that opens Identity, beside the profile in force -->
+    <string name="settings_section_identity">Identity</string>
+    <string name="settings_profile">Profile</string>
+
+    <!-- USB section, on a phone with more than one controller -->
+    <string name="settings_section_usb">USB</string>
+    <!-- The row and the sheet that picks the controller -->
+    <string name="settings_controller">Controller</string>
+    <!-- The row's value when no controller is picked -->
+    <string name="settings_controller_none">none</string>
+    <!-- Under the row while the gadget is bound, which is when the controller cannot change -->
+    <string name="settings_controller_bound">stop all to change it</string>
+    <!-- The sheet when no controller was found -->
+    <string name="settings_controller_empty">No controllers</string>
+
+    <!-- Backend section -->
+    <string name="settings_section_backend">Backend</string>
+    <!-- The switch that puts usb-arsenal on PATH -->
+    <string name="settings_system_path">System path</string>
+    <!-- Under the switch once it was flipped: the link is read at boot -->
+    <string name="settings_path_next_boot">applies from the next boot</string>
+    <!-- Under the switch when it is turned on with no backend installed -->
+    <string name="settings_path_install_first">Install the backend first</string>
+    <!-- The key that runs Check again, and the one that installs the backend again -->
+    <string name="settings_requirements">Requirements</string>
+    <string name="settings_reinstall">Reinstall</string>
+
+    <!-- App section: the app's own switches -->
+    <string name="settings_section_app">App</string>
+    <string name="settings_motion">Motion</string>
+    <string name="settings_haptics">Haptics</string>
+    <!-- The row and the sheet that pick the colour theme -->
+    <string name="settings_theme">Theme</string>
+    <!-- Beside each theme in the sheet: a backlit panel with dark pixels, or dark glass with lit pixels -->
+    <string name="settings_theme_lit">lit</string>
+    <string name="settings_theme_negative">negative</string>
+
+    <!-- Credits section: the rows for the fonts' licence and the touchpad's gesture rules -->
+    <string name="settings_section_credits">Credits</string>
+    <string name="settings_fonts">Fonts</string>
+    <string name="settings_touchpad">Touchpad</string>
+
+    <!-- About section: the app's version, and where its source is -->
+    <string name="settings_section_about">About</string>
+    <string name="settings_about_app">App</string>
+    <string name="settings_source">Source</string>
+</resources>

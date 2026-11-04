@@ -3,6 +3,8 @@ package com.usbarsenal.app.backend
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.usbarsenal.app.R
+import com.usbarsenal.app.str
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -205,16 +207,16 @@ suspend fun rootInfo(): Result<String> {
     // The uid decides: the exit code is su -v's, which a root shell without su on its PATH fails
     return when {
         // A root shell with no su on its PATH: what it said, or that there is none
-        r.out.firstOrNull() == "0" -> Result.success(r.out.getOrNull(1) ?: r.err.lastOrNull()?.takeIf(String::isNotBlank) ?: "(no su)")
-        r.code == NO_ROOT && r.out.isEmpty() -> Result.failure(SecurityException("su: inaccessible or not found"))
-        r.timedOut -> Result.failure(SecurityException("su: no answer in ${timeoutMs / 1000}s"))
-        else -> Result.failure(SecurityException(r.err.lastOrNull() ?: "su: permission denied"))
+        r.out.firstOrNull() == "0" -> Result.success(r.out.getOrNull(1) ?: r.err.lastOrNull()?.takeIf(String::isNotBlank) ?: str(R.string.gadget_su_none))
+        r.code == NO_ROOT && r.out.isEmpty() -> Result.failure(SecurityException(str(R.string.gadget_su_not_found)))
+        r.timedOut -> Result.failure(SecurityException(str(R.string.gadget_su_no_answer, timeoutMs / 1000)))
+        else -> Result.failure(SecurityException(r.err.lastOrNull() ?: str(R.string.gadget_su_denied)))
     }
 }
 
 // check exits 1 when a requirement is missing and still prints the report, so stdout decides
 private inline fun <T> RootResult.json(parse: (String) -> T): Result<T> = runCatching {
-    if (out.isEmpty()) error(err.joinToString("\n").ifEmpty { if (timedOut) "timed out" else "exit $code" })
+    if (out.isEmpty()) error(err.joinToString("\n").ifEmpty { if (timedOut) str(R.string.gadget_read_timed_out) else str(R.string.gadget_read_exit, code) })
     parse(out.joinToString("\n"))
 }
 
