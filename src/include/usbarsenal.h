@@ -59,7 +59,7 @@
 #define UA_F_KBD "hid.ua_kbd"
 #define UA_F_MOUSE "hid.ua_mouse"
 #define UA_F_WEBCAM "uvc.ua_webcam"
-#define UA_WEBCAM_MAX_JPEG_BYTES (2u * 1024u * 1024u)
+#define UA_WEBCAM_MAX_JPEG_BYTES (640u * 480u * 2u)
 
 enum ua_fn {
   UA_FN_STORAGE,
@@ -231,6 +231,7 @@ struct ua_setup {
   unsigned hid_interval;
   char webcam_source[PATH_MAX];
   char webcam_image[PATH_MAX];
+  char webcam_size[8], webcam_aspect[8], webcam_quality[8], webcam_fps[8];
 };
 
 void ua_setup_load(struct ua_setup *s);

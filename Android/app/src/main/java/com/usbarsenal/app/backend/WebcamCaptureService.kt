@@ -73,6 +73,13 @@ class WebcamCaptureService : LifecycleService() {
     @Volatile private var source = ""
     @Volatile private var outputPath = ""
     @Volatile private var rotation = 0
+    @Volatile private var frameWidth = 640
+    @Volatile private var frameHeight = 480
+    @Volatile private var frameSize = 640
+    @Volatile private var frameAspect = "auto"
+    @Volatile private var jpegQuality = 85
+    @Volatile private var frameIntervalMs = 33L
+    @Volatile private var frameByteLimit = MAX_FRAME_BYTES
     private var lastFrameAt = 0L
     @Volatile private var captureFailed = false
     @Volatile private var captureEpoch = 0
@@ -117,6 +124,16 @@ class WebcamCaptureService : LifecycleService() {
         source = intent.getStringExtra(EXTRA_SOURCE).orEmpty()
         val input = intent.getStringExtra(EXTRA_INPUT).orEmpty()
         outputPath = intent.getStringExtra(EXTRA_OUTPUT).orEmpty()
+        frameSize = intent.getIntExtra(EXTRA_SIZE, 1280).let {
+            when { it >= 1920 -> 1920; it >= 1280 -> 1280; else -> 640 }
+        }
+        frameAspect = intent.getStringExtra(EXTRA_ASPECT).orEmpty().ifEmpty { "auto" }
+        frameWidth = frameSize
+        frameHeight = if (frameAspect == "4:3") frameSize * 3 / 4 else frameSize * 9 / 16
+        jpegQuality = intent.getIntExtra(EXTRA_QUALITY, 85).coerceIn(30, 95)
+        val fps = intent.getIntExtra(EXTRA_FPS, 30).coerceIn(15, 30)
+        frameIntervalMs = 1000L / fps
+        frameByteLimit = MAX_FRAME_BYTES * 12 / fps
         captureFailed = false
         val epoch = ++captureEpoch
         lastFrameAt = 0L
@@ -154,7 +171,7 @@ class WebcamCaptureService : LifecycleService() {
             if (!isCurrent(epoch)) return@addListener
             try {
                 val resolution = ResolutionSelector.Builder()
-                    .setResolutionStrategy(ResolutionStrategy(android.util.Size(640, 480), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER))
+                    .setResolutionStrategy(ResolutionStrategy(android.util.Size(frameWidth, frameHeight), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER))
                     .build()
                 val analysis = ImageAnalysis.Builder()
                     .setResolutionSelector(resolution)
@@ -224,7 +241,7 @@ class WebcamCaptureService : LifecycleService() {
 
     private fun startPlayback(input: String, epoch: Int) {
         val uri = Uri.parse(input)
-        val reader = ImageReader.newInstance(640, 480, PixelFormat.RGBA_8888, 2)
+        val reader = ImageReader.newInstance(frameWidth, frameHeight, PixelFormat.RGBA_8888, 2)
         imageReader = reader
         reader.setOnImageAvailableListener({ images ->
             val image = images.acquireLatestImage() ?: return@setOnImageAvailableListener
@@ -287,7 +304,7 @@ class WebcamCaptureService : LifecycleService() {
 
     private fun shouldEncode(epoch: Int): Boolean {
         val now = SystemClock.elapsedRealtime()
-        if (now - lastFrameAt < FRAME_INTERVAL_MS || !isCurrent(epoch)) return false
+        if (now - lastFrameAt < frameIntervalMs || !isCurrent(epoch)) return false
         lastFrameAt = now
         return true
     }
@@ -307,34 +324,45 @@ class WebcamCaptureService : LifecycleService() {
                 true,
             )
             oriented = rotated.takeIf { it !== input }
-            val normalized = Bitmap.createBitmap(FRAME_WIDTH, FRAME_HEIGHT, Bitmap.Config.ARGB_8888)
+            val ratio = when (frameAspect) {
+                "4:3" -> 4f / 3f
+                "16:9" -> 16f / 9f
+                else -> if (rotated.width.toFloat() / rotated.height < 1.55f) 4f / 3f else 16f / 9f
+            }
+            if (ratio < 1.5f) {
+                frameWidth = frameSize
+                frameHeight = frameWidth * 3 / 4
+            } else {
+                frameWidth = frameSize
+                frameHeight = frameSize * 9 / 16
+            }
+            val normalized = Bitmap.createBitmap(frameWidth, frameHeight, Bitmap.Config.ARGB_8888)
             frame = normalized
             Canvas(normalized).apply {
-                drawColor(Color.BLACK)
-                val scale = minOf(FRAME_WIDTH.toFloat() / rotated.width, FRAME_HEIGHT.toFloat() / rotated.height)
+                val scale = maxOf(frameWidth.toFloat() / rotated.width, frameHeight.toFloat() / rotated.height)
                 val width = rotated.width * scale
                 val height = rotated.height * scale
+                val left = (frameWidth - width) / 2
+                val top = (frameHeight - height) / 2
+                val save = save()
+                clipRect(0f, 0f, frameWidth.toFloat(), frameHeight.toFloat())
                 drawBitmap(
                     rotated,
                     null,
-                    RectF(
-                        (FRAME_WIDTH - width) / 2,
-                        (FRAME_HEIGHT - height) / 2,
-                        (FRAME_WIDTH + width) / 2,
-                        (FRAME_HEIGHT + height) / 2,
-                    ),
+                    RectF(left, top, left + width, top + height),
                     Paint(Paint.FILTER_BITMAP_FLAG),
                 )
+                restoreToCount(save)
             }
             val bytes = ByteArrayOutputStream()
-            var quality = 85
+            var quality = jpegQuality
             do {
                 bytes.reset()
                 if (!frame.compress(Bitmap.CompressFormat.JPEG, quality, bytes))
                     throw IOException("Could not encode a webcam frame")
                 quality -= 10
-            } while (bytes.size() > MAX_FRAME_BYTES && quality >= 45)
-            if (bytes.size() > MAX_FRAME_BYTES) throw IOException("The webcam frame is too large")
+            } while (bytes.size() > frameByteLimit && quality >= 35)
+            if (bytes.size() > frameByteLimit) throw IOException("The webcam frame is too large")
             if (!isCurrent(epoch)) return
 
             val file = File(outputPath)
@@ -482,13 +510,14 @@ class WebcamCaptureService : LifecycleService() {
         const val EXTRA_SOURCE = "source"
         const val EXTRA_INPUT = "input"
         const val EXTRA_OUTPUT = "output"
+        const val EXTRA_SIZE = "size"
+        const val EXTRA_ASPECT = "aspect"
+        const val EXTRA_QUALITY = "quality"
+        const val EXTRA_FPS = "fps"
         const val EXTRA_PROJECTION_RESULT = "projection_result"
         const val EXTRA_PROJECTION_DATA = "projection_data"
         private const val CHANNEL_ID = "webcam_capture"
         private const val NOTIFICATION_ID = 34
-        private const val FRAME_WIDTH = 640
-        private const val FRAME_HEIGHT = 480
-        private const val MAX_FRAME_BYTES = 2 * 1024 * 1024
-        private const val FRAME_INTERVAL_MS = 66
+        private const val MAX_FRAME_BYTES = 640 * 480 * 2
     }
 }

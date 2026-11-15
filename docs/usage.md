@@ -78,7 +78,11 @@ usb-arsenal setup revert [storage|tether|hid|webcam]  # back to what runs
 | `tether_address`, `tether_dns`, `tether_upstream` | as the options; empty: the profile's |
 | `hid_interval` | 1 to 255; `0`: the kernel's default |
 | `webcam_source` | `image`, `camera:front`, `camera:back`, `screen`, `video` or `stream` |
-| `webcam_image` | Absolute path to the current 640x480 JPEG frame; empty: no source |
+| `webcam_image` | Absolute path to the current JPEG frame; empty: no source |
+| `webcam_size` | Long edge: `640`, `1280` or `1920` pixels |
+| `webcam_aspect` | `auto`, `4:3` or `16:9`; auto follows the source and crops to fill |
+| `webcam_quality` | JPEG quality target: `30`, `40`, `50`, `60`, `70`, `80`, `90` or `95` |
+| `webcam_fps` | `15`, `20`, `24`, `25` or `30`; higher rates reduce the per-frame JPEG budget |
 
 `setup.conf` is `key=value` lines with `#` comments, the identity profile's format. Next to it
 the backend keeps `running.conf`, the same keys as the last successful start of each function
@@ -220,16 +224,18 @@ usb-arsenal webcam apply
 usb-arsenal webcam stop
 ```
 
-The backend presents 640x480 JPEG frames as an MJPEG UVC feed, up to 2 MiB per frame. The
-Android app can use a picture, either camera, screen capture, a picked video, or a direct
+The backend presents the selected JPEG dimensions as an MJPEG UVC feed. The Android app can
+use a picture, either camera, screen capture, a picked video, or a direct
 HTTP(S), HLS, DASH or RTSP media URL. Videos and streams play muted; screen capture requires
-fresh consent each time. Sources are fitted to the frame with black bars when needed. The
+fresh consent each time. Auto aspect follows the source; every frame is center-cropped to fill
+the selected shape, so it has no black bars. The encoder targets the selected JPEG quality but
+can lower it to fit the per-frame USB budget. The
 capture service runs in the foreground and stops with Webcam; its notification can stop the
 gadget too. Source controls are disabled while Webcam is bound, so stop it on Home before
 switching sources.
 
-The command line expects an absolute path to an already prepared 640x480 JPEG no larger than
-2 MiB. `start JPEG` saves that path in `webcam_image`; a bare `start` uses the saved setup, and
+The command line expects an absolute path to an already prepared JPEG no larger than 600 KiB
+and 1920x1440 pixels. `start JPEG` saves that path in `webcam_image`; a bare `start` uses the saved setup, and
 `apply` restarts from it. The CLI serves the last frame at that path. It does not start Android's
 camera, screen, video or stream capture service. Direct URLs only are supported, not browser
 pages or DRM-protected media. The app keeps picked video URIs and stream URLs in private

@@ -530,12 +530,18 @@ label (`ncm`, `masquerade`). Label left, value right. Addresses live in the key-
 below, not in the chain.
 
 ### Webcam
-The selected source, `640 × 480 JPEG`, and one line for capture state. `Pick picture` opens the
-system picker and writes a fitted JPEG into the backend workspace. Front and back cameras use
+The selected source, output shape and one line for capture state. Size (640, 1280 or 1920 pixels on
+the long edge), aspect (automatic, 4:3 or 16:9), JPEG quality (30 to 95) and frame rate (15 to
+30 fps) are saved in backend setup. Automatic aspect follows the source; each frame is cropped
+to fill the output. The JPEG byte budget scales down as frame rate rises, protecting the USB
+link and keeping kernel buffers bounded. The encoder can lower quality below its selected
+target when needed. `Pick picture` opens the system picker and writes a JPEG into the backend
+workspace. Front and back cameras use
 CameraX; screen capture asks for fresh system consent; video files and direct HTTP(S), HLS, DASH
 or RTSP URLs play muted through Media3. Video URIs and stream URLs stay in the app's private
-no-backup directory, not root setup or logs. The app scales each source onto black, atomically
-writes the current JPEG frame in its cache, and the UVC feeder reads that file. There is no preview.
+no-backup directory, not root setup or logs. The app scales and center-crops each source,
+atomically writes the current JPEG frame in its cache, and the UVC feeder reads that file. The
+backend advertises the JPEG dimensions and selected frame rate. There is no preview.
 The host sees a repeated still frame for pictures and moving frames for the other sources.
 Source controls are disabled while Webcam is bound; stop it on Home before switching sources.
 The foreground capture service can be paused or resumed while the gadget is off, and its
@@ -988,14 +994,14 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 | Mode segments | `storage start --mode auto\|cdrom\|dvd\|disk\|rw` |
 | LUN strip | `--lun 0-7` |
 | NCM / RNDIS | `tether start --ncm` / `tether start --rndis` |
-| Webcam sources | App-side CameraX camera frames, MediaProjection screen frames, Media3 video and direct HTTP(S)/HLS/DASH/RTSP playback, plus picture decoding; normalized to 640×480 JPEG and atomically written as `webcam_image` |
+| Webcam sources | App-side CameraX camera frames, MediaProjection screen frames, Media3 video and direct HTTP(S)/HLS/DASH/RTSP playback, plus picture decoding; normalized to the selected size and aspect as a bounded JPEG and atomically written as `webcam_image` |
 | Video and stream inputs | App-private no-backup storage; URLs are not written to backend setup or command logs |
 | Webcam output and availability | `webcam start`, `webcam apply`, `webcam stop`; runtime `check` probe `uvc`; `status --json`'s `webcam` source, image and feeder state |
 | Tether chain, Tx, Rx | `status --json`: `tether`'s `iface`, `upstream`, `gateway_*`, `tx_bytes`, `rx_bytes` |
 | Gateway, container, its iface | `--gateway CONTAINER`, `--gateway-iface IFACE`; the containers are `droidspaces show --json`'s `running`, and the gateway shows only with `/data/local/Droidspaces/bin/droidspaces` installed |
 | Tether address, DNS, upstream, DHCP and NAT | `--address CIDR`, `--dns IP[,IP]` (127 characters at most), `--upstream IFACE`, `--no-net`; the upstream's list is app-side, the interfaces a default route leaves by in `ip route show table all` (Droidspaces' rule) |
 | Not applied sheet, Apply, Discard | `status --json`'s `pending`; `storage apply`, `tether apply`, `hid apply`, `webcam apply`; `setup revert <function>` |
-| Each function's setup | `setup set KEY=VALUE` on every edit (one write a beat later), read back as `status --json`'s `setup`; the picks are `storage_lunN=MODE:PATH`, Tether's rows the `tether_*` keys, the interval `hid_interval`, and Webcam's `webcam_source` and `webcam_image` |
+| Each function's setup | `setup set KEY=VALUE` on every edit (one write a beat later), read back as `status --json`'s `setup`; the picks are `storage_lunN=MODE:PATH`, Tether's rows the `tether_*` keys, the interval `hid_interval`, and Webcam's `webcam_source`, `webcam_image`, `webcam_size`, `webcam_aspect`, `webcam_quality` and `webcam_fps` |
 | HID interval | `hid start --interval N`, period 2^(N-1)×125µs, set at start; without the f_hid patch (`check`'s `hid_interval` is 0) it is `1 ms, fixed by this kernel` and the steppers are dead |
 | Keys + mouse, the gamepad | app-side reports (8-byte keyboard, 5-byte mouse), each one write into `hid write NODE SIZE`, one per node, which never blocks on the node and keeps only the newest report while the host reads nothing; key reports are paced two poll periods apart. Speed, Natural scroll and every gesture are app-side too (`Touchpad.kt`, libinput's rules), applied to the reports before they are written; a pinch is Ctrl held on the keyboard node around wheel notches on the mouse node |
 | HID period text | `status --json`'s `speed` (`full-speed` is a USB 1.1 host) and `hid[].interval` |
@@ -1021,8 +1027,8 @@ App-side features, done by the app itself: the Not applied sheet's asking (what 
 the backend's `pending`), the `/sdcard/USB-Arsenal/Disks` image list (by extension: `.iso`,
 `.img`, `.bin`, `.raw`, `.ima`, `.dd`; Pick image refuses any other), Create (a sparse
 image, as `truncate -s` does, or a full one with progress), HID input written to `/dev/hidgN`,
-the webcam's picture, camera, screen, video and direct-stream capture and conversion to
-640×480 JPEG, the Motion and Haptics switches and the Theme pick in Settings, and the profiles folder,
+the webcam's picture, camera, screen, video and direct-stream capture and conversion to the
+selected bounded JPEG shape, the Motion and Haptics switches and the Theme pick in Settings, and the profiles folder,
 `/sdcard/USB-Arsenal/Profiles`, which Identity lists and writes. Settings' System path makes or
 removes `/data/adb/modules/usb-arsenal/system/bin/usb-arsenal`, a link to the workspace binary
 (Droidspaces' `SymlinkInstaller`), which acts at the next boot.

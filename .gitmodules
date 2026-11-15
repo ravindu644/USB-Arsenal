@@ -3,4 +3,4 @@
 	url = https://github.com/ravindu644/Quacky
 [submodule "external/uvc-gadget"]
 	path = external/uvc-gadget
-	url = https://gitlab.freedesktop.org/camera/uvc-gadget
+	url = https://github.com/Onlineraider/uvc-gadget.git

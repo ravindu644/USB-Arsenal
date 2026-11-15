@@ -258,12 +258,21 @@
     <string name="webcam_bad_url">Enter an HTTP, HTTPS or RTSP stream URL</string>
     <string name="webcam_url_too_long">The stream URL is too long</string>
     <string name="webcam_source_on_note">Stop Webcam on Home before changing its source.</string>
-    <string name="webcam_frame_note">Each source is fitted to a 640 × 480 MJPEG frame.</string>
+    <string name="webcam_frame_note">Frames fill the selected shape; higher frame rates reduce the JPEG budget.</string>
     <string name="webcam_notification_channel">Webcam capture</string>
     <string name="webcam_notification_running">Sending frames to USB Arsenal</string>
     <string name="webcam_notification_stop">Stop webcam</string>
     <string name="webcam_no_image">No picture picked</string>
-    <string name="webcam_frame_format">640 × 480 JPEG</string>
+    <string name="webcam_frame_format">%1$d × %2$d JPEG, %3$s fps</string>
+    <string name="webcam_frame_format_auto">Auto aspect, %1$s px, %2$s fps</string>
+    <string name="webcam_resolution">Size</string>
+    <string name="webcam_aspect">Aspect</string>
+    <string name="webcam_aspect_auto">Auto</string>
+    <string name="webcam_quality">Quality</string>
+    <string name="webcam_fps">Frame rate</string>
+    <string name="webcam_setting_value">%1$s  %2$s</string>
+    <string name="webcam_resolution_value">%1$s px</string>
+    <string name="webcam_quality_value">%1$s%%</string>
     <string name="webcam_bad_image">Could not read or convert that picture</string>
     <string name="webcam_copy_failed">Could not copy the picture into the backend workspace</string>
 
