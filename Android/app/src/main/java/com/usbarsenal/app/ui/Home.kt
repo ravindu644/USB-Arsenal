@@ -15,6 +15,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.usbarsenal.app.BuildConfig
 import com.usbarsenal.app.R
@@ -22,6 +23,7 @@ import com.usbarsenal.app.plural
 import com.usbarsenal.app.str
 import com.usbarsenal.app.backend.Backend
 import com.usbarsenal.app.backend.BackendState
+import com.usbarsenal.app.backend.WebcamCapture
 import com.usbarsenal.app.lcd.Lcd
 import com.usbarsenal.app.lcd.LcdType
 import com.usbarsenal.app.lcd.Pin
@@ -51,6 +53,7 @@ val NO_ANSWER: String get() = str(R.string.home_no_answer)
  */
 @Composable
 fun HomeScreen(open: (Fn) -> Unit, openLog: () -> Unit, openSettings: () -> Unit, fix: (Backend) -> Unit) {
+    val context = LocalContext.current
     val backend = Gadget.backend
     val status = Gadget.status
     val caps = Gadget.caps
@@ -79,7 +82,11 @@ fun HomeScreen(open: (Fn) -> Unit, openLog: () -> Unit, openSettings: () -> Unit
     val barShake = rememberShake()
     val fault = Gadget.fault?.takeUnless { it.identity }
     LaunchedEffect(fault) { if (fault != null && fault.where == null) barShake.fire() }
-    val stopAll = { Gadget.run(null, "stop") }
+    val stopAll = {
+        Gadget.run(null, "stop") { ok ->
+            if (ok) WebcamCapture.stop(context)
+        }
+    }
     Screen(bottomBar = { BottomBar(port, { stopAll() }, Modifier.shake(barShake), Gadget.binds, Gadget.fails) }) {
         Top {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -102,12 +109,17 @@ fun HomeScreen(open: (Fn) -> Unit, openLog: () -> Unit, openSettings: () -> Unit
                         Fn.STORAGE -> Sprites.Storage
                         Fn.TETHER -> Sprites.Tether
                         Fn.HID -> Sprites.Hid
+                        Fn.WEBCAM -> Sprites.Webcam
                     },
                     label = fn.label,
                     line1 = l1,
                     line2 = l2,
                     on = on,
-                    onToggle = { flip(fn, it) },
+                    onToggle = { on ->
+                        flip(fn, on) { ok ->
+                            if (fn == Fn.WEBCAM && (!on || !ok)) WebcamCapture.stop(context)
+                        }
+                    },
                     onOpen = { open(fn) },
                     modifier = Modifier
                         .drawnFrom(i, shown)

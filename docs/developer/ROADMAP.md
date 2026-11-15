@@ -1,9 +1,9 @@
 # Roadmap: USB Arsenal
 
 **Goal.** One static binary that turns a phone (or any Linux board with a USB device
-controller) into a composite USB gadget: a drive that boots an ISO, USB tethering, and a
-keyboard and mouse at `/dev/hidgN`, all at once, and that always hands the controller
-back to its owner afterwards.
+controller) into a composite USB gadget: a drive that boots an ISO, USB tethering, a
+keyboard and mouse at `/dev/hidgN`, and a UVC webcam, all at once, and that always hands
+the controller back to its owner afterwards.
 
 **Background.** [research/01-kernel-survey.md](research/01-kernel-survey.md) has the
 per-kernel facts every decision below rests on.
@@ -216,8 +216,14 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Hardware: HID, Identity and Storage from the app on the a166p; setup, haptics and a
       tether started from Home's switch (the PC leased `192.168.42.130`) on the S10
 
-## Phase 4. UVC (TODO)
-- [ ] `f_uvc` plus a userspace frame feeder, after the kernel's `uvc-gadget` sample
+## Phase 4. UVC
+- [ ] Runtime UVC capability probe, configfs descriptors, and the 2 MiB JPEG frame feeder
+      based on the upstream `uvc-gadget` sample; compile-validated, hardware verification pending
+- [ ] App picture picker plus CameraX front/back, MediaProjection screen, Media3 video,
+      HTTP(S), HLS, DASH and RTSP sources; release build and JVM tests pass, device capture
+      verification pending
+- [ ] Hardware: enumerate with a host, verify the image feed, stop/recovery and Android
+      USB hand-back on a UVC-capable kernel
 
 ## Stretch
 - [x] `check --json` for a future app frontend (Droidspaces' encoder; Droidspaces itself
@@ -230,6 +236,38 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Samsung 5.15 (a166p, own gadget): every command, containers, gateway mode
 
 ## Status log
+- 2026-11-15: On a rooted Android 14 / 6.1 device, confirmed the installed backend hash
+  matched the UVC path/cleanup fix, SELinux was permissive, and the UDC returned to
+  configured after storage recovery. The failed UVC attempt had already rolled back its
+  function, so no configfs tree remained to inspect. The next log identified relative
+  configfs symlink targets resolving from the process working directory, not the UVC
+  header directory. Switched UVC links to absolute configfs targets; native and four
+  architecture builds, Android JVM tests, and release APK assembly pass.
+- 2026-11-15: Fixed UVC configfs format and class-link paths, replaced recursive cleanup
+  with ordered removal of only USB Arsenal's links and frame directories, and made failed
+  webcam setup hand USB back rather than rebind an incomplete function. Native and
+  four-architecture builds pass; Android release APK assembly succeeds. Physical UVC and
+  device recovery still need verification.
+- 2026-11-15: Implemented picture, front/back camera, screen, video, and direct HTTP(S),
+  HLS, DASH and RTSP webcam sources, with an atomically refreshed JPEG frame path. Native
+  build, 76 Android JVM tests, and design lint pass. The R8-shrunk release APK and
+  four-architecture v1.6.2 module build; the APK is signed with the Android debug key.
+  Physical UVC enumeration, capture permissions and Android USB hand-back remain untested.
+- 2026-11-15: Changed Webcam shutdown to unbind the UDC before stopping its feeder,
+  unblock inherited signals in the worker, and leave the gadget unbound if the worker
+  cannot be stopped. Native and four-architecture builds, Android JVM tests and release
+  APK assembly pass; all four APK backend binaries match the module. APK uses the debug
+  key. Host video and device stop/recovery still need verification.
+- 2026-11-15: Device diagnostics showed the stop process held the gadget lock while the
+  UVC worker remained in `do_select` and the UDC was still bound. This locates the hang
+  at or before UDC unbind, so teardown now stops the feeder before unbinding and leaves
+  the gadget and hand-back record intact if the worker cannot exit. Native and
+  four-architecture builds, Android JVM tests and release APK assembly pass. Device
+  verification remains pending.
+- 2026-11-15: Further `/proc/locks` output showed the stop process waiting on the gadget
+  lock inherited by the UVC worker's fork inside the commit critical section. The worker
+  now closes its inherited lock descriptor before entering the feeder loop. Native,
+  four-architecture and Android release builds pass; device verification remains pending.
 - 2026-10-18: Research done (kernel survey, Droidspaces conventions, prior art).
   Phases 0 to 3 implemented and building clean with `-Werror` for x86_64, aarch64 and
   armhf. Nothing has run on hardware or under dummy_hcd yet.

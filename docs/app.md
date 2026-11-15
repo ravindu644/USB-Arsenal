@@ -64,6 +64,14 @@ whose text the host receives as typed. Speed and Natural scroll sit under the tr
 full-screen button turns the phone into one wide trackpad in landscape. A gamepad's left
 stick moves the pointer; A and X click.
 
+**Webcam** can use a picked picture, the front or back camera, screen capture, a picked video,
+or a direct HTTP(S), HLS, DASH or RTSP media URL. The app fits every source to 640x480 JPEG
+frames; videos and streams play muted. Camera and playback capture run in a foreground service,
+and screen capture asks Android for consent each time. Stop Webcam on Home before changing its
+source. The kernel must include UVC support, which Check probes at runtime. The feature has not
+yet been validated against physical UVC hardware. Picked video URIs and stream URLs stay in
+app-private no-backup storage, not root setup or command logs.
+
 **Log** shows the backend's log: every command run from the app or a shell and what it printed,
 the tether process's lines too, in time order, kept across launches. Clear empties it.
 

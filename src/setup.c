@@ -57,6 +57,10 @@ static const struct ua_key keys[] = {
      IFNAMSIZ - 1, NULL, "empty: the profile's"},
     {"hid_interval", K_UINT, F(hid_interval), 0, 255, NULL,
      "1-255; 0: the kernel's default"},
+    {"webcam_source", K_STR, F(webcam_source), S(webcam_source), PATH_MAX - 1,
+     NULL, "image | camera:front | camera:back | screen | video | stream"},
+    {"webcam_image", K_STR, F(webcam_image), S(webcam_image), PATH_MAX - 1,
+     NULL, "640x480 JPEG frame; app source or still image"},
 };
 
 #define NKEYS (sizeof(keys) / sizeof(keys[0]))
@@ -70,6 +74,8 @@ static enum ua_fn key_fn(size_t i) {
     return UA_FN_TETHER;
   if (!strncmp(n, "hid_", 4))
     return UA_FN_HID;
+  if (!strncmp(n, "webcam_", 7))
+    return UA_FN_WEBCAM;
   return UA_FN_ALL;
 }
 
@@ -127,7 +133,7 @@ static void body(FILE *f, const void *arg) {
             "it with\n#   " UA_NAME " setup set KEY=VALUE ...\n# An empty "
             "value means the active profile's default, or the kernel's.\n\n");
   for (size_t i = 0; i < NKEYS; i++) {
-    char v[UA_LUN_SPEC], line[UA_LUN_SPEC + 40];
+    char v[PATH_MAX], line[PATH_MAX + 40];
     ua_key_get(a->s, &keys[i], v, sizeof(v));
     snprintf(line, sizeof(line), "%s=%s", keys[i].name, v);
     if (keys[i].comment && !a->running)
@@ -254,7 +260,7 @@ int ua_setup_pending(enum ua_fn fn, const struct ua_setup *setup,
   for (size_t i = 0; i < NKEYS; i++) {
     if (key_fn(i) != fn)
       continue;
-    char a[UA_LUN_SPEC], b[UA_LUN_SPEC];
+    char a[PATH_MAX], b[PATH_MAX];
     resolved(setup, &cfg, i, a, sizeof(a));
     resolved(running, &cfg, i, b, sizeof(b));
     if (strcmp(a, b))
@@ -271,6 +277,8 @@ int ua_fn_linked(const struct ua_gadget *g, enum ua_fn fn) {
     return ua_gadget_has(g, UA_F_NCM) || ua_gadget_has(g, UA_F_RNDIS);
   case UA_FN_HID:
     return ua_gadget_has(g, UA_F_KBD);
+  case UA_FN_WEBCAM:
+    return ua_gadget_has(g, UA_F_WEBCAM);
   default:
     return 0;
   }
@@ -281,7 +289,7 @@ static void json_table(const char *name, const struct ua_setup *s, int *first) {
   printf("%s\"%s\":{", *first ? "" : ",", name);
   *first = 0;
   for (size_t i = 0; i < NKEYS; i++) {
-    char v[UA_LUN_SPEC];
+    char v[PATH_MAX];
     ua_key_get(s, &keys[i], v, sizeof(v));
     ua_json_str(keys[i].name, v, &f);
   }
@@ -300,9 +308,9 @@ void ua_setup_json(const struct ua_gadget *g, int live, int *first) {
   json_table("setup", &s, first);
   json_table("running", &r, first);
   printf(",\"pending\":{");
-  static const char *const names[] = {"storage", "tether", "hid"};
+  static const char *const names[] = {"storage", "tether", "hid", "webcam"};
   int f = 1;
-  for (enum ua_fn fn = UA_FN_STORAGE; fn <= UA_FN_HID; fn++)
+  for (enum ua_fn fn = UA_FN_STORAGE; fn <= UA_FN_WEBCAM; fn++)
     ua_json_int(names[fn],
                 live && ua_fn_linked(g, fn) && ua_setup_pending(fn, &s, &r),
                 &f);
@@ -319,7 +327,8 @@ void ua_help_setup(void) {
       "Actions:\n"
       "  show [--json]  Every key: the setup, and what the last start used\n"
       "  set KEY=VALUE  Change the setup. A bad value changes nothing.\n"
-      "  reset [FN]     Back to the defaults (storage, tether or hid; all\n"
+      "  reset [FN]     Back to the defaults (storage, tether, hid or webcam; "
+      "all\n"
       "                 without one)\n"
       "  revert [FN]    Back to what runs (what Discard does in the app)\n\n"
       "Keys:\n");
@@ -344,6 +353,8 @@ static int fn_of(const char *name, enum ua_fn *fn) {
     *fn = UA_FN_TETHER;
   else if (!strcmp(name, "hid"))
     *fn = UA_FN_HID;
+  else if (!strcmp(name, "webcam"))
+    *fn = UA_FN_WEBCAM;
   else
     return -1;
   return 0;
@@ -363,7 +374,7 @@ static int do_show(int json) {
   }
   printf("%-22s %-40s %s\n", "key", "setup", "running");
   for (size_t i = 0; i < NKEYS; i++) {
-    char a[UA_LUN_SPEC], b[UA_LUN_SPEC];
+    char a[PATH_MAX], b[PATH_MAX];
     ua_key_get(&s, &keys[i], a, sizeof(a));
     ua_key_get(&r, &keys[i], b, sizeof(b));
     printf("%-22s %-40s %s\n", keys[i].name, a[0] ? a : "-", b[0] ? b : "-");
@@ -405,8 +416,8 @@ int ua_cmd_setup(int argc, char **argv) {
     struct ua_setup s, from;
     enum ua_fn fn;
     if (argc > 3 || fn_of(argc == 3 ? argv[2] : NULL, &fn) < 0) {
-      ua_usage_error("setup", "%s takes storage, tether, hid or nothing",
-                     action);
+      ua_usage_error(
+          "setup", "%s takes storage, tether, hid, webcam or nothing", action);
       return UA_EXIT_USAGE;
     }
     ua_setup_load(&s);
