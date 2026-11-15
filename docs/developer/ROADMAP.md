@@ -217,13 +217,13 @@ Tick a box only when the item is merged and verified as described in its phase.
       tether started from Home's switch (the PC leased `192.168.42.130`) on the S10
 
 ## Phase 4. UVC
-- [ ] Runtime UVC capability probe, configfs descriptors, and the 2 MiB JPEG frame feeder
-      based on the upstream `uvc-gadget` sample; compile-validated, hardware verification pending
+- [x] Runtime UVC capability probe, configfs descriptors, and the 614400-byte JPEG frame feeder
+      based on the upstream `uvc-gadget` sample; image delivery verified on Android 14 / 6.1
 - [ ] App picture picker plus CameraX front/back, MediaProjection screen, Media3 video,
       HTTP(S), HLS, DASH and RTSP sources; release build and JVM tests pass, device capture
       verification pending
-- [ ] Hardware: enumerate with a host, verify the image feed, stop/recovery and Android
-      USB hand-back on a UVC-capable kernel
+- [x] Hardware: Windows enumerates and displays the UVC image; stop returns the UDC and ADB
+      to Android on Android 14 / 6.1
 
 ## Stretch
 - [x] `check --json` for a future app frontend (Droidspaces' encoder; Droidspaces itself
@@ -268,6 +268,26 @@ Tick a box only when the item is merged and verified as described in its phase.
   lock inherited by the UVC worker's fork inside the commit critical section. The worker
   now closes its inherited lock descriptor before entering the feeder loop. Native,
   four-architecture and Android release builds pass; device verification remains pending.
+- 2026-11-15: On the rooted Android 14 / 6.1 phone, Windows enumerated the UVC camera,
+  negotiated 640x480 MJPEG at 30 fps, and started the video stream, but Camera ended with
+  `0xA00F4292 PhotoCaptureStartTimeout`. FFmpeg also negotiated the stream but received no
+  frames. The stored source decodes as a 640x480 JPEG, and the UVC V4L2 queue accepted four
+  filled buffers and STREAMON. The userspace frame limit is now 614400 bytes, matching the
+  640x480 MJPEG size advertised by uvc-gadget; with the former 2 MiB limit, the phone kernel
+  invoked the OOM killer during UVC buffer allocation. The smaller limit avoided that OOM,
+  but the host still received no frames. Stops returned the UDC to Android. Frame delivery
+  between the kernel UVC queue and USB endpoint remains unresolved.
+- 2026-11-15: A second USBPcap capture, filtered to the phone's UVC device address, confirms that
+  endpoint `0x82` still returns zero data during the host's isochronous IN requests. A diagnostic
+  userspace build confirms that STREAMON succeeds and all four MMAP buffers contain 5284 JPEG bytes,
+  but no buffer is returned by DQBUF before teardown. The failure is now narrowed to the kernel UVC
+  queue or endpoint pump, after userspace QBUF and before buffer completion; stop still restores
+  Android's gadget. The targeted DQBUF/requeue diagnostics remain in the local uvc-gadget submodule.
+- 2026-11-15: Reproduced the empty UVC endpoint when all four output buffers were queued before
+  STREAMON. On the rooted Android 14 / 6.1 SM7635 device, starting the output stream first and
+  queueing the buffers afterwards made Windows Camera display the feed. The host selected the
+  streaming altsetting, and teardown unbound UVC and returned ADB to Android. Kept this buffer
+  order in the static JPEG path; other kernels still need hardware verification.
 - 2026-10-18: Research done (kernel survey, Droidspaces conventions, prior art).
   Phases 0 to 3 implemented and building clean with `-Werror` for x86_64, aarch64 and
   armhf. Nothing has run on hardware or under dummy_hcd yet.
