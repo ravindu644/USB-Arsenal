@@ -231,6 +231,7 @@ struct ua_setup {
   unsigned hid_interval;
   char webcam_source[PATH_MAX];
   char webcam_image[PATH_MAX];
+  char webcam_size[8], webcam_aspect[8], webcam_quality[8], webcam_fps[8];
 };
 
 void ua_setup_load(struct ua_setup *s);

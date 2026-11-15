@@ -7,7 +7,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.media.projection.MediaProjectionManager
@@ -55,8 +54,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val WIDTH = 640
-private const val HEIGHT = 480
 private const val WEBCAM_IMAGE = "$WORKSPACE/Gadget/webcam.jpg"
 private const val MAX_URL_LENGTH = 2_000
 
@@ -74,6 +71,14 @@ fun WebcamScreen(back: () -> Unit, openLog: () -> Unit) {
     var inputLoaded by rememberSaveable { mutableStateOf(false) }
     var streamUrl by rememberSaveable { mutableStateOf("") }
     var pendingCamera by rememberSaveable { mutableStateOf("") }
+    var choosingSize by rememberSaveable { mutableStateOf(false) }
+    var choosingAspect by rememberSaveable { mutableStateOf(false) }
+    var choosingQuality by rememberSaveable { mutableStateOf(false) }
+    var choosingFps by rememberSaveable { mutableStateOf(false) }
+    val webcamSize = Gadget.setupValue("webcam_size").ifEmpty { "1280" }
+    val webcamAspect = Gadget.setupValue("webcam_aspect").ifEmpty { "auto" }
+    val webcamQuality = Gadget.setupValue("webcam_quality").ifEmpty { "90" }
+    val webcamFps = Gadget.setupValue("webcam_fps").ifEmpty { "30" }
 
     LaunchedEffect(configuredSource) {
         inputLoaded = false
@@ -94,7 +99,11 @@ fun WebcamScreen(back: () -> Unit, openLog: () -> Unit) {
     suspend fun activateSource(source: String, input: String, projectionResult: Int? = null, projectionData: Intent? = null) {
         Gadget.fault = null
         try {
-            val output = WebcamCapture.start(context, source, input, projectionResult, projectionData)
+            val output = WebcamCapture.start(
+                context, source, input, webcamSize.toIntOrNull() ?: 1280, webcamAspect,
+                webcamQuality.toIntOrNull() ?: 90, webcamFps.toIntOrNull() ?: 30,
+                projectionResult, projectionData,
+            )
             if (!WebcamCapture.awaitFrame(output)) {
                 val message = str(WebcamCapture.errorOr(R.string.webcam_capture_timeout))
                 WebcamCapture.stop(context)
@@ -132,7 +141,11 @@ fun WebcamScreen(back: () -> Unit, openLog: () -> Unit) {
             WebcamCapture.stop(context)
             scope.launch {
                 try {
-                    val image = prepareWebcamImage(context, uri)
+                    val image = prepareWebcamImage(
+                        context, uri, webcamSize.toIntOrNull() ?: 1280, webcamAspect,
+                        webcamFps.toIntOrNull() ?: 30,
+                        webcamQuality.toIntOrNull() ?: 90,
+                    )
                     val copied = Root.change(
                         "mkdir -p $WORKSPACE/Gadget && cp -- ${shellQuote(image.absolutePath)} " +
                             "${shellQuote(WEBCAM_IMAGE)} && chmod 0644 ${shellQuote(WEBCAM_IMAGE)}",
@@ -227,7 +240,14 @@ fun WebcamScreen(back: () -> Unit, openLog: () -> Unit) {
             SpriteIcon(Sprites.Webcam, 3.dp)
             Column(verticalArrangement = Arrangement.spacedBy(Lcd.lines)) {
                 Text(sourceName(configuredSource), LcdType.data)
-                Text(str(R.string.webcam_frame_format), LcdType.data)
+                val frameWidth = webcamSize.toIntOrNull() ?: 1280
+                val frameHeight = if (webcamAspect == "4:3") frameWidth * 3 / 4 else frameWidth * 9 / 16
+                val frameFormat = if (webcamAspect == "auto") {
+                    str(R.string.webcam_frame_format_auto, webcamSize, webcamFps)
+                } else {
+                    str(R.string.webcam_frame_format, frameWidth, frameHeight, webcamFps)
+                }
+                Text(frameFormat, LcdType.data)
             }
         }
         when {
@@ -237,6 +257,14 @@ fun WebcamScreen(back: () -> Unit, openLog: () -> Unit) {
             capture.phase == WebcamCapturePhase.ERROR -> Note(str(capture.error ?: R.string.webcam_capture_failed))
             configuredSource.isEmpty() -> Note(str(R.string.webcam_no_source))
             else -> Note(str(R.string.webcam_frame_note))
+        }
+        KeyRow {
+            Key(str(R.string.webcam_setting_value, str(R.string.webcam_resolution), str(R.string.webcam_resolution_value, webcamSize)), Modifier.weight(1f).opener("webcam/size"), enabled = !webcamOn) { choosingSize = true }
+            Key(str(R.string.webcam_setting_value, str(R.string.webcam_aspect), if (webcamAspect == "auto") str(R.string.webcam_aspect_auto).uppercase() else webcamAspect), Modifier.weight(1f).opener("webcam/aspect"), enabled = !webcamOn) { choosingAspect = true }
+        }
+        KeyRow {
+            Key(str(R.string.webcam_setting_value, str(R.string.webcam_quality), str(R.string.webcam_quality_value, webcamQuality)), Modifier.weight(1f).opener("webcam/quality"), enabled = !webcamOn) { choosingQuality = true }
+            Key(str(R.string.webcam_setting_value, str(R.string.webcam_fps), webcamFps), Modifier.weight(1f).opener("webcam/fps"), enabled = !webcamOn) { choosingFps = true }
         }
         KeyRow {
             Key(
@@ -296,6 +324,26 @@ fun WebcamScreen(back: () -> Unit, openLog: () -> Unit) {
         }
     }
     UnappliedSheet(Fn.WEBCAM, back)
+    ChoiceSheet(choosingSize, str(R.string.webcam_resolution), listOf("640", "1280", "1920"), webcamSize, "", {
+            Gadget.set("webcam_size" to it)
+            WebcamCapture.stop(context)
+            choosingSize = false
+    }, { choosingSize = false })
+    ChoiceSheet(choosingAspect, str(R.string.webcam_aspect), listOf(str(R.string.webcam_aspect_auto), "4:3", "16:9"), if (webcamAspect == "auto") str(R.string.webcam_aspect_auto) else webcamAspect, "", {
+            Gadget.set("webcam_aspect" to if (it == str(R.string.webcam_aspect_auto)) "auto" else it)
+            WebcamCapture.stop(context)
+            choosingAspect = false
+    }, { choosingAspect = false })
+    ChoiceSheet(choosingQuality, str(R.string.webcam_quality), listOf("30", "40", "50", "60", "70", "80", "90", "95"), webcamQuality, "", {
+            Gadget.set("webcam_quality" to it)
+            WebcamCapture.stop(context)
+            choosingQuality = false
+    }, { choosingQuality = false })
+    ChoiceSheet(choosingFps, str(R.string.webcam_fps), listOf("15", "20", "24", "25", "30"), webcamFps, "", {
+            Gadget.set("webcam_fps" to it)
+            WebcamCapture.stop(context)
+            choosingFps = false
+    }, { choosingFps = false })
 }
 
 private val LIVE_SOURCES = setOf("camera:front", "camera:back", "screen", "video", "stream")
@@ -325,29 +373,43 @@ internal fun validWebcamStreamUrl(value: String): Boolean {
         !uri.host.isNullOrBlank()
 }
 
-private suspend fun prepareWebcamImage(context: Context, uri: Uri): File = withContext(Dispatchers.IO) {
+private suspend fun prepareWebcamImage(context: Context, uri: Uri, size: Int, aspect: String, fps: Int, quality: Int): File = withContext(Dispatchers.IO) {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
         ?: throw IOException("The selected picture could not be opened")
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("The selected file is not a picture")
     var sample = 1
-    while (maxOf(bounds.outWidth / sample, bounds.outHeight / sample) > WIDTH * 2) sample *= 2
+    while (maxOf(bounds.outWidth / sample, bounds.outHeight / sample) > size * 2) sample *= 2
     val source = context.contentResolver.openInputStream(uri)?.use {
         BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
     } ?: throw IOException("The selected picture could not be decoded")
-    val output = Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888)
+    val ratio = when (aspect) {
+        "4:3" -> 4f / 3f
+        "16:9" -> 16f / 9f
+        else -> if (source.width.toFloat() / source.height < 1.55f) 4f / 3f else 16f / 9f
+    }
+    val width = size
+    val height = if (ratio < 1.5f) width * 3 / 4 else size * 9 / 16
+    val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     try {
-        val scale = minOf(WIDTH.toFloat() / source.width, HEIGHT.toFloat() / source.height)
-        val width = source.width * scale
-        val height = source.height * scale
+        val scale = maxOf(width.toFloat() / source.width, height.toFloat() / source.height)
+        val scaledWidth = source.width * scale
+        val scaledHeight = source.height * scale
         Canvas(output).apply {
-            drawColor(Color.BLACK)
-            drawBitmap(source, null, RectF((WIDTH - width) / 2, (HEIGHT - height) / 2, (WIDTH + width) / 2, (HEIGHT + height) / 2), Paint(Paint.FILTER_BITMAP_FLAG))
+            clipRect(0f, 0f, width.toFloat(), height.toFloat())
+            drawBitmap(source, null, RectF((width - scaledWidth) / 2, (height - scaledHeight) / 2, (width + scaledWidth) / 2, (height + scaledHeight) / 2), Paint(Paint.FILTER_BITMAP_FLAG))
         }
         val file = File(context.cacheDir, "webcam.jpg")
-        file.outputStream().use {
-            if (!output.compress(Bitmap.CompressFormat.JPEG, 85, it)) throw IOException("JPEG conversion failed")
-        }
+        val bytes = java.io.ByteArrayOutputStream()
+        var jpegQuality = quality
+        do {
+            bytes.reset()
+            if (!output.compress(Bitmap.CompressFormat.JPEG, jpegQuality, bytes))
+                throw IOException("JPEG conversion failed")
+            jpegQuality -= 10
+        } while (bytes.size() > 640 * 480 * 2 * 12 / fps && jpegQuality >= 35)
+        if (bytes.size() > 640 * 480 * 2 * 12 / fps) throw IOException("The webcam frame is too large")
+        file.writeBytes(bytes.toByteArray())
         file
     } finally {
         source.recycle()

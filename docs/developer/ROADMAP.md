@@ -236,6 +236,13 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Samsung 5.15 (a166p, own gadget): every command, containers, gateway mode
 
 ## Status log
+- 2026-11-15: Added selectable 640, 1280 and 1920 pixel long-edge webcam sizes, automatic or
+  fixed 4:3 / 16:9 crop, JPEG quality and 15-30 fps. The UVC feeder uses the configfs compressed
+  frame limit for MJPEG buffer negotiation instead of allocating `width * height * 2`; the
+  encoded byte budget also scales down at higher frame rates to protect the USB link. Kotlin
+  compilation passed. The Android SDK is available,
+  but the full APK build lacks the musl cross toolchains, and `adb devices` reports no connected
+  phone, so the higher-resolution modes and device memory use still need hardware verification.
 - 2026-11-15: On a rooted Android 14 / 6.1 device, confirmed the installed backend hash
   matched the UVC path/cleanup fix, SELinux was permissive, and the UDC returned to
   configured after storage recovery. The failed UVC attempt had already rolled back its

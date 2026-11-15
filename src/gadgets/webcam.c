@@ -8,9 +8,9 @@
 #include "usbarsenal.h"
 
 #define FUNC UA_F_WEBCAM
-#define FRAME_WIDTH 640
-#define FRAME_HEIGHT 480
 #define MAX_JPEG_BYTES UA_WEBCAM_MAX_JPEG_BYTES
+#define MAX_FRAME_WIDTH 1920u
+#define MAX_FRAME_HEIGHT 1440u
 
 int ua_uvc_gadget_main(int argc, char **argv);
 
@@ -88,9 +88,9 @@ static int image_dimensions(int fd, unsigned *width, unsigned *height) {
   }
 }
 
-static int validate_image(const char *path, unsigned *jpeg_size) {
+static int validate_image(const char *path, unsigned *jpeg_size,
+                          unsigned *width, unsigned *height) {
   unsigned char sig[2], tail[2];
-  unsigned width, height;
   struct stat st;
   int fd = open(path, O_RDONLY | O_CLOEXEC);
   if (fd < 0 || fstat(fd, &st) < 0 || !S_ISREG(st.st_mode) || path[0] != '/' ||
@@ -98,18 +98,18 @@ static int validate_image(const char *path, unsigned *jpeg_size) {
       pread(fd, sig, sizeof(sig), 0) != sizeof(sig) ||
       pread(fd, tail, sizeof(tail), st.st_size - 2) != sizeof(tail) ||
       sig[0] != 0xff || sig[1] != 0xd8 || tail[0] != 0xff || tail[1] != 0xd9 ||
-      image_dimensions(fd, &width, &height) < 0) {
+      image_dimensions(fd, width, height) < 0 || !*width || !*height ||
+      *width > MAX_FRAME_WIDTH || *height > MAX_FRAME_HEIGHT) {
     if (fd >= 0)
       close(fd);
-    ua_error("Cannot use %s: choose a JPEG no larger than 2 MiB", path);
+    ua_error(
+        "Cannot use %s: choose a JPEG no larger than 600 KiB and 1920x1440 "
+        "pixels",
+        path);
     return -1;
   }
   close(fd);
   *jpeg_size = (unsigned)st.st_size;
-  if (width != FRAME_WIDTH || height != FRAME_HEIGHT) {
-    ua_error("The JPEG must be %ux%u pixels", FRAME_WIDTH, FRAME_HEIGHT);
-    return -1;
-  }
   return 0;
 }
 
@@ -207,6 +207,9 @@ int ua_webcam_remove(struct ua_gadget *g) {
     if (snprintf(path, sizeof(path), "%s/streaming/header/h/%s", dir,
                  formats[i]) >= (int)sizeof(path) ||
         remove_link(path) < 0 ||
+        snprintf(path, sizeof(path), "%s/streaming/mjpeg/%s/frame", dir,
+                 formats[i]) >= (int)sizeof(path) ||
+        remove_dir(path) < 0 ||
         snprintf(path, sizeof(path), "%s/streaming/mjpeg/%s/480p", dir,
                  formats[i]) >= (int)sizeof(path) ||
         remove_dir(path) < 0 ||
@@ -229,26 +232,30 @@ fail:
   return -1;
 }
 
-static int configure_function(struct ua_gadget *g) {
+static int configure_function(struct ua_gadget *g, unsigned width,
+                              unsigned height, unsigned frame_budget,
+                              unsigned fps) {
   char dir[PATH_MAX], path[PATH_MAX], target[PATH_MAX], value[32];
   if (ua_gadget_add(g, FUNC, dir, sizeof(dir)) < 0)
     return -1;
-  int n = snprintf(path, sizeof(path), "%s/streaming/mjpeg/m/480p", dir);
+  int n = snprintf(path, sizeof(path), "%s/streaming/mjpeg/m/frame", dir);
   if (n < 0 || n >= (int)sizeof(path)) {
     errno = ENAMETOOLONG;
     goto fail;
   }
   if (make_configfs_dir(path) < 0)
     return -1;
-  snprintf(value, sizeof(value), "%u", FRAME_WIDTH);
+  snprintf(value, sizeof(value), "%u", width);
   if (write_configfs_attr(path, "wWidth", value) < 0)
     return -1;
-  snprintf(value, sizeof(value), "%u", FRAME_HEIGHT);
+  snprintf(value, sizeof(value), "%u", height);
   if (write_configfs_attr(path, "wHeight", value) < 0)
     return -1;
-  snprintf(value, sizeof(value), "%u", MAX_JPEG_BYTES);
-  if (write_configfs_attr(path, "dwMaxVideoFrameBufferSize", value) < 0 ||
-      write_configfs_attr(path, "dwFrameInterval", "333333\n666666") < 0)
+  snprintf(value, sizeof(value), "%u", frame_budget);
+  if (write_configfs_attr(path, "dwMaxVideoFrameBufferSize", value) < 0)
+    return -1;
+  snprintf(value, sizeof(value), "%u", 10000000u / fps);
+  if (write_configfs_attr(path, "dwFrameInterval", value) < 0)
     return -1;
 
   n = snprintf(path, sizeof(path), "%s/streaming/header/h", dir);
@@ -388,20 +395,35 @@ void ua_webcam_reapply(const struct ua_gadget *g) {
 
 static int do_start(const char *image, int apply) {
   struct ua_gadget g;
-  unsigned jpeg_size;
+  unsigned width, height, jpeg_size;
+  struct ua_setup setup;
+  ua_setup_load(&setup);
+  unsigned fps =
+      setup.webcam_fps[0] ? (unsigned)strtoul(setup.webcam_fps, NULL, 10) : 30;
+  if (fps != 15 && fps != 20 && fps != 24 && fps != 25 && fps != 30) {
+    ua_error("Unsupported webcam frame rate: %u", fps);
+    return UA_EXIT_USAGE;
+  }
+  unsigned frame_budget = MAX_JPEG_BYTES * 12u / fps;
   if (ua_gadget_open(&g) < 0 || ua_check_requirements(&g, UA_NEED_WEBCAM) < 0)
     return UA_EXIT_FAIL;
   if (!image[0]) {
-    ua_error("Pick a 640x480 JPEG first with '" UA_NAME
+    ua_error("Pick a JPEG frame first with '" UA_NAME
              " setup set webcam_image=PATH'");
     return UA_EXIT_FAIL;
   }
-  if (validate_image(image, &jpeg_size) < 0)
+  if (validate_image(image, &jpeg_size, &width, &height) < 0)
     return UA_EXIT_FAIL;
+  if (jpeg_size > frame_budget) {
+    ua_error("The webcam JPEG exceeds the %u-byte frame budget at %u fps",
+             frame_budget, fps);
+    return UA_EXIT_FAIL;
+  }
   if (ua_gadget_live(&g) && ua_gadget_has(&g, FUNC)) {
     struct ua_setup running;
     ua_running_load(&running);
-    if (!strcmp(running.webcam_image, image) && worker_pid() > 0) {
+    if (!strcmp(running.webcam_image, image) && worker_pid() > 0 &&
+        !ua_setup_pending(UA_FN_WEBCAM, &setup, &running)) {
       ua_log("Webcam already runs its still image");
       return UA_EXIT_OK;
     }
@@ -415,7 +437,7 @@ static int do_start(const char *image, int apply) {
     return UA_EXIT_FAIL;
   if (ua_gadget_has(&g, FUNC) && ua_webcam_remove(&g) < 0)
     goto fail;
-  if (configure_function(&g) < 0)
+  if (configure_function(&g, width, height, frame_budget, fps) < 0)
     goto fail;
   if (ua_running_take(UA_FN_WEBCAM, 0) < 0) {
     ua_error("Cannot save the running webcam setup: %s", strerror(errno));
@@ -433,7 +455,8 @@ static int do_start(const char *image, int apply) {
     rollback_webcam(&g);
     return UA_EXIT_FAIL;
   }
-  ua_log("Serving 640x480 MJPEG frames as a UVC webcam");
+  ua_log("Serving %ux%u MJPEG frames at %u fps as a UVC webcam", width, height,
+         fps);
   return UA_EXIT_OK;
 
 fail:
@@ -468,8 +491,10 @@ static int do_stop(void) {
 void ua_help_webcam(void) {
   printf("Usage: " UA_NAME " webcam <start|apply|stop> [JPEG]\n\n"
          "Present a still image to a USB host as a UVC webcam. The image\n"
-         "must be a 640x480 JPEG; the Android app prepares picked pictures\n"
-         "to that size. The kernel must provide CONFIG_USB_CONFIGFS_F_UVC.\n\n"
+         "must be an absolute JPEG no larger than 600 KiB and 1920x1440. The\n"
+         "Android app prepares the selected source. UVC uses webcam_fps and\n"
+         "the image dimensions. The kernel must provide "
+         "CONFIG_USB_CONFIGFS_F_UVC.\n\n"
          "  start [JPEG]  Start from the saved setup, or save JPEG first\n"
          "  apply         Apply the saved image, restarting the webcam\n"
          "  stop          Remove the webcam function\n");

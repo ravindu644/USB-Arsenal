@@ -60,7 +60,16 @@ static const struct ua_key keys[] = {
     {"webcam_source", K_STR, F(webcam_source), S(webcam_source), PATH_MAX - 1,
      NULL, "image | camera:front | camera:back | screen | video | stream"},
     {"webcam_image", K_STR, F(webcam_image), S(webcam_image), PATH_MAX - 1,
-     NULL, "640x480 JPEG frame; app source or still image"},
+     NULL, "JPEG frame; app source or still image"},
+    {"webcam_size", K_CHOICE, F(webcam_size), S(webcam_size), 0,
+     "640 1280 1920", "long edge in pixels"},
+    {"webcam_aspect", K_CHOICE, F(webcam_aspect), S(webcam_aspect), 0,
+     "auto 4:3 16:9",
+     "auto follows source; otherwise crop to the selected ratio"},
+    {"webcam_quality", K_CHOICE, F(webcam_quality), S(webcam_quality), 0,
+     "30 40 50 60 70 80 90 95", "JPEG quality"},
+    {"webcam_fps", K_CHOICE, F(webcam_fps), S(webcam_fps), 0, "15 20 24 25 30",
+     "frames per second"},
 };
 
 #define NKEYS (sizeof(keys) / sizeof(keys[0]))

@@ -65,6 +65,10 @@ object WebcamCapture {
         context: Context,
         source: String,
         input: String,
+        size: Int,
+        aspect: String,
+        quality: Int,
+        fps: Int,
         projectionResult: Int? = null,
         projectionData: Intent? = null,
     ): String {
@@ -75,6 +79,10 @@ object WebcamCapture {
             .putExtra(WebcamCaptureService.EXTRA_SOURCE, source)
             .putExtra(WebcamCaptureService.EXTRA_INPUT, input)
             .putExtra(WebcamCaptureService.EXTRA_OUTPUT, output)
+            .putExtra(WebcamCaptureService.EXTRA_SIZE, size)
+            .putExtra(WebcamCaptureService.EXTRA_ASPECT, aspect)
+            .putExtra(WebcamCaptureService.EXTRA_QUALITY, quality)
+            .putExtra(WebcamCaptureService.EXTRA_FPS, fps)
         projectionResult?.let { intent.putExtra(WebcamCaptureService.EXTRA_PROJECTION_RESULT, it) }
         projectionData?.let { intent.putExtra(WebcamCaptureService.EXTRA_PROJECTION_DATA, it) }
         androidx.core.content.ContextCompat.startForegroundService(context, intent)
