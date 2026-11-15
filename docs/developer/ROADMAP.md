@@ -1,9 +1,9 @@
 # Roadmap: USB Arsenal
 
 **Goal.** One static binary that turns a phone (or any Linux board with a USB device
-controller) into a composite USB gadget: a drive that boots an ISO, USB tethering, and a
-keyboard and mouse at `/dev/hidgN`, all at once, and that always hands the controller
-back to its owner afterwards.
+controller) into a composite USB gadget: a drive that boots an ISO, USB tethering, a
+keyboard and mouse at `/dev/hidgN`, and a UVC webcam, all at once, and that always hands
+the controller back to its owner afterwards.
 
 **Background.** [research/01-kernel-survey.md](research/01-kernel-survey.md) has the
 per-kernel facts every decision below rests on.
@@ -216,8 +216,14 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Hardware: HID, Identity and Storage from the app on the a166p; setup, haptics and a
       tether started from Home's switch (the PC leased `192.168.42.130`) on the S10
 
-## Phase 4. UVC (TODO)
-- [ ] `f_uvc` plus a userspace frame feeder, after the kernel's `uvc-gadget` sample
+## Phase 4. UVC
+- [x] Runtime UVC capability probe, configfs descriptors, and the 614400-byte JPEG frame feeder
+      based on the upstream `uvc-gadget` sample; image delivery verified on Android 14 / 6.1
+- [ ] App picture picker plus CameraX front/back, MediaProjection screen, Media3 video,
+      HTTP(S), HLS, DASH and RTSP sources; release build and JVM tests pass, device capture
+      verification pending
+- [x] Hardware: Windows enumerates and displays the UVC image; stop returns the UDC and ADB
+      to Android on Android 14 / 6.1
 
 ## Stretch
 - [x] `check --json` for a future app frontend (Droidspaces' encoder; Droidspaces itself
@@ -230,6 +236,65 @@ Tick a box only when the item is merged and verified as described in its phase.
 - [x] Samsung 5.15 (a166p, own gadget): every command, containers, gateway mode
 
 ## Status log
+- 2026-11-15: Added selectable 640, 1280 and 1920 pixel long-edge webcam sizes, automatic or
+  fixed 4:3 / 16:9 crop, JPEG quality and 15-30 fps. The UVC feeder uses the configfs compressed
+  frame limit for MJPEG buffer negotiation instead of allocating `width * height * 2`; the
+  encoded byte budget also scales down at higher frame rates to protect the USB link. Kotlin
+  compilation passed. The Android SDK is available,
+  but the full APK build lacks the musl cross toolchains, and `adb devices` reports no connected
+  phone, so the higher-resolution modes and device memory use still need hardware verification.
+- 2026-11-15: On a rooted Android 14 / 6.1 device, confirmed the installed backend hash
+  matched the UVC path/cleanup fix, SELinux was permissive, and the UDC returned to
+  configured after storage recovery. The failed UVC attempt had already rolled back its
+  function, so no configfs tree remained to inspect. The next log identified relative
+  configfs symlink targets resolving from the process working directory, not the UVC
+  header directory. Switched UVC links to absolute configfs targets; native and four
+  architecture builds, Android JVM tests, and release APK assembly pass.
+- 2026-11-15: Fixed UVC configfs format and class-link paths, replaced recursive cleanup
+  with ordered removal of only USB Arsenal's links and frame directories, and made failed
+  webcam setup hand USB back rather than rebind an incomplete function. Native and
+  four-architecture builds pass; Android release APK assembly succeeds. Physical UVC and
+  device recovery still need verification.
+- 2026-11-15: Implemented picture, front/back camera, screen, video, and direct HTTP(S),
+  HLS, DASH and RTSP webcam sources, with an atomically refreshed JPEG frame path. Native
+  build, 76 Android JVM tests, and design lint pass. The R8-shrunk release APK and
+  four-architecture v1.6.2 module build; the APK is signed with the Android debug key.
+  Physical UVC enumeration, capture permissions and Android USB hand-back remain untested.
+- 2026-11-15: Changed Webcam shutdown to unbind the UDC before stopping its feeder,
+  unblock inherited signals in the worker, and leave the gadget unbound if the worker
+  cannot be stopped. Native and four-architecture builds, Android JVM tests and release
+  APK assembly pass; all four APK backend binaries match the module. APK uses the debug
+  key. Host video and device stop/recovery still need verification.
+- 2026-11-15: Device diagnostics showed the stop process held the gadget lock while the
+  UVC worker remained in `do_select` and the UDC was still bound. This locates the hang
+  at or before UDC unbind, so teardown now stops the feeder before unbinding and leaves
+  the gadget and hand-back record intact if the worker cannot exit. Native and
+  four-architecture builds, Android JVM tests and release APK assembly pass. Device
+  verification remains pending.
+- 2026-11-15: Further `/proc/locks` output showed the stop process waiting on the gadget
+  lock inherited by the UVC worker's fork inside the commit critical section. The worker
+  now closes its inherited lock descriptor before entering the feeder loop. Native,
+  four-architecture and Android release builds pass; device verification remains pending.
+- 2026-11-15: On the rooted Android 14 / 6.1 phone, Windows enumerated the UVC camera,
+  negotiated 640x480 MJPEG at 30 fps, and started the video stream, but Camera ended with
+  `0xA00F4292 PhotoCaptureStartTimeout`. FFmpeg also negotiated the stream but received no
+  frames. The stored source decodes as a 640x480 JPEG, and the UVC V4L2 queue accepted four
+  filled buffers and STREAMON. The userspace frame limit is now 614400 bytes, matching the
+  640x480 MJPEG size advertised by uvc-gadget; with the former 2 MiB limit, the phone kernel
+  invoked the OOM killer during UVC buffer allocation. The smaller limit avoided that OOM,
+  but the host still received no frames. Stops returned the UDC to Android. Frame delivery
+  between the kernel UVC queue and USB endpoint remains unresolved.
+- 2026-11-15: A second USBPcap capture, filtered to the phone's UVC device address, confirms that
+  endpoint `0x82` still returns zero data during the host's isochronous IN requests. A diagnostic
+  userspace build confirms that STREAMON succeeds and all four MMAP buffers contain 5284 JPEG bytes,
+  but no buffer is returned by DQBUF before teardown. The failure is now narrowed to the kernel UVC
+  queue or endpoint pump, after userspace QBUF and before buffer completion; stop still restores
+  Android's gadget. The targeted DQBUF/requeue diagnostics remain in the local uvc-gadget submodule.
+- 2026-11-15: Reproduced the empty UVC endpoint when all four output buffers were queued before
+  STREAMON. On the rooted Android 14 / 6.1 SM7635 device, starting the output stream first and
+  queueing the buffers afterwards made Windows Camera display the feed. The host selected the
+  streaming altsetting, and teardown unbound UVC and returned ADB to Android. Kept this buffer
+  order in the static JPEG path; other kernels still need hardware verification.
 - 2026-10-18: Research done (kernel survey, Droidspaces conventions, prior art).
   Phases 0 to 3 implemented and building clean with `-Werror` for x86_64, aarch64 and
   armhf. Nothing has run on hardware or under dummy_hcd yet.

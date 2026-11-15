@@ -42,6 +42,7 @@
     <string name="gadget_fn_storage">Storage</string>
     <string name="gadget_fn_tether">Tether</string>
     <string name="gadget_fn_hid">HID</string>
+    <string name="gadget_fn_webcam">Webcam</string>
 
     <!-- The bottom bar while a command runs: what it does in a few words -->
     <string name="gadget_says_stop_all">stopping everything</string>
@@ -57,6 +58,9 @@
     <string name="gadget_says_hid_start">starting HID</string>
     <string name="gadget_says_hid_apply">applying HID</string>
     <string name="gadget_says_hid_stop">stopping HID</string>
+    <string name="gadget_says_webcam_start">starting webcam</string>
+    <string name="gadget_says_webcam_apply">applying webcam</string>
+    <string name="gadget_says_webcam_stop">stopping webcam</string>
 
     <!-- Faults under a row or over the bottom bar; the screen puts a [-] mark before each -->
     <!-- %1$s is the exit code. "setup set" is the command and stays as it is -->
@@ -70,12 +74,14 @@
     <string name="gadget_apply_note_storage">The host still sees the drives as they were. Apply loads your changes, and may reconnect every drive; Discard puts your picks back.</string>
     <string name="gadget_apply_note_tether">Tether still runs as it was. Apply reconnects the gadget, every drive and function with it, for a moment; Discard puts your settings back.</string>
     <string name="gadget_apply_note_hid">HID still runs as it was. Apply reconnects the gadget, every drive and function with it, for a moment.</string>
+    <string name="gadget_apply_note_webcam">The webcam still runs as it was. Apply reconnects the gadget and its functions for a moment.</string>
 
     <!-- Home's row, first line, when the kernel lacks the function; the second line is the
          kernel option it needs -->
     <string name="gadget_row_no_storage">no mass storage in this kernel</string>
     <string name="gadget_row_no_tether">no ncm or rndis in this kernel</string>
     <string name="gadget_row_no_hid">no hid in this kernel</string>
+    <string name="gadget_row_no_webcam">no uvc webcam in this kernel</string>
     <!-- Home's row, first line, while its command runs; the second line is the command -->
     <string name="gadget_row_stopping">stopping</string>
     <string name="gadget_row_starting">starting</string>
@@ -99,6 +105,13 @@
     <!-- HID's row while off, over two lines -->
     <string name="gadget_row_hid_off_1">a keyboard and a mouse</string>
     <string name="gadget_row_hid_off_2">for the host</string>
+    <string name="gadget_row_webcam_off_1">a picture, camera, screen or stream</string>
+    <string name="gadget_row_webcam_off_2">as a USB webcam</string>
+    <string name="gadget_row_webcam_image">%1$s</string>
+    <string name="gadget_row_webcam_live">frame feeder running</string>
+    <string name="gadget_row_webcam_failed">no frame feeder</string>
+    <string name="gadget_row_webcam_last_frame">last frame only</string>
+    <string name="gadget_row_webcam_source">%1$s</string>
 
     <!-- What the Root step shows after "$ su", as a shell would print it; su is the command -->
     <string name="gadget_su_none">(no su)</string>
@@ -214,6 +227,54 @@
 
     <!-- HID: the keyboard and mouse the host sees, and the keyboard's poll interval -->
     <string name="hid_title">HID</string>
+
+    <!-- A picked or captured frame, normalized by the app into the UVC kernel's supported frame -->
+    <string name="setup_feature_webcam">a picture, camera, screen or stream as a USB webcam</string>
+    <string name="webcam_title">Webcam</string>
+    <string name="webcam_pick">Pick picture</string>
+    <string name="webcam_pick_video">Pick video</string>
+    <string name="webcam_camera_front">Front camera</string>
+    <string name="webcam_camera_back">Back camera</string>
+    <string name="webcam_screen">Capture screen</string>
+    <string name="webcam_stream_label">Stream URL</string>
+    <string name="webcam_stream_placeholder">https://, http:// or rtsp://</string>
+    <string name="webcam_stream_note">Use a direct HTTP(S), HLS, DASH or RTSP media URL, not a webpage.</string>
+    <string name="webcam_stream_start">Use stream</string>
+    <string name="webcam_resume">Resume source</string>
+    <string name="webcam_pause">Pause source</string>
+    <string name="webcam_no_source">No source selected</string>
+    <string name="webcam_source_image">Picture</string>
+    <string name="webcam_source_front">Front camera</string>
+    <string name="webcam_source_back">Back camera</string>
+    <string name="webcam_source_screen">Screen</string>
+    <string name="webcam_source_video">Video file</string>
+    <string name="webcam_source_stream">Live stream</string>
+    <string name="webcam_capture_starting">Starting capture</string>
+    <string name="webcam_capture_running">Frames ready</string>
+    <string name="webcam_capture_idle">Capture stopped</string>
+    <string name="webcam_capture_failed">Capture could not start</string>
+    <string name="webcam_capture_timeout">No video frame arrived</string>
+    <string name="webcam_camera_denied">Camera permission is required for this source</string>
+    <string name="webcam_bad_url">Enter an HTTP, HTTPS or RTSP stream URL</string>
+    <string name="webcam_url_too_long">The stream URL is too long</string>
+    <string name="webcam_source_on_note">Stop Webcam on Home before changing its source.</string>
+    <string name="webcam_frame_note">Frames fill the selected shape; higher frame rates reduce the JPEG budget.</string>
+    <string name="webcam_notification_channel">Webcam capture</string>
+    <string name="webcam_notification_running">Sending frames to USB Arsenal</string>
+    <string name="webcam_notification_stop">Stop webcam</string>
+    <string name="webcam_no_image">No picture picked</string>
+    <string name="webcam_frame_format">%1$d × %2$d JPEG, %3$s fps</string>
+    <string name="webcam_frame_format_auto">Auto aspect, %1$s px, %2$s fps</string>
+    <string name="webcam_resolution">Size</string>
+    <string name="webcam_aspect">Aspect</string>
+    <string name="webcam_aspect_auto">Auto</string>
+    <string name="webcam_quality">Quality</string>
+    <string name="webcam_fps">Frame rate</string>
+    <string name="webcam_setting_value">%1$s  %2$s</string>
+    <string name="webcam_resolution_value">%1$s px</string>
+    <string name="webcam_quality_value">%1$s%%</string>
+    <string name="webcam_bad_image">Could not read or convert that picture</string>
+    <string name="webcam_copy_failed">Could not copy the picture into the backend workspace</string>
 
     <!-- The cards into Keys + mouse and Quacky; the line under the first shows the device
          nodes while HID runs, this text otherwise -->

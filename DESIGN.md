@@ -220,8 +220,9 @@ The front matter is the normative part. The prose says when each value applies.
 ## Overview
 
 USB Arsenal turns a rooted phone into one composite USB gadget: storage (ISO as CD-ROM, DVD or
-disk, writable images), tethering (NCM or RNDIS, or an OpenWrt gateway) and HID (keyboard and
-mouse), any combination at once. The app is the front panel of that gadget.
+disk, writable images), tethering (NCM or RNDIS, or an OpenWrt gateway), HID (keyboard and
+mouse), and a UVC webcam fed by pictures, cameras, screen capture, video or direct streams, any
+combination at once. The app is the front panel of that gadget.
 
 It is a pocket hardware hacking tool. It should feel like a small device with a backlit
 monochrome LCD that lives in a drawer next to a soldering iron and a logic analyzer: amber glow,
@@ -413,10 +414,11 @@ dashed border.
 Class names are those in `docs/developer/design/lcd.css`.
 
 ### Functions: set up, then switch on at Home
-Storage, Tether and HID work one way.
+Storage, Tether, HID and Webcam work one way.
 - **A function's screen only configures.** It edits the setup the backend keeps (`setup.conf`:
-  picks per LUN with their modes, every `tether start` option, the HID interval), which the
-  command line shares. It never touches the port and has no switch.
+  picks per LUN with their modes, every `tether start` option, the HID interval, and the
+  prepared webcam JPEG path), which the command line shares. It never touches the port and has
+  no switch.
 - **Home's row** opens that screen (`STORAGE >`), and its DIP is the only switch. It runs a bare
   `<function> start`, which starts the whole setup in one command, so every LUN comes up in one
   replug.
@@ -439,7 +441,7 @@ Storage, Tether and HID work one way.
 32px sprite, Silkscreen name with ` >` (the row opens its screen), two VT323 status lines, DIP
 switch on the right. Selected row inverts, and a 2px rule divides one row from the next. On,
 the status lines show live facts only (`LUN0 Win11_24H2_x64.iso · dvd`, `via rmnet_data0`,
-`keyboard /dev/hidg1`). Off, they say what the function does (`ISOs and disk images` / `as
+`keyboard /dev/hidg1`, `frame.jpg` / `still image`). Off, they say what the function does (`ISOs and disk images` / `as
 drives for the host`): the DIP already says off. While a function starts or stops, its lines
 read `starting` or `stopping` and the command.
 
@@ -526,6 +528,25 @@ same line, inverted, so a mode change never moves the files below.
 Host, Phone (inverted), Upstream, joined by dashed 6px wires with stepping packets and a VT323
 label (`ncm`, `masquerade`). Label left, value right. Addresses live in the key-value rows
 below, not in the chain.
+
+### Webcam
+The selected source, output shape and one line for capture state. Size (640, 1280 or 1920 pixels on
+the long edge), aspect (automatic, 4:3 or 16:9), JPEG quality (30 to 95) and frame rate (15 to
+30 fps) are saved in backend setup. Automatic aspect follows the source; each frame is cropped
+to fill the output. The JPEG byte budget scales down as frame rate rises, protecting the USB
+link and keeping kernel buffers bounded. The encoder can lower quality below its selected
+target when needed. `Pick picture` opens the system picker and writes a JPEG into the backend
+workspace. Front and back cameras use
+CameraX; screen capture asks for fresh system consent; video files and direct HTTP(S), HLS, DASH
+or RTSP URLs play muted through Media3. Video URIs and stream URLs stay in the app's private
+no-backup directory, not root setup or logs. The app scales and center-crops each source,
+atomically writes the current JPEG frame in its cache, and the UVC feeder reads that file. The
+backend advertises the JPEG dimensions and selected frame rate. There is no preview.
+The host sees a repeated still frame for pictures and moving frames for the other sources.
+Source controls are disabled while Webcam is bound; stop it on Home before switching sources.
+The foreground capture service can be paused or resumed while the gadget is off, and its
+notification can stop Webcam. Home's row shows the source or picture name and feeder state. A
+kernel without UVC leaves the row visible but unavailable, with `CONFIG_USB_CONFIGFS_F_UVC`.
 
 ### Key-value rows (`.kv`)
 Silkscreen label left, VT323 value right, 44px tall. For settings and facts, one per line. A
@@ -967,17 +988,20 @@ A control exists only if the backend can do it. Check `src/` before adding one.
 
 | UI | Backend |
 | --- | --- |
-| Function DIP switches | `storage` / `tether` / `hid` `start` and `stop` |
+| Function DIP switches | `storage` / `tether` / `hid` / `webcam` `start` and `stop` |
 | Stop all | `usb-arsenal stop` |
 | Eject | `storage eject` |
 | Mode segments | `storage start --mode auto\|cdrom\|dvd\|disk\|rw` |
 | LUN strip | `--lun 0-7` |
 | NCM / RNDIS | `tether start --ncm` / `tether start --rndis` |
+| Webcam sources | App-side CameraX camera frames, MediaProjection screen frames, Media3 video and direct HTTP(S)/HLS/DASH/RTSP playback, plus picture decoding; normalized to the selected size and aspect as a bounded JPEG and atomically written as `webcam_image` |
+| Video and stream inputs | App-private no-backup storage; URLs are not written to backend setup or command logs |
+| Webcam output and availability | `webcam start`, `webcam apply`, `webcam stop`; runtime `check` probe `uvc`; `status --json`'s `webcam` source, image and feeder state |
 | Tether chain, Tx, Rx | `status --json`: `tether`'s `iface`, `upstream`, `gateway_*`, `tx_bytes`, `rx_bytes` |
 | Gateway, container, its iface | `--gateway CONTAINER`, `--gateway-iface IFACE`; the containers are `droidspaces show --json`'s `running`, and the gateway shows only with `/data/local/Droidspaces/bin/droidspaces` installed |
 | Tether address, DNS, upstream, DHCP and NAT | `--address CIDR`, `--dns IP[,IP]` (127 characters at most), `--upstream IFACE`, `--no-net`; the upstream's list is app-side, the interfaces a default route leaves by in `ip route show table all` (Droidspaces' rule) |
-| Not applied sheet, Apply, Discard | `status --json`'s `pending`; `storage apply`, `tether apply`, `hid apply`; `setup revert <function>` |
-| Each function's setup | `setup set KEY=VALUE` on every edit (one write a beat later), read back as `status --json`'s `setup`; the picks are `storage_lunN=MODE:PATH`, Tether's rows the `tether_*` keys, the interval `hid_interval` |
+| Not applied sheet, Apply, Discard | `status --json`'s `pending`; `storage apply`, `tether apply`, `hid apply`, `webcam apply`; `setup revert <function>` |
+| Each function's setup | `setup set KEY=VALUE` on every edit (one write a beat later), read back as `status --json`'s `setup`; the picks are `storage_lunN=MODE:PATH`, Tether's rows the `tether_*` keys, the interval `hid_interval`, and Webcam's `webcam_source`, `webcam_image`, `webcam_size`, `webcam_aspect`, `webcam_quality` and `webcam_fps` |
 | HID interval | `hid start --interval N`, period 2^(N-1)×125µs, set at start; without the f_hid patch (`check`'s `hid_interval` is 0) it is `1 ms, fixed by this kernel` and the steppers are dead |
 | Keys + mouse, the gamepad | app-side reports (8-byte keyboard, 5-byte mouse), each one write into `hid write NODE SIZE`, one per node, which never blocks on the node and keeps only the newest report while the host reads nothing; key reports are paced two poll periods apart. Speed, Natural scroll and every gesture are app-side too (`Touchpad.kt`, libinput's rules), applied to the reports before they are written; a pinch is Ctrl held on the keyboard node around wheel notches on the mouse node |
 | HID period text | `status --json`'s `speed` (`full-speed` is a USB 1.1 host) and `hid[].interval` |
@@ -1003,14 +1027,15 @@ App-side features, done by the app itself: the Not applied sheet's asking (what 
 the backend's `pending`), the `/sdcard/USB-Arsenal/Disks` image list (by extension: `.iso`,
 `.img`, `.bin`, `.raw`, `.ima`, `.dd`; Pick image refuses any other), Create (a sparse
 image, as `truncate -s` does, or a full one with progress), HID input written to `/dev/hidgN`,
-the Motion and Haptics switches and the Theme pick in Settings, and the profiles folder,
+the webcam's picture, camera, screen, video and direct-stream capture and conversion to the
+selected bounded JPEG shape, the Motion and Haptics switches and the Theme pick in Settings, and the profiles folder,
 `/sdcard/USB-Arsenal/Profiles`, which Identity lists and writes. Settings' System path makes or
 removes `/data/adb/modules/usb-arsenal/system/bin/usb-arsenal`, a link to the workspace binary
 (Droidspaces' `SymlinkInstaller`), which acts at the next boot.
 
-Not shown because the backend cannot: UVC (not built), host controller or port names, lease
-countdowns, link uptime, a configfs write trace, a pending-changes queue (the Not applied sheet says
-only that a setup waits, not what changed).
+Not shown because the backend cannot: DRM-protected or webpage-only media capture, host controller
+or port names, lease countdowns, link uptime, a configfs write trace, a pending-changes queue (the
+Not applied sheet says only that a setup waits, not what changed).
 
 ## Do's and Don'ts
 

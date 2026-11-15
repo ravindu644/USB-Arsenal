@@ -16,7 +16,9 @@ controller, and always hands the controller back. Research behind the decisions 
 | `src/check.c` | capability probing, `check`, the NCM safety rule |
 | `src/config.c` | profiles: loader, `generate`, `set`, the active profile |
 | `src/utils.c` | logging, file and process helpers, workspace paths, fd passing |
-| `src/gadgets/storage/`, `hid.c`, `tether/` | the three commands; `storage/image.c` gets an image ready for the kernel, and `tether/` splits into `routed.c`, `gateway.c` and `monitor.c` |
+| `src/gadgets/storage/`, `hid.c`, `webcam.c`, `webcam_source.c`, `tether/` | the commands; storage and webcam prepare their sources, `tether/` splits into `routed.c`, `gateway.c` and `monitor.c` |
+| `external/uvc-gadget/` | upstream UVC userspace feeder, linked into the binary with its main renamed; the JPEG source reloads the atomically replaced 640x480 frame file |
+| `Android/app/src/main/java/com/usbarsenal/app/backend/WebcamCaptureService.kt` | Android foreground capture for CameraX, MediaProjection and Media3, normalizing sources to JPEG frames |
 | `src/net/` | lifted from Droidspaces under its own names: `nl/` (netlink), `ipt/` (iptables), `dhcp/` (DHCP and RA); `uplink.c` and `netns.c` build on its old `network.c` |
 | `module/` | the KernelSU/Magisk module (`make module`) |
 | `kernel-patches/<version>/` | `git format-patch` exports of kernel fixes |
@@ -48,12 +50,13 @@ functions, attributes written while unlinked) → `commit`. Failures go to `tear
   - binds;
   - raises the pullup (below);
   - waits for `configured`;
-  - re-applies the HID permissions, still inside the critical section, so a client
+  - re-applies HID permissions and restarts the webcam frame feeder, still inside the critical section, so a client
     hangup's SIGTERM never lands between a chown and its chmod.
 
   A link failure fails the commit; no functions left means `teardown`.
 - **`teardown`:**
   - stops the tether daemon;
+  - stops the UVC frame feeder;
   - unbinds and removes everything of ours;
   - restores the previous owner: the saved `sys.usb.config`, or `g1` rebound by hand
     once its functions are linked, never racing init.
@@ -173,6 +176,17 @@ gadget that never hands the port back to Android (`ua_crit_leave` closes that se
 empty values compared as the profile's). The Android app is one client of this: it edits the
 setup, starts bare, applies, and shows `pending`; it keeps no setup of its own
 ([research/06-app-state.md](research/06-app-state.md)).
+
+## Webcam frames
+
+The Android capture service turns CameraX analysis frames, MediaProjection images, and muted
+Media3 video output into fitted 640x480 JPEGs. Each frame is renamed atomically in app cache;
+the UVC worker reopens the configured path for each output buffer and keeps the last good frame
+if a replacement is incomplete. `webcam_source` describes the source type in setup and status;
+the backend itself only consumes `webcam_image`. Video URIs and stream URLs stay in the app's
+private no-backup directory, not in root command logs or backend status. A foreground service owns
+camera, screen and playback resources, and releases them on an app stop, a notification stop,
+or after status confirms that an externally stopped Webcam function stayed off.
 
 ## The tether process (`src/gadgets/tether/`)
 

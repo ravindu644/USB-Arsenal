@@ -18,7 +18,7 @@ class ParsersTest {
                 """"hid":[{"function":"keyboard","node":"/dev/hidg1"},{"function":"mouse","node":"/dev/hidg2"}],""" +
                 """"tether":{"function":"ncm","iface":"usb0","running":1,"address":"192.168.42.129/24",""" +
                 """"ipv6":"fd75:7361::/64","upstream":"wlan0","gateway":0,"gateway_container":"",""" +
-                """"gateway_iface":"","gateway_waiting":0}}""",
+                """"gateway_iface":"","gateway_waiting":0},"webcam":{"function":"uvc","image":"/Gadget/frame.jpg","running":1}}""",
         )
         assertEquals(true, s.bound)
         assertEquals(listOf(Lun(0, "/data/local/tmp/ua-b2.img", "rw", "rw")), s.storage)
@@ -27,6 +27,7 @@ class ParsersTest {
             Tether("ncm", "usb0", true, "192.168.42.129/24", "fd75:7361::/64", "wlan0", false, "", "", false),
             s.tether,
         )
+        assertEquals(Webcam("/Gadget/frame.jpg", true), s.webcam)
     }
 
     @Test
@@ -40,14 +41,24 @@ class ParsersTest {
     }
 
     @Test
+    fun webcamSourceMetadata() {
+        val s = parseStatus(
+            """{"version":"1.2.0","udc":"x","udc_state":"configured","bound":1,"storage":[],"hid":[],"tether":null,""" +
+                """"webcam":{"function":"uvc","source":"stream","image":"/cache/frame.jpg","running":1}}""",
+        )
+        assertEquals(Webcam("/cache/frame.jpg", true, "stream"), s.webcam)
+    }
+
+    @Test
     fun check() {
         val c = parseCheck(
             """{"root":1,"configfs":1,"udc":1,"gadget":1,"mass_storage":1,"cdrom":1,"hid":1,"ncm":-1,""" +
-                """"rndis":1,"nat":1,"nat6":0,"version":"1.2.0","udc_name":"11201000.usb0","requirements_met":1}""",
+                """"rndis":1,"nat":1,"nat6":0,"uvc":1,"version":"1.2.0","udc_name":"11201000.usb0","requirements_met":1}""",
         )
         assertEquals(Probe.CAVEAT, c.ncm)
         assertEquals(Probe.MISSING, c.nat6)
         assertEquals(Probe.OK, c.massStorage)
+        assertEquals(Probe.OK, c.uvc)
         assertEquals("11201000.usb0", c.udcName)
         assertEquals(true, c.requirementsMet)
     }

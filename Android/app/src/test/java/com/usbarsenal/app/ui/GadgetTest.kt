@@ -7,6 +7,7 @@ import com.usbarsenal.app.backend.HidNode
 import com.usbarsenal.app.backend.Lun
 import com.usbarsenal.app.backend.Probe
 import com.usbarsenal.app.backend.Tether
+import com.usbarsenal.app.backend.Webcam
 import com.usbarsenal.app.backend.parseContainers
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -21,6 +22,7 @@ class GadgetTest {
         storage = listOf(Lun(0, "/sdcard/USB-Arsenal/Win11.iso", "dvd", "ro"), Lun(1, "", "", "")),
         hid = listOf(HidNode("keyboard", "/dev/hidg1"), HidNode("mouse", "/dev/hidg2")),
         tether = Tether("ncm", "usb0", true, "192.168.42.129/24", "fd75:7361::/64", "rmnet_data0", false, "", "", false),
+        webcam = Webcam("/data/local/USB-Arsenal/Gadget/frame.jpg", true),
     )
     private fun caps(hid: Probe = Probe.OK) = Capabilities(
         Probe.OK, Probe.OK, Probe.OK, Probe.OK, Probe.OK, Probe.OK, hid, Probe.CAVEAT, Probe.OK, Probe.OK, Probe.OK,
@@ -32,11 +34,21 @@ class GadgetTest {
         assertEquals("LUN0 Win11.iso · dvd" to "", rowLines(Fn.STORAGE, live, caps(), null))
         assertEquals("ncm 192.168.42.129 → .130" to "via rmnet_data0", rowLines(Fn.TETHER, live, caps(), null))
         assertEquals("keyboard /dev/hidg1" to "mouse /dev/hidg2", rowLines(Fn.HID, live, caps(), null))
+        assertEquals("frame.jpg" to "frame feeder running", rowLines(Fn.WEBCAM, live, caps().copy(uvc = Probe.OK), null))
+        assertEquals(
+            "Front camera" to "last frame only",
+            rowLines(
+                Fn.WEBCAM,
+                live.copy(webcam = Webcam("/cache/frame.jpg", true, "camera:front")),
+                caps().copy(uvc = Probe.OK),
+                null,
+            ),
+        )
     }
 
     @Test
     fun offBusyAndMissing() {
-        val idle = live.copy(bound = false, storage = emptyList(), hid = emptyList(), tether = null)
+        val idle = live.copy(bound = false, storage = emptyList(), hid = emptyList(), tether = null, webcam = null)
         // Off, a row says what the function does: its switch already says off
         assertEquals("ISOs and disk images" to "as drives for the host", rowLines(Fn.STORAGE, idle, caps(), null))
         assertEquals("this phone's internet" to "for the host, over USB", rowLines(Fn.TETHER, idle, caps(), null))
@@ -45,6 +57,7 @@ class GadgetTest {
         // A path that ends in "stop" is still a start
         assertEquals("starting", rowLines(Fn.STORAGE, idle, caps(), Busy(Fn.STORAGE, "storage start /sdcard/backstop", stopping = false)).first)
         assertEquals("no hid in this kernel" to "CONFIG_USB_CONFIGFS_F_HID", rowLines(Fn.HID, idle, caps(Probe.MISSING), null))
+        assertEquals("no uvc webcam in this kernel" to "CONFIG_USB_CONFIGFS_F_UVC", rowLines(Fn.WEBCAM, idle, caps().copy(uvc = Probe.MISSING), null))
     }
 
     // The bottom bar's few words for a command, never read from a path

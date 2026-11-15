@@ -30,6 +30,8 @@ static const struct command commands[] = {
     {"storage", ua_cmd_storage, ua_help_storage,
      "Mass storage: boot an ISO, share a disk image"},
     {"hid", ua_cmd_hid, ua_help_hid, "Keyboard and mouse nodes (/dev/hidgN)"},
+    {"webcam", ua_cmd_webcam, ua_help_webcam,
+     "A UVC camera from a still image"},
     {"tether", ua_cmd_tether, ua_help_tether,
      "Give the host a network over USB"},
     {"stop", cmd_stop, help_stop, "Tear everything down, restore the owner"},
@@ -62,8 +64,8 @@ static void usage(void) {
          __DATE__ + 4 + (__DATE__[4] == ' '), __TIME__);
   printf("Usage: " UA_NAME " [--udc NAME] [-v] <command> [<action>] "
          "[options]\n\n");
-  printf("Turn this device into a composite USB gadget: bootable storage,\n"
-         "USB tethering and HID, all at once over one cable.\n\n");
+  printf("Turn this device into a composite USB gadget: storage, tethering,\n"
+         "HID and a UVC webcam, all at once over one cable.\n\n");
   printf("Commands:\n");
   for (size_t i = 0; i < NCOMMANDS; i++)
     printf("  %-9s %s\n", commands[i].name, commands[i].summary);
@@ -122,11 +124,11 @@ int ua_want_help(int argc, char **argv) {
 static void help_status(void) {
   printf("Usage: " UA_NAME " status [--json]\n\n"
          "Show the backend, the controller and its state, and every live\n"
-         "function: storage images, HID nodes, the tether interface.\n\n"
+         "function: storage images, HID nodes, tether, webcam source.\n\n"
          "  --json    One JSON object instead: version, udc, udc_state,\n"
          "            bound, speed (the UDC's current_speed, such as\n"
          "            high-speed; empty while not bound), the storage,\n"
-         "            hid and tether parts, then\n"
+         "            hid, tether and webcam parts, then\n"
          "            boot_id, setup, running and pending (see `setup`).\n"
          "            Every key is always present.\n\n"
          "Examples:\n"
@@ -189,6 +191,11 @@ static int cmd_status(int argc, char **argv) {
       ua_status_tether(&g, 1);
     else
       printf("null");
+    printf(",\"webcam\":");
+    if (live)
+      ua_status_webcam(&g, 1);
+    else
+      printf("null");
     first = 0;
     ua_setup_json(&g, live, &first);
     printf("}\n");
@@ -204,11 +211,12 @@ static int cmd_status(int argc, char **argv) {
   ua_status_storage(&g, 0);
   ua_status_hid(&g, 0);
   ua_status_tether(&g, 0);
+  ua_status_webcam(&g, 0);
   struct ua_setup s, r;
   ua_setup_load(&s);
   ua_running_load(&r);
-  static const char *const names[] = {"storage", "tether", "hid"};
-  for (int fn = 0; fn < 3; fn++)
+  static const char *const names[] = {"storage", "tether", "hid", "webcam"};
+  for (int fn = 0; fn < 4; fn++)
     if (ua_fn_linked(&g, (enum ua_fn)fn) &&
         ua_setup_pending((enum ua_fn)fn, &s, &r))
       printf("Pending:    %s differs from its setup; `" UA_NAME " %s apply`\n",
