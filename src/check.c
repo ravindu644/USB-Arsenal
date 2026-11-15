@@ -96,6 +96,11 @@ int ua_check_requirements(struct ua_gadget *g, int need) {
              "(CONFIG_USB_CONFIGFS_NCM / _RNDIS)");
     missing++;
   }
+  if ((need & UA_NEED_WEBCAM) && !ua_probe_function(g, "uvc", NULL)) {
+    ua_error("This kernel has no uvc gadget function "
+             "(CONFIG_USB_CONFIGFS_F_UVC)");
+    missing++;
+  }
   if (missing)
     ua_log("Run '" UA_NAME " check' for the full report.");
   return missing ? -1 : 0;
@@ -248,6 +253,9 @@ int ua_cmd_check(int argc, char **argv) {
     line("rndis", ua_probe_function(&g, "rndis", NULL), 0, "rndis",
          "CONFIG_USB_CONFIGFS_RNDIS; 'tether --rndis' fallback for Windows "
          "7 and older hosts");
+    line("uvc", ua_probe_function(&g, "uvc", NULL), 0, "uvc",
+         "CONFIG_USB_CONFIGFS_F_UVC and CONFIG_USB_F_UVC; needed by "
+         "'webcam'");
     line("nat", ds_ipt4_nat_available(), 0, "NAT for tethering",
          "The iptables nat table and MASQUERADE target "
          "(CONFIG_IP_NF_NAT, CONFIG_IP_NF_TARGET_MASQUERADE)");
@@ -259,7 +267,7 @@ int ua_cmd_check(int argc, char **argv) {
     /* Every key always present, so a reader never has to guess */
     static const char *const fkeys[] = {"mass_storage", "cdrom", "hid",
                                         "hid_interval", "ncm",   "rndis",
-                                        "nat",          "nat6"};
+                                        "uvc",          "nat",   "nat6"};
     for (size_t i = 0; i < sizeof(fkeys) / sizeof(fkeys[0]); i++)
       ua_json_int(fkeys[i], 0, &json_first);
   } else {

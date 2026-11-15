@@ -3,10 +3,17 @@
 
     <!-- Rich haptics (the bind sequence) go through Vibrator, which needs it -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <application
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Lcd">
         <!-- Compose redraws for every one of these itself. Recreating the activity would cancel a
              su request mid-dialog and ask again, and replay every typed session; a gamepad or
@@ -23,6 +30,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".backend.WebcamCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="camera|mediaProjection|mediaPlayback" />
     </application>
 
 </manifest>

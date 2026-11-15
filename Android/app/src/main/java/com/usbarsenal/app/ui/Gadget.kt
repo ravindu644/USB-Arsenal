@@ -31,6 +31,8 @@ import com.usbarsenal.app.backend.LOG
 import com.usbarsenal.app.backend.Probe
 import com.usbarsenal.app.backend.Root
 import com.usbarsenal.app.backend.UA
+import com.usbarsenal.app.backend.WebcamCapture
+import com.usbarsenal.app.backend.WebcamCapturePhase
 import com.usbarsenal.app.backend.backendState
 import com.usbarsenal.app.backend.plain
 import com.usbarsenal.app.backend.readCheck
@@ -69,6 +71,9 @@ private val SAYS = mapOf(
     "hid start" to R.string.gadget_says_hid_start,
     "hid apply" to R.string.gadget_says_hid_apply,
     "hid stop" to R.string.gadget_says_hid_stop,
+    "webcam start" to R.string.gadget_says_webcam_start,
+    "webcam apply" to R.string.gadget_says_webcam_apply,
+    "webcam stop" to R.string.gadget_says_webcam_stop,
 )
 
 // A command in a few words. Read from its first two words, never from a path after them
@@ -88,7 +93,8 @@ fun says(args: List<String>): String {
 enum class Fn(@StringRes val labelRes: Int, val prefix: String) {
     STORAGE(R.string.gadget_fn_storage, "storage_"),
     TETHER(R.string.gadget_fn_tether, "tether_"),
-    HID(R.string.gadget_fn_hid, "hid_");
+    HID(R.string.gadget_fn_hid, "hid_"),
+    WEBCAM(R.string.gadget_fn_webcam, "webcam_");
 
     val label: String get() = str(labelRes)
 }
@@ -365,6 +371,7 @@ private fun applyNote(fn: Fn) = when (fn) {
     Fn.STORAGE -> str(R.string.gadget_apply_note_storage)
     Fn.TETHER -> str(R.string.gadget_apply_note_tether)
     Fn.HID -> str(R.string.gadget_apply_note_hid)
+    Fn.WEBCAM -> str(R.string.gadget_apply_note_webcam)
 }
 
 /*
@@ -412,6 +419,15 @@ fun startable(fn: Fn) = when (fn) {
     Fn.STORAGE -> picks().isNotEmpty()
     Fn.TETHER -> tetherPlan().ready(Gadget.caps)
     Fn.HID -> true
+    Fn.WEBCAM -> {
+        val source = Gadget.setupValue("webcam_source")
+        val path = Gadget.setupValue("webcam_image")
+        path.isNotEmpty() && (
+            source.isEmpty() || source == "image" ||
+                (WebcamCapture.state.phase == WebcamCapturePhase.RUNNING &&
+                    WebcamCapture.state.source == source && WebcamCapture.state.output == path)
+            )
+    }
 }
 
 // Whether the backend stops the switches: until it is known, and while it needs a fix other
@@ -423,6 +439,7 @@ fun Capabilities?.has(fn: Fn) = this == null || when (fn) {
     Fn.STORAGE -> massStorage != Probe.MISSING
     Fn.TETHER -> ncm != Probe.MISSING || rndis != Probe.MISSING
     Fn.HID -> hid != Probe.MISSING
+    Fn.WEBCAM -> uvc != Probe.MISSING
 }
 
 // On means linked in the gadget: storage with every drive empty is still on, and `storage
@@ -431,6 +448,7 @@ fun GadgetStatus?.isOn(fn: Fn) = this != null && when (fn) {
     Fn.STORAGE -> storage.isNotEmpty()
     Fn.TETHER -> tether != null
     Fn.HID -> hid.isNotEmpty()
+    Fn.WEBCAM -> webcam != null
 }
 
 /*
@@ -443,6 +461,7 @@ fun rowLines(fn: Fn, status: GadgetStatus?, caps: Capabilities?, busy: Busy?): P
             Fn.STORAGE -> str(R.string.gadget_row_no_storage) to "CONFIG_USB_CONFIGFS_MASS_STORAGE"
             Fn.TETHER -> str(R.string.gadget_row_no_tether) to "CONFIG_USB_CONFIGFS_NCM"
             Fn.HID -> str(R.string.gadget_row_no_hid) to "CONFIG_USB_CONFIGFS_F_HID"
+            Fn.WEBCAM -> str(R.string.gadget_row_no_webcam) to "CONFIG_USB_CONFIGFS_F_UVC"
         }
     }
     if (busy != null && busy.fn == fn) return str(if (busy.stopping) R.string.gadget_row_stopping else R.string.gadget_row_starting) to busy.typed
@@ -476,8 +495,34 @@ fun rowLines(fn: Fn, status: GadgetStatus?, caps: Capabilities?, busy: Busy?): P
         } else {
             str(R.string.gadget_row_hid_off_1) to str(R.string.gadget_row_hid_off_2)
         }
+        Fn.WEBCAM -> if (on) {
+            val w = status?.webcam
+            val source = w?.source?.ifEmpty { "image" } ?: "image"
+            val label = when (source) {
+                "camera:front" -> str(R.string.webcam_source_front)
+                "camera:back" -> str(R.string.webcam_source_back)
+                "screen" -> str(R.string.webcam_source_screen)
+                "video" -> str(R.string.webcam_source_video)
+                "stream" -> str(R.string.webcam_source_stream)
+                else -> w?.image?.substringAfterLast('/').orEmpty()
+            }
+            str(R.string.gadget_row_webcam_image, label) to
+                str(
+                    when {
+                        w?.running != true -> R.string.gadget_row_webcam_failed
+                        source in LIVE_WEBCAM_SOURCES &&
+                            (WebcamCapture.state.phase != WebcamCapturePhase.RUNNING ||
+                                WebcamCapture.state.output != w.image) -> R.string.gadget_row_webcam_last_frame
+                        else -> R.string.gadget_row_webcam_live
+                    },
+                )
+        } else {
+            str(R.string.gadget_row_webcam_off_1) to str(R.string.gadget_row_webcam_off_2)
+        }
     }
 }
+
+private val LIVE_WEBCAM_SOURCES = setOf("camera:front", "camera:back", "screen", "video", "stream")
 
 // An image set up for a LUN: the setup's `storage_lunN=MODE:PATH`
 data class Pick(val lun: Int, val mode: String, val path: String) {
