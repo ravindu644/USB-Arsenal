@@ -248,12 +248,33 @@ int net_up(struct tether *t) {
  * gadget unbinds and make a new one at bind, so any other function starting
  * or stopping hands us a fresh rndis0/usb0: no address, down, and a DHCP
  * socket still bound to the dead ifindex. Spot the new index and redo the
- * per-interface half. The NAT rules match by name and subnet, so they hold. */
+ * per-interface half. The NAT rules match by name and subnet, so they hold.
+ *
+ * A changed ifindex is not the only sign of a rebind: on some controllers the
+ * kernel reuses the index for the new netdev, or flushes the address without
+ * replacing the netdev at all, so the address is gone while the index stands
+ * (issue #4). Index alone would miss that and leave the host a link with no
+ * gateway, so follow a vanished address too, the way keep_forwarding() restores
+ * ip_forward. The restored address raises one RTM_NEWADDR; the reprobe it wakes
+ * finds the address present and returns here at once, so it does not loop. */
 void follow_netdev(struct tether *t) {
   unsigned idx = if_nametoindex(t->iface);
-  if (!idx || idx == t->ifindex)
+  if (!idx)
     return;
-  ua_log("[NET] %s was re-created by a rebind, configuring it again", t->iface);
+  int recreated = idx != t->ifindex;
+  if (!recreated) {
+    ds_nl_ctx_t *c = ds_nl_open();
+    int gone = c && !ds_nl_has_addr4(c, t->iface, t->ip_be, t->prefix);
+    if (c)
+      ds_nl_close(c);
+    if (!gone)
+      return;
+    ua_log("[NET] %s lost its address after a rebind; putting it back",
+           t->iface);
+  } else {
+    ua_log("[NET] %s was re-created by a rebind, configuring it again",
+           t->iface);
+  }
   ds_dhcp_server_stop();
   ds_nl_ctx_t *ctx = ds_nl_open();
   if (ctx) {
