@@ -33,6 +33,8 @@ int ds_nl_del_link(ds_nl_ctx_t *ctx, const char *ifname);
 int ds_nl_set_mac(ds_nl_ctx_t *ctx, const char *ifname, const uint8_t mac[6]);
 int ds_nl_add_addr4(ds_nl_ctx_t *ctx, const char *ifname, uint32_t ip_be,
                     uint8_t prefix);
+int ds_nl_has_addr4(ds_nl_ctx_t *ctx, const char *ifname, uint32_t ip_be,
+                    uint8_t prefix);
 int ds_nl_add_addr6(ds_nl_ctx_t *ctx, const char *ifname,
                     const struct in6_addr *ip, uint8_t prefix);
 int ds_nl_add_route6(ds_nl_ctx_t *ctx, const struct in6_addr *dst,
