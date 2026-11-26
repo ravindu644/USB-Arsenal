@@ -11,7 +11,7 @@ through one screen at a time:
 | `common_` | keys more than one screen uses (Cancel, Save, Log, `< Back`); `app_name`, which is not translated, sits with them |
 | `home_` | Home: the hero, the bar's silence, the backend's attention key |
 | `gadget_` | the function rows, the busy and fault texts, the Not applied sheet, what su answered |
-| `storage_`, `tether_`, `hid_`, `keyboard_`, `quacky_`, `identity_` | each function's screen |
+| `storage_`, `tether_`, `hid_`, `webcam_`, `keyboard_`, `quacky_`, `identity_` | each function's screen |
 | `setup_`, `settings_`, `log_` | the install and check screens, Settings, Log |
 | `parts_` | the shared widgets: the bottom bar's port states and Stop all, the drive and LUN controls, the step dots, the theme names |
 

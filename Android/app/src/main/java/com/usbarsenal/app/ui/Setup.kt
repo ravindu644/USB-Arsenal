@@ -87,7 +87,7 @@ import kotlinx.coroutines.launch
 const val POLL_MS = 2_000L
 
 // Every screen; App keeps them as a back stack
-private enum class Step { WELCOME, ROOT, CONTROLLER, CHECK, INSTALL, HOME, LOG, SETTINGS, FONTS, STORAGE, TETHER, HID, KEYS, QUACKY, IDENTITY }
+private enum class Step { WELCOME, ROOT, CONTROLLER, CHECK, INSTALL, HOME, LOG, SETTINGS, FONTS, STORAGE, TETHER, HID, WEBCAM, KEYS, QUACKY, IDENTITY }
 
 // TYPING: Install was pressed and the command is typing; the installer starts when it has
 private enum class Phase { BEFORE, TYPING, RUNNING, DONE, FAILED }
@@ -251,6 +251,7 @@ fun App() {
                             Fn.STORAGE -> Step.STORAGE
                             Fn.TETHER -> Step.TETHER
                             Fn.HID -> Step.HID
+                            Fn.WEBCAM -> Step.WEBCAM
                         },
                     )
                 },
@@ -272,6 +273,7 @@ fun App() {
             Step.STORAGE -> StorageScreen(back = ::pop, openLog = { push(Step.LOG) })
             Step.TETHER -> TetherScreen(back = ::pop, openLog = { push(Step.LOG) })
             Step.HID -> HidScreen(back = ::pop, openKeys = { push(Step.KEYS) }, openQuacky = { push(Step.QUACKY) })
+            Step.WEBCAM -> WebcamScreen(back = ::pop, openLog = { push(Step.LOG) })
             Step.KEYS -> KbdMouseScreen(back = ::pop)
             Step.QUACKY -> QuackyScreen(back = ::pop)
         }
@@ -301,6 +303,7 @@ private fun Welcome(next: () -> Unit) {
             Feature(Sprites.Storage, str(R.string.setup_feature_storage))
             Feature(Sprites.Tether, str(R.string.setup_feature_tether))
             Feature(Sprites.Hid, str(R.string.setup_feature_hid))
+            Feature(Sprites.Webcam, str(R.string.setup_feature_webcam))
         }
     }
 }

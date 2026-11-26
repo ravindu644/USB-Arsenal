@@ -144,6 +144,16 @@ void ua_crit_leave(void) {
   }
 }
 
+void ua_crit_child_release(void) {
+  if (crit_depth > 0) {
+    if (crit_lock >= 0)
+      close(crit_lock);
+    crit_lock = -1;
+    crit_depth = 0;
+    sigprocmask(SIG_SETMASK, &crit_old, NULL);
+  }
+}
+
 static int pathf(char *out, size_t size, const char *fmt, ...)
     __attribute__((format(printf, 3, 4)));
 static int pathf(char *out, size_t size, const char *fmt, ...) {
@@ -442,6 +452,14 @@ int ua_gadget_begin(struct ua_gadget *g) {
   ua_crit_enter();
 
   if (ua_gadget_taken()) {
+    /* Stop the feeder before the UDC write, which can wait for an active
+     * UVC stream to drain on some controllers. */
+    if (ua_webcam_kill() < 0) {
+      ua_error("The gadget stays bound rather than removing a live UVC "
+               "function; retry '" UA_NAME " stop'");
+      ua_crit_leave();
+      return -1;
+    }
     /* Already ours: unbind so functions can change. Attributes like the HID
      * report descriptor are locked while the function is in use. */
     if (ua_gadget_live(g))
@@ -577,6 +595,8 @@ static int keep_ours(const char *dir, const struct dirent *e) {
 }
 
 int ua_gadget_remove(struct ua_gadget *g, const char *func) {
+  if (!strcmp(func, UA_F_WEBCAM))
+    return ua_webcam_remove(g);
   char p[PATH_MAX];
   ua_gadget_unlink(g, func);
   if (ua_gadget_func_dir(g, func, p, sizeof(p)) < 0)
@@ -685,6 +705,7 @@ int ua_gadget_commit(struct ua_gadget *g) {
   wait_configured(g);
   /* Inside the section: a client hangup's SIGTERM must not land mid-chown */
   ua_hid_reapply(g);
+  ua_webcam_reapply(g);
   ua_crit_leave();
   return 0;
 
@@ -767,7 +788,7 @@ static void android_restore(const struct ua_gadget *g,
 
 void ua_gadget_teardown(struct ua_gadget *g) {
   struct handoff h;
-  int have = handoff_load(&h) == 0, was_here = 0;
+  int have = handoff_load(&h) == 0, was_here = 0, webcam_stopped;
   char p[PATH_MAX];
 
   ua_crit_enter();
@@ -775,23 +796,26 @@ void ua_gadget_teardown(struct ua_gadget *g) {
    * serving an interface that is about to vanish */
   ua_tether_kill();
   if (access(g->path, F_OK) == 0) {
-    if (bound(g->path)) {
+    webcam_stopped = ua_webcam_kill() == 0;
+    if (webcam_stopped && bound(g->path)) {
       write_attr(g->path, "UDC", UNBIND);
       was_here = 1;
+    } else if (!webcam_stopped) {
+      ua_error("Leaving the gadget bound because the UVC feeder did not stop");
+      was_here = 1;
     }
-    /* As in ua_gadget_begin. A holder that will not die keeps our functions
-     * linked, since unlinking frees f_hid under it; the hand-back goes on and
-     * a later stop removes them. */
-    if (ua_hid_evict(g) < 0)
+    /* A holder that will not die keeps our functions linked, since unlinking
+     * frees f_hid under it. */
+    if (!webcam_stopped || ua_hid_evict(g) < 0)
       was_here = 1;
     else {
       if (unlink_all(g->config) > 0)
         was_here = 1;
       remove_ours(g);
     }
-    if (pathf(p, sizeof(p), "%s/os_desc", g->path) == 0)
+    if (webcam_stopped && pathf(p, sizeof(p), "%s/os_desc", g->path) == 0)
       unlink_all(p);
-    if (!keep_gadget()) {
+    if (webcam_stopped && !keep_gadget()) {
       if (pathf(p, sizeof(p), "%s/strings/0x409", g->config) == 0)
         rmdir(p);
       rmdir(g->config);
@@ -800,11 +824,19 @@ void ua_gadget_teardown(struct ua_gadget *g) {
       if (rmdir(g->path) < 0 && errno != ENOENT)
         ua_warn("Cannot remove %s: %s", g->path, strerror(errno));
     }
+  } else {
+    webcam_stopped = ua_webcam_kill() == 0;
+    if (!webcam_stopped)
+      ua_error("Cannot stop the webcam feeder while the gadget directory is "
+               "missing");
   }
 
   if (g->android_gadget) {
-    if (have)
+    if (have && webcam_stopped)
       android_restore(g, &h);
+    else if (have && !webcam_stopped)
+      ua_error("Leaving the Android hand-back record in place until the "
+               "webcam feeder stops");
     /* Our gadget was there but the record of what we took is gone (a crash
      * between deleting it and finishing, an older version): Android's g1
      * with functions linked and nothing bound can only mean we left it so */

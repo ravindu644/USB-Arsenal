@@ -58,8 +58,16 @@
 #define UA_F_RNDIS "rndis.ua"
 #define UA_F_KBD "hid.ua_kbd"
 #define UA_F_MOUSE "hid.ua_mouse"
+#define UA_F_WEBCAM "uvc.ua_webcam"
+#define UA_WEBCAM_MAX_JPEG_BYTES (640u * 480u * 2u)
 
-enum ua_fn { UA_FN_STORAGE, UA_FN_TETHER, UA_FN_HID, UA_FN_ALL = -1 };
+enum ua_fn {
+  UA_FN_STORAGE,
+  UA_FN_TETHER,
+  UA_FN_HID,
+  UA_FN_WEBCAM,
+  UA_FN_ALL = -1
+};
 
 /* Hardware knobs. Real controllers and hosts are slower than the spec says;
  * raise these if a device needs it. */
@@ -154,6 +162,7 @@ void ua_gadget_teardown(struct ua_gadget *g);
  * inside another command's begin and closes it with ua_crit_leave */
 void ua_crit_enter(void);
 void ua_crit_leave(void);
+void ua_crit_child_release(void);
 void ua_boot_marker(char *out, size_t size);
 int ua_fn_linked(const struct ua_gadget *g, enum ua_fn fn);
 int ua_gadget_func_dir(const struct ua_gadget *g, const char *func, char *dir,
@@ -220,6 +229,9 @@ struct ua_setup {
   unsigned tether_net;
   char tether_address[32], tether_dns[128], tether_upstream[IFNAMSIZ];
   unsigned hid_interval;
+  char webcam_source[PATH_MAX];
+  char webcam_image[PATH_MAX];
+  char webcam_size[8], webcam_aspect[8], webcam_quality[8], webcam_fps[8];
 };
 
 void ua_setup_load(struct ua_setup *s);
@@ -241,6 +253,7 @@ void ua_help_setup(void);
 #define UA_NEED_STORAGE (1 << 0)
 #define UA_NEED_HID (1 << 1)
 #define UA_NEED_NET (1 << 2)
+#define UA_NEED_WEBCAM (1 << 3)
 
 int ua_ncm_unsafe(void);
 int ua_probe_function(const struct ua_gadget *g, const char *type,
@@ -269,6 +282,14 @@ void ua_help_hid(void);
 void ua_status_hid(const struct ua_gadget *g, int json);
 void ua_hid_reapply(const struct ua_gadget *g);
 int ua_hid_evict(const struct ua_gadget *g);
+
+/* gadgets/webcam.c */
+int ua_cmd_webcam(int argc, char **argv);
+void ua_help_webcam(void);
+void ua_status_webcam(const struct ua_gadget *g, int json);
+int ua_webcam_remove(struct ua_gadget *g);
+int ua_webcam_kill(void);
+void ua_webcam_reapply(const struct ua_gadget *g);
 
 /* gadgets/tether/tether.c */
 

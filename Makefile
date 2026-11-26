@@ -39,6 +39,8 @@ SRCS = $(SRC_DIR)/main.c \
        $(SRC_DIR)/gadgets/storage/storage.c \
        $(SRC_DIR)/gadgets/storage/image.c \
        $(SRC_DIR)/gadgets/hid.c \
+       $(SRC_DIR)/gadgets/webcam.c \
+       $(SRC_DIR)/gadgets/webcam_source.c \
        $(SRC_DIR)/gadgets/tether/tether.c \
        $(SRC_DIR)/gadgets/tether/gateway.c \
        $(SRC_DIR)/gadgets/tether/routed.c \
@@ -76,8 +78,19 @@ ARCH := $(shell $(CC) -dumpmachine 2>/dev/null | cut -d'-' -f1 | \
         sed 's/i.86/x86/; s/armv7l/armhf/; s/^arm.*/armhf/' || echo "x86_64")
 
 OBJ_DIR = $(OUT_DIR)/.obj/$(ARCH)
-OBJS    = $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
+OBJS    = $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o) $(UVC_OBJS)
 -include $(OBJS:.o=.d)
+
+UVC_DIR = external/uvc-gadget
+UVC_SRCS = $(UVC_DIR)/src/main.c \
+           $(addprefix $(UVC_DIR)/lib/,configfs.c events.c \
+             slideshow-source.c stream.c test-source.c timer.c uvc.c v4l2.c \
+             v4l2-source.c video-buffers.c video-source.c)
+UVC_OBJS = $(patsubst $(UVC_DIR)/%.c,$(OBJ_DIR)/uvc/%.o,$(UVC_SRCS))
+UVC_INCLUDES = -I$(UVC_DIR)/include -I$(UVC_DIR)/include/uvcgadget \
+               -I$(UVC_DIR)/include/linux -I$(UVC_DIR)/lib
+
+$(OBJ_DIR)/gadgets/webcam_source.o: CFLAGS += $(UVC_INCLUDES)
 
 find-cc = $(shell \
 	if [ -n "$(MUSL_CROSS)" ] && [ -f "$(MUSL_CROSS)/$(1)-gcc" ]; then \
@@ -119,6 +132,31 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(msg_cc)
 	$(Q)mkdir -p $(dir $@)
 	$(Q)$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/uvc/config.h: Makefile
+	$(Q)mkdir -p $(dir $@)
+	$(Q)printf '%s\n' \
+		"#define HAVE_GLOB 1" \
+		"static inline const char *ua_uvc_basename(const char *path)" \
+		"{" \
+		"	const char *base = path;" \
+		"	for (const char *p = path; *p; ++p)" \
+		"		if (*p == '/') base = p + 1;" \
+		"	return base;" \
+		"}" \
+		"#define basename(path) ua_uvc_basename(path)" > $@
+
+$(OBJ_DIR)/uvc/src/main.o: $(UVC_DIR)/src/main.c $(OBJ_DIR)/uvc/config.h
+	$(msg_cc)
+	$(Q)mkdir -p $(dir $@)
+	$(Q)$(CC) -O2 -std=gnu99 $(UVC_INCLUDES) -I$(OBJ_DIR)/uvc \
+		-Dmain=ua_uvc_gadget_main -c $< -o $@
+
+$(OBJ_DIR)/uvc/lib/%.o: $(UVC_DIR)/lib/%.c $(OBJ_DIR)/uvc/config.h
+	$(msg_cc)
+	$(Q)mkdir -p $(dir $@)
+	$(Q)$(CC) -O2 -std=gnu99 $(UVC_INCLUDES) -I$(OBJ_DIR)/uvc \
+		-c $< -o $@
 
 $(BINARY_NAME): $(OBJS)
 	$(msg_ld)

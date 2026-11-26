@@ -166,6 +166,14 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.lifecycle:lifecycle-service:2.9.4")
+    implementation("androidx.camera:camera-core:1.6.2")
+    implementation("androidx.camera:camera-camera2:1.6.2")
+    implementation("androidx.camera:camera-lifecycle:1.6.2")
+    implementation("androidx.media3:media3-exoplayer:1.11.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.11.1")
+    implementation("androidx.media3:media3-exoplayer-dash:1.11.1")
+    implementation("androidx.media3:media3-exoplayer-rtsp:1.11.1")
 
     testImplementation("junit:junit:4.13.2")
     // android.jar's org.json is a stub on the JVM; the real one runs the parser tests

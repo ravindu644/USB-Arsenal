@@ -14,8 +14,8 @@ A command's options may come before or after its action.
 | `-v`, `--verbose` | Debug output |
 | `-h`, `--help`, `-V`, `--version` | Help, version |
 
-There is one gadget. Each command adds or removes its part of it, so storage, network
-and HID can run together. Adding or removing a part re-plugs the gadget for a moment,
+There is one gadget. Each command adds or removes its part of it, so storage, network,
+HID and a UVC webcam can run together. Adding or removing a part re-plugs the gadget for a moment,
 and the host sees it re-appear with the rest intact. Removing the last part hands the
 USB port back to Android. Defaults for every option come from the active
 [identity profile](identity.md); an option given on the command line wins.
@@ -29,13 +29,13 @@ is there for the other, and clearing the app's data loses nothing. See [setup](#
 
 ```sh
 usb-arsenal check     # what this kernel can do; MUST HAVE lines block every command
-usb-arsenal status    # what is live: storage images, HID nodes, the tether link
+usb-arsenal status    # what is live: storage images, HID nodes, tether and webcam
 usb-arsenal stop      # everything off, the port back to its owner
 ```
 
 `check --json` prints the same probes as one JSON object for a program to read: each key
 (`root`, `configfs`, `udc`, `gadget`, `mass_storage`, `cdrom`, `hid`, `hid_interval`, `ncm`,
-`rndis`, `nat`, `nat6`) is `1` (ok), `0` (missing) or `-1` (works with caveats), plus `version`,
+`rndis`, `uvc`, `nat`, `nat6`) is `1` (ok), `0` (missing) or `-1` (works with caveats), plus `version`,
 `udc_name` and `requirements_met`. `hid_interval` says whether `hid --interval` takes (the
 f_hid patch in [kernel-patches/README.md](../kernel-patches/README.md)); it is `0` whenever `hid` is.
 The exit code is the same as the text report's.
@@ -52,7 +52,8 @@ The exit code is the same as the text report's.
 | `tether` | `null`, or `function` (`ncm`, `rndis`), `iface`, `running` (the network side is up), `address`, `ipv6`, `upstream`, `gateway` (`1` in gateway mode), `gateway_container`, `gateway_iface`, `gateway_waiting` (the container is not running yet), `tx_bytes` and `rx_bytes` (what the phone's end of the link has sent and received, `-1` when unread) |
 | `boot_id` | this boot's id, so a reader never takes a status from before a reboot as live |
 | `setup`, `running` | every key of the [setup](#setup), as set up and as the last successful start of each function used; `running` is empty for a function that is off |
-| `pending` | `storage`, `tether`, `hid`: `1` when the function is linked and its setup differs from what started it (an empty value is compared as the profile's), so `<function> apply` would change something |
+| `webcam` | `null`, or `function` (`uvc`), `source`, `image` and `running` (whether its frame feeder is running) |
+| `pending` | `storage`, `tether`, `hid`, `webcam`: `1` when the function is linked and its setup differs from what started it (an empty value is compared as the profile's), so `<function> apply` would change something |
 
 `stop` is safe at any time, any number of times. It is also the recovery path: if a
 command was killed half-way, or the phone lost power, `stop` finishes the job.
@@ -62,8 +63,8 @@ command was killed half-way, or the phone lost power, `stop` finishes the job.
 ```sh
 usb-arsenal setup show [--json]            # every key: as set up, and as the last start used
 usb-arsenal setup set KEY=VALUE ...        # change the setup; a bad value changes nothing
-usb-arsenal setup reset [storage|tether|hid]   # back to the defaults
-usb-arsenal setup revert [storage|tether|hid]  # back to what runs
+usb-arsenal setup reset [storage|tether|hid|webcam]   # back to the defaults
+usb-arsenal setup revert [storage|tether|hid|webcam]  # back to what runs
 ```
 
 | Key | Value |
@@ -76,6 +77,12 @@ usb-arsenal setup revert [storage|tether|hid]  # back to what runs
 | `tether_net` | `0` for `--no-net`, else `1`; ignored with a gateway |
 | `tether_address`, `tether_dns`, `tether_upstream` | as the options; empty: the profile's |
 | `hid_interval` | 1 to 255; `0`: the kernel's default |
+| `webcam_source` | `image`, `camera:front`, `camera:back`, `screen`, `video` or `stream` |
+| `webcam_image` | Absolute path to the current JPEG frame; empty: no source |
+| `webcam_size` | Long edge: `640`, `1280` or `1920` pixels |
+| `webcam_aspect` | `auto`, `4:3` or `16:9`; auto follows the source and crops to fill |
+| `webcam_quality` | JPEG quality target: `30`, `40`, `50`, `60`, `70`, `80`, `90` or `95` |
+| `webcam_fps` | `15`, `20`, `24`, `25` or `30`; higher rates reduce the per-frame JPEG budget |
 
 `setup.conf` is `key=value` lines with `#` comments, the identity profile's format. Next to it
 the backend keeps `running.conf`, the same keys as the last successful start of each function
@@ -208,6 +215,34 @@ Every re-plug and every `stop` kills whatever holds one of our nodes open, `hid 
 since an open node across an unbind panics many kernels (the f_hid patches in
 [kernel-patches/README.md](../kernel-patches/README.md)). A program that keeps a node open
 opens it again once the gadget is back.
+
+## webcam
+
+```sh
+usb-arsenal webcam start [JPEG]
+usb-arsenal webcam apply
+usb-arsenal webcam stop
+```
+
+The backend presents the selected JPEG dimensions as an MJPEG UVC feed. The Android app can
+use a picture, either camera, screen capture, a picked video, or a direct
+HTTP(S), HLS, DASH or RTSP media URL. Videos and streams play muted; screen capture requires
+fresh consent each time. Auto aspect follows the source; every frame is center-cropped to fill
+the selected shape, so it has no black bars. The encoder targets the selected JPEG quality but
+can lower it to fit the per-frame USB budget. The
+capture service runs in the foreground and stops with Webcam; its notification can stop the
+gadget too. Source controls are disabled while Webcam is bound, so stop it on Home before
+switching sources.
+
+The command line expects an absolute path to an already prepared JPEG no larger than 600 KiB
+and 1920x1440 pixels. `start JPEG` saves that path in `webcam_image`; a bare `start` uses the saved setup, and
+`apply` restarts from it. The CLI serves the last frame at that path. It does not start Android's
+camera, screen, video or stream capture service. Direct URLs only are supported, not browser
+pages or DRM-protected media. The app keeps picked video URIs and stream URLs in private
+no-backup storage, not in backend setup or command logs.
+
+The kernel must provide `CONFIG_USB_CONFIGFS_F_UVC` and `CONFIG_USB_F_UVC`. `check` probes UVC
+support at runtime, since many kernels do not include it.
 
 ## tether
 

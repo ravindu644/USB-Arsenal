@@ -240,6 +240,7 @@ data class Capabilities(
     val requirementsMet: Boolean,
     // Whether f_hid takes an interval; null from a backend older than the probe
     val hidInterval: Probe? = null,
+    val uvc: Probe = Probe.MISSING,
     // The JSON it was parsed from, for the cache
     val raw: String = "",
 )
@@ -276,6 +277,7 @@ data class GadgetStatus(
     val storage: List<Lun>,
     val hid: List<HidNode>,
     val tether: Tether?,
+    val webcam: Webcam? = null,
     // The boot this was read in, the setup (what each function starts with), what the last
     // successful start used, and whether they differ per function; empty from an older backend
     val bootId: String = "",
@@ -285,6 +287,12 @@ data class GadgetStatus(
     // The bus speed the host gave the gadget (full-speed, high-speed, super-speed); empty unbound
     val speed: String = "",
     val raw: String = "",
+)
+
+data class Webcam(
+    val image: String,
+    val running: Boolean,
+    val source: String = "image",
 )
 
 // The C side prints every key, so a missing one is a mismatched backend and throws
@@ -299,6 +307,7 @@ fun parseCheck(json: String): Capabilities = with(JSONObject(json)) {
         p("ncm"), p("rndis"), p("nat"), p("nat6"),
         getString("version"), getString("udc_name"), getInt("requirements_met") == 1,
         if (has("hid_interval")) p("hid_interval") else null,
+        if (has("uvc")) p("uvc") else Probe.MISSING,
         raw = json,
     )
 }
@@ -328,6 +337,13 @@ fun parseStatus(json: String): GadgetStatus = with(JSONObject(json)) {
                 gatewayWaiting = getInt("gateway_waiting") == 1,
                 txBytes = optLong("tx_bytes", -1),
                 rxBytes = optLong("rx_bytes", -1),
+            )
+        },
+        webcam = if (!has("webcam") || isNull("webcam")) null else getJSONObject("webcam").run {
+            Webcam(
+                image = getString("image"),
+                running = getInt("running") == 1,
+                source = optString("source", "image"),
             )
         },
         bootId = optString("boot_id"),
